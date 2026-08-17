@@ -132,7 +132,7 @@ własnej kopii świata — po prostu jest za słaba, żeby wejść wysoko, więc
 | skille zbierackie | poziom i postęp w wieży |
 | **bank** | atrybuty i punkty |
 | wiedza o wieży (mgła) | drzewko |
-| złoto i materiały `OTWARTE` | ekwipunek |
+| **złoto**, materiały, mikstury | ekwipunek |
 
 Mgła jest kontowa świadomie: **dotyczy tego, czego nie wiesz, nie tego, czym nie zagrałeś.**
 Skoro Wojownikiem byłeś na piętrze 50, Mag nie ma powodu tego nie wiedzieć.
@@ -196,8 +196,48 @@ Pierwsza wspinaczka jest głodna sprzętu — nikt jeszcze nic nie nafarmił. **
 klasa ma w banku komplet na każdy poziom**, więc idzie znacznie szybciej, mimo że przechodzi
 te same piętra. To jest naturalne przyspieszenie, którego nie trzeba nigdzie kodować.
 
-`OTWARTE` Czy wszystkie klasy są dostępne od startu, czy odblokowują się za postęp.
-Sześć pustych postaci na dzień dobry to paraliż wyboru.
+### Wiele klas naprawia kolejki do rajdów
+
+Zaprojektowaliśmy Tytana na 25 osób z wymogiem trzech tanków i pięciu healerów, a ekran
+kolejki pokazuje `1 tank z 3 · 31 DPS-ów czeka`. To jest klasyczna choroba tego gatunku:
+wszyscy chcą bić, nikt nie chce trzymać tarczy.
+
+**Wiele klas na koncie rozwiązuje to bez żadnej zachęty.** Widzisz, że brakuje tanka —
+przełączasz się na Paladyna i wchodzisz od ręki, zamiast czekać dziewięć minut w kolejce
+DPS-ów. To samo w wyprawach drużynowych i Kolosie.
+
+Gracz nie robi tego z uprzejmości, tylko dlatego, że **to jego najszybsza droga do wejścia**.
+Kolejka reguluje się sama, a role przestają być deklaracją i stają się reakcją na to,
+czego akurat brakuje.
+
+Warunek: te klasy trzeba mieć wychodzone. Rajdowy Paladyn na pierwszym poziomie nikomu
+nie pomoże — więc **posiadanie drugiej i trzeciej klasy na poziomie staje się celem samo
+w sobie**, a nie ciekawostką.
+
+### Odblokowywanie klas
+
+**Zaczynasz jedną klasą. Kolejne odblokowują bossowie aktów.**
+
+```
+start        wybierasz pierwszą klasę
+boss 10      druga klasa
+boss 20      trzecia
+boss 30      czwarta
+boss 40      piąta
+boss 50      szósta
+```
+
+Pięciu bossów do piętra 50, sześć klas — liczby wychodzą bez naciągania.
+
+Trzy rzeczy z tego wynikają:
+
+- **Boss aktu przestaje być tylko przeszkodą.** Daje punkty drzewka, walutę specjalną
+  **i całą nową postać do rozegrania**. To najmocniejsza nagroda w grze.
+- **Wybór ma wagę.** Pierwsza klasa to jedyna, jaką masz przez pierwsze dziesięć pięter.
+- **Sześć pustych postaci na dzień dobry nie istnieje.** Nowy gracz ma jedną rzecz do
+  zrobienia, a nie sześć, których żadnej nie rozumie.
+
+Złoto jest wspólne dla konta, tak samo jak bank i materiały.
 
 ### Czego już nie ma
 
