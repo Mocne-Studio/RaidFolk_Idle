@@ -15,11 +15,10 @@ export const CONFIG = {
 
     // Siła ciosu — wybierana co turę w walce turowej.
     // Mocniej znaczy rzadziej. To jest cała decyzja tury.
-    // charge — ile ładuje pasek ultimate
     strengths: {
-      lekki:   { label: 'Lekki',  dmg: 0.60, acc: +0.22, charge: 1 },
-      srednio: { label: 'Średni', dmg: 1.00, acc:  0.00, charge: 2 },
-      mocno:   { label: 'Mocny',  dmg: 1.75, acc: -0.28, charge: 3 },
+      lekki:   { label: 'Lekki',  dmg: 0.60, acc: +0.22 },
+      srednio: { label: 'Średni', dmg: 1.00, acc:  0.00 },
+      mocno:   { label: 'Mocny',  dmg: 1.75, acc: -0.28 },
     },
     accuracyMin: 0.10,        // nigdy nie jest beznadziejnie
     accuracyMax: 0.97,        // i nigdy pewnie
@@ -33,20 +32,18 @@ export const CONFIG = {
     // następnej tury. Sensowna tylko tam, gdzie tury są, czyli u bossa.
     defendCut: 0.50,
 
-    // Pasek ultimate. Lekki cios ładuje 1, średni 2, mocny 3.
-    chargeMax: 10,
   },
 
   // ---------------------------------------------------------------- UMIEJĘTNOŚCI
   // Docelowo wychodzone w drzewku. Na razie wszystkie dostępne od startu.
   abilities: {
     okrzyk: {
-      label: 'Okrzyk bojowy', cd: 5, charge: 1, target: 'self',
+      label: 'Okrzyk bojowy', cd: 5, target: 'self',
       desc: 'Pancerz −20%, obrażenia +20% przez 3 tury.',
       buff: { id: 'okrzyk', turns: 3, dmgMult: 1.20, armorMult: 0.80 },
     },
     wir: {
-      label: 'Wir', cd: 3, charge: 2, target: 'all',
+      label: 'Wir', cd: 3, target: 'all',
       desc: 'Trzy ciosy po 60% obrażeń we wszystkich przeciwników.',
       hits: 3, dmgMult: 0.60,
     },
@@ -58,58 +55,61 @@ export const CONFIG = {
     // Dlatego pierwszy czar to Fireball na poziomie 1 — wystarczy podpiąć
     // Esencję Ognia. Reszta przychodzi z expem w Magii.
     fireball: {
-      label: 'Fireball', cd: 3, charge: 0, mana: 8, target: 'one',
+      label: 'Fireball', cd: 3, mana: 8, target: 'one',
       czar: { runa: 'runaognia', magia: 1 },
       desc: '210% obrażeń w jeden cel. Ignoruje jedną trzecią pancerza.',
       dmgMult: 2.10, armorPierce: 0.33,
     },
     pozoga: {
-      label: 'Pożoga', cd: 5, charge: 0, mana: 18, target: 'all',
+      label: 'Pożoga', cd: 5, mana: 18, target: 'all',
       czar: { runa: 'runaognia', magia: 8 },
       desc: 'Trzy uderzenia po 130% we wszystkich przeciwników.',
       hits: 3, dmgMult: 1.30,
     },
     falachlodu: {
-      label: 'Fala Chłodu', cd: 5, charge: 0, mana: 12, target: 'self',
+      label: 'Fala Chłodu', cd: 5, mana: 12, target: 'self',
       czar: { runa: 'runamrozu', magia: 1 },
       desc: 'Leczy 25% zdrowia i zbija otrzymywane obrażenia o 15% na 3 tury.',
       heal: 0.25, buff: { id: 'falachlodu', turns: 3, takenMult: 0.85 },
     },
     kamiennaskora: {
-      label: 'Kamienna Skóra', cd: 5, charge: 0, mana: 10, target: 'self',
+      label: 'Kamienna Skóra', cd: 5, mana: 10, target: 'self',
       czar: { runa: 'runaziemi', magia: 1 },
       desc: 'Pancerz +60% przez 4 tury.',
       buff: { id: 'kamiennaskora', turns: 4, armorMult: 1.60 },
     },
     podmuch: {
-      label: 'Podmuch', cd: 4, charge: 0, mana: 14, target: 'all',
+      label: 'Podmuch', cd: 4, mana: 14, target: 'all',
       czar: { runa: 'runawichru', magia: 1 },
       desc: 'Cztery uderzenia po 70% obrażeń we wszystkich.',
       hits: 4, dmgMult: 0.70,
     },
     burzazywiolow: {
-      label: 'Burza Żywiołów', cd: 6, charge: 0, mana: 26, target: 'all',
+      label: 'Burza Żywiołów', cd: 6, mana: 26, target: 'all',
       czar: { runa: 'runapradawna', magia: 5 },
       desc: 'Trzy uderzenia po 210% we wszystkich. Wymaga Runy Pradawnej.',
       hits: 3, dmgMult: 2.10,
     },
 
+    // PROWOKACJA — narzędzie tanka. Ściąga uwagę wroga na siebie i zatrzymuje
+    // go w miejscu: sprowokowany bije w Ciebie, a nie idzie dalej po maga.
+    prowokacja: {
+      label: 'Prowokacja', cd: 4, target: 'self',
+      desc: 'Wrogowie biją w Ciebie przez 3 tury i przestają podchodzić. Pancerz +30%.',
+      taunt: 3,
+      buff: { id: 'prowokacja', turns: 3, armorMult: 1.30 },
+    },
+
     ogluszenie: {
-      label: 'Cios ogłuszający', cd: 4, charge: 2, target: 'one',
+      label: 'Cios ogłuszający', cd: 4, target: 'one',
       desc: '150% obrażeń, 50% szans na ogłuszenie. Ogłuszony traci turę i obrywa krytyki 2× częściej.',
       dmgMult: 1.50, stun: 0.50, stunTurns: 1, stunCritMult: 2.0,
     },
   },
 
-  // Ultimate zależy od typu broni w ręce.
-  ultimates: {
-    mele:    { label: 'Rozłam',      desc: 'Jeden cios za 400% obrażeń, ignoruje połowę pancerza.',
-               dmgMult: 4.0, armorPierce: 0.5, target: 'one' },
-    dystans: { label: 'Grad Strzał', desc: 'Pięć strzał po 110% obrażeń, każda trafia osobno.',
-               hits: 5, dmgMult: 1.10, target: 'all' },
-    magia:   { label: 'Nawałnica',   desc: 'Trzy uderzenia po 190% we wszystkich przeciwników.',
-               hits: 3, dmgMult: 1.90, target: 'all' },
-  },
+  // ULTIMATE I PASEK ŁADOWANIA SKASOWANE. Pasek istniał wyłącznie po to,
+  // żeby napędzać ultimate — bez niego był licznikiem bez treści.
+  // Umiejętności chodzą na cooldownach, zaklęcia na manie. Dwa zasoby wystarczą.
 
   // ---------- LECZENIE ----------
   healing: {
@@ -610,6 +610,7 @@ export const CONFIG = {
   combatSkills: {
     xpBase: 45,               // exp na kolejny poziom = xpBase * poziom
     xpPerFloor: 6,            // exp za wygraną walkę = xpPerFloor * piętro
+    xpPerSpell: 9,            // exp do Magii za KAŻDE rzucone zaklęcie
     twoHandDmg: 1.35,         // dwuręczna bije mocniej — to jej cała przewaga
     list: {
       melee:     { label: 'Broń biała', ic: '⚔', opis: 'Obrażenia bronią do walki wręcz' },
@@ -639,7 +640,11 @@ export const CONFIG = {
   // kosztuje turę. Dystans i magia biją wszędzie od razu i to jest ich przewaga
   // za cenę słabszych statystyk obronnych.
   formation: {
-    rows: { wojownik: 1, paladyn: 1, tancerz: 1, mag: 2, lowca: 3, tropiciel: 3, bohater: 1 },
+    rows: { wojownik: 1, paladyn: 1, tancerz: 1, mag: 2, lowca: 3, tropiciel: 3 },
+    // RZĄD BOHATERA BIERZE SIĘ Z BRONI. Bijesz wręcz — stoisz z przodu.
+    // Różdżka stawia Cię w środku, łuk z tyłu, i wtedy sojusznik-wojownik
+    // naprawdę Cię zasłania: wróg musi przejść jeden albo dwa kroki.
+    heroRow: { mele: 1, magia: 2, dystans: 3 },
     reach: { mele: 1, dystans: 3, magia: 3 },
     petRow: 1,               // pet leci przodem, nie ma klasy
     maxRow: 3,

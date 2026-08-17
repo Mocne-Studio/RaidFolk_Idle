@@ -29,7 +29,6 @@ export function healEffect(usesSoFar) {
 
 export const STRENGTHS = C.combat.strengths;
 export const ABILITIES = C.abilities;
-export const ULTIMATES = C.ultimates;
 
 export function hitChance(accuracy, strength, evasion = 0) {
   const s = STRENGTHS[strength] ?? STRENGTHS.srednio;
@@ -59,6 +58,7 @@ const mkUnit = (u, side, idx) => ({
   reach: u.reach ?? C.formation.maxRow,
   advance: 0,
   klasa: u.klasa ?? null,
+  taunt: null,           // { by, turns } — kto go sprowokował i na jak długo
   next: interval(u.speed),
   effects: [],           // [{ id, turns, dmgMult, armorMult, stun, critTakenMult }]
   alive: true,
@@ -68,13 +68,12 @@ export function createFight({ party, enemies, potions = 0, wtype = 'mele', abili
                               maxMana = 0, manaRegen = 0 }, seed, mode = 'auto') {
   return {
     mode, seed, rng: seed >>> 0, t: 0, turn: 0, wtype,
-    // Mana pod zaklęcia. Osobny zasób od paska ultimate: pasek ładuje się
-    // biciem, mana wraca sama co turę. Dwa zasoby, dwie osie decyzji.
+    // Mana pod zaklęcia. Jedyny zasób w walce — pasek ładowania został skasowany.
+    // Umiejętności chodzą na cooldownach, zaklęcia na manie.
     mana: maxMana, maxMana, manaRegen,
     party: party.map((u, i) => mkUnit(u, 'gracz', i)),
     enemies: enemies.map((u, i) => mkUnit({ ...u, kind: 'wrog' }, 'wrog', i)),
     potions, potionsStart: potions, healUses: 0,
-    charge: 0, chargeMax: C.combat.chargeMax,
     cooldowns: Object.fromEntries(abilities.map(a => [a, 0])),
     abilities,
     log: [], over: false, win: null, awaiting: false,
@@ -99,7 +98,28 @@ export function reachable(attacker, pool) {
   return w.filter(u => u.row === naj);
 }
 
-export const target1 = (attacker, pool) => reachable(attacker, pool)[0] ?? null;
+// Jak groźna jest jednostka. Obrażenia na sekundę ważą najwięcej, bo to one
+// zabijają; niskie HP podbija priorytet, bo taniej ją dobić niż tankować.
+export const groznosc = (u) =>
+  (u.damage * (u.speed || 100) / 100) * (1 + Math.max(0, 1 - u.hp / u.maxHp) * 0.5);
+
+// Kogo zaatakować. AI nie wali w pierwszego z brzegu:
+//   1. PROWOKACJA ma pierwszeństwo — sprowokowany bije w prowokującego
+//   2. w zasięgu wybiera NAJGROŹNIEJSZEGO, nie najbliższego w tablicy
+// Dzięki temu łucznik z tyłu naprawdę jest wart ochrony, a tank ma czym
+// odciągnąć uwagę od maga.
+export function pickTarget(attacker, pool) {
+  const w = reachable(attacker, pool);
+  if (!w.length) return null;
+
+  if (attacker.taunt?.turns > 0) {
+    const prowokujacy = w.find(u => u.idx === attacker.taunt.by && u.alive);
+    if (prowokujacy) return prowokujacy;
+  }
+  return w.reduce((a, b) => (groznosc(b) > groznosc(a) ? b : a));
+}
+
+export const target1 = (attacker, pool) => pickTarget(attacker, pool);
 
 // Ile jeszcze podejść dzieli jednostkę od najbliższego żywego wroga.
 export function stepsNeeded(attacker, pool) {
@@ -116,7 +136,6 @@ function snapshot(F) {
   return {
     party: F.party.map(u2),
     enemies: F.enemies.map(u2),
-    charge: F.charge,
     mana: F.mana,
   };
 }
@@ -190,13 +209,9 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0, la
 
 // ---------------------------------------------------------------- akcje gracza
 
-function addCharge(F, n) {
-  F.charge = Math.min(F.chargeMax, F.charge + n);
-}
-
 // Podejście. Broń biała nie dosięga tylnych rzędów — trzeba stracić turę,
 // żeby skrócić dystans. To jest cała cena za bicie wręcz i cały powód,
-// dla którego łucznik z tyłu jest wart ochrony.
+// dla którego tylna jednostka jest warta ochrony.
 function advance(F, u, pool) {
   const zostalo = stepsNeeded(u, pool);
   if (zostalo <= 0) return false;
@@ -211,26 +226,15 @@ function advance(F, u, pool) {
 function playerBasic(F, u, strength) {
   const target = target1(u, F.enemies);
   if (!target) { advance(F, u, F.enemies); return; }
-  const dmg = strike(F, u, target, { mult: STRENGTHS[strength].dmg, strength });
-
-  // Pudło zeruje pasek. Dlatego mocny cios to hazard: ładuje 3, ale trafia rzadko,
-  // a nieudany zabiera wszystko, co uzbierałeś.
-  if (dmg > 0) {
-    addCharge(F, STRENGTHS[strength].charge);
-  } else if (F.charge > 0) {
-    push(F, 'lost', `pasek spada z ${F.charge} do zera`);
-    F.charge = 0;
-  }
+  strike(F, u, target, { mult: STRENGTHS[strength].dmg, strength });
 }
 
-// Czy zaklęcie da się w tej chwili rzucić. Powód odmowy wraca tekstem,
+// Czy umiejętność da się w tej chwili użyć. Powód odmowy wraca tekstem,
 // żeby klient nie musiał znać reguł.
 export function abilityBlock(F, id) {
   const A = ABILITIES[id];
   if (!A) return 'nieznana umiejętność';
   if ((F.cooldowns?.[id] ?? 0) > 0) return `odnowienie: ${F.cooldowns[id]}`;
-  // UWAGA: `charge` przy umiejętności to ile ona ŁADUJE pasek, nie ile kosztuje.
-  // Jedynym kosztem jest mana i płacą ją wyłącznie zaklęcia.
   if (A.mana && F.mana < A.mana) return `brak many (${F.mana}/${A.mana})`;
   return null;
 }
@@ -240,16 +244,20 @@ function useAbility(F, u, id) {
   const blok = abilityBlock(F, id);
   if (blok) { push(F, 'info', `${A?.label ?? id}: ${blok}`); return; }
 
-  // Zaklęcia płacą maną, zwykłe umiejętności ładują pasek. Nigdy jedno i drugie.
+  // Zaklęcia płacą maną i ćwiczą Magię. Reszta chodzi na samym cooldownie.
   if (A.mana) {
     F.mana -= A.mana;
+    F.spellsCast = (F.spellsCast ?? 0) + 1;
     push(F, 'buff', `${u.name} · ${A.label} (−${A.mana} many)`);
-  } else {
-    addCharge(F, A.charge ?? 1);
   }
   F.cooldowns[id] = A.cd;
 
-  // Zaklęcia leczące — Fala Chłodu i podobne.
+  // PROWOKACJA — ściąga uwagę wrogów i zatrzymuje ich marsz w głąb szyku.
+  if (A.taunt) {
+    for (const e of F.enemies) if (e.alive) e.taunt = { by: u.idx, turns: A.taunt };
+    push(F, 'buff', `${u.name} · ${A.label} — wrogowie idą po Ciebie`);
+  }
+
   if (A.heal) {
     const ile = Math.round(u.maxHp * A.heal);
     u.hp = Math.min(u.maxHp, u.hp + ile);
@@ -258,10 +266,9 @@ function useAbility(F, u, id) {
 
   if (A.buff) {
     addEffect(u, A.buff);
-    if (!A.mana) push(F, 'buff', `${u.name} · ${A.label}`);
-    return;
+    if (!A.mana && !A.taunt) push(F, 'buff', `${u.name} · ${A.label}`);
   }
-  if (A.heal) return;
+  if (A.buff || A.heal || A.taunt) return;
 
   const targets = A.target === 'all' ? livingEnemies(F) : reachable(u, F.enemies).slice(0, 1);
   if (!targets.length) return;
@@ -270,29 +277,16 @@ function useAbility(F, u, id) {
   for (let h = 0; h < hits; h++) {
     for (const t of targets) {
       if (!t.alive) continue;
-      strike(F, u, t, { mult: A.dmgMult ?? 1, label: A.label });
-
-      if (A.stun && t.alive && rand(F) < A.stun) {
-        addEffect(t, { id: 'ogłuszenie', turns: (A.stunTurns ?? 1) + 1, stun: true,
-                       critTakenMult: A.stunCritMult ?? 2 });
-        push(F, 'buff', `${t.name} ogłuszony`);
-      }
+      strike(F, u, t, { mult: A.dmgMult ?? 1, pierce: A.armorPierce ?? 0, label: A.label });
     }
   }
-}
-
-function useUltimate(F, u) {
-  if (F.charge < F.chargeMax) { push(F, 'info', 'pasek jeszcze nie pełny'); return; }
-  const U = ULTIMATES[F.wtype] ?? ULTIMATES.mele;
-  F.charge = 0;
-
-  const targets = U.target === 'all' ? livingEnemies(F) : reachable(u, F.enemies).slice(0, 1);
-  const hits = U.hits ?? 1;
-  push(F, 'ult', `${u.name} · ${U.label}`);
-  for (let h = 0; h < hits; h++) {
+  if (A.stun) {
     for (const t of targets) {
-      if (!t.alive) continue;
-      strike(F, u, t, { mult: U.dmgMult, pierce: U.armorPierce ?? 0, label: U.label });
+      if (t.alive && rand(F) < A.stun) {
+        addEffect(t, { id: 'ogluszenie', turns: A.stunTurns ?? 1, stun: true,
+                       critTakenMult: A.stunCritMult ?? 1 });
+        push(F, 'info', `${t.name} ogłuszony`);
+      }
     }
   }
 }
@@ -330,12 +324,18 @@ function unitTurn(F, u, action) {
   F.turn++;
   tickEffects(u, F);
 
+  // Prowokacja schodzi z tur na turze sprowokowanego.
+  if (u.taunt) { u.taunt.turns--; if (u.taunt.turns <= 0) u.taunt = null; }
+
   if (isStunned(u)) {
     push(F, 'info', `${u.name} jest ogłuszony i traci turę`);
   } else if (u.side === 'wrog') {
     const target = target1(u, F.party);
     if (target) strike(F, u, target, {});
-    else advance(F, u, F.party);
+    // Sprowokowany stoi w miejscu — o to chodzi w prowokacji. Bez niej
+    // podchodzi, żeby dobrać się do tylnych rzędów.
+    else if (!u.taunt) advance(F, u, F.party);
+    else push(F, 'info', `${u.name} stoi sprowokowany`);
   } else if (action == null) {
     autoPotion(F, u);
     // Automat rzuca zaklęcie, gdy stać go na najdroższe dostępne — inaczej
@@ -349,7 +349,6 @@ function unitTurn(F, u, action) {
     switch (action.type) {
       case 'potion':   drinkPotion(F, u); break;
       case 'ability':  useAbility(F, u, action.id); break;
-      case 'ultimate': useUltimate(F, u); break;
       case 'defend':   defend(F, u); break;
       default:         playerBasic(F, u, action.strength ?? 'srednio');
     }
@@ -424,12 +423,12 @@ export function summary(F) {
     log: F.log, durationMs: Math.round(F.t), turns: F.turn,
     party: F.party.map(u => ({ name: u.name, kind: u.kind, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
     enemies: F.enemies.map(u => ({ name: u.name, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
-    charge: F.charge, chargeMax: F.chargeMax,
     mana: F.mana, maxMana: F.maxMana,
     cooldowns: F.cooldowns,
     // Co da się teraz rzucić i dlaczego nie — klient nie musi znać reguł.
     blokady: Object.fromEntries((F.abilities ?? []).map(id => [id, abilityBlock(F, id)])),
     potionsLeft: F.potions, potionsUsed: F.potionsStart - F.potions,
+    spellsCast: F.spellsCast ?? 0,
   };
 }
 
@@ -453,10 +452,6 @@ export function demo() {
     'kazdy wpis logu ma stan obu stron');
   const ehp = a.log.map(l => l.enemies[0].hp);
   console.assert(ehp.every((v, i) => i === 0 || v <= ehp[i - 1]), 'HP wroga tylko spada');
-
-  // pasek ultimate: lekki 1, sredni 2, mocny 3
-  console.assert(STRENGTHS.lekki.charge === 1 && STRENGTHS.srednio.charge === 2
-    && STRENGTHS.mocno.charge === 3, 'ladowanie paska wg sily ciosu');
 
   // Sojusznicy naprawde bija: ta sama walka z druzyna konczy sie szybciej.
   const solo = summary(runToEnd(createFight(
@@ -527,7 +522,6 @@ export function demo() {
   step(magik, { type: 'ability', id: 'fireball' });
   console.assert(magik.mana === 12, `fireball zabiera 8 many (${magik.mana})`);
   console.assert(magik.enemies[0].hp < hpPrzedCzarem, 'fireball zadaje obrazenia');
-  console.assert(magik.charge === 0, 'zaklecie NIE laduje paska ultimate');
 
   // brak many blokuje czar i mowi dlaczego (cooldown zdjety, zeby nie zaslanial)
   magik.mana = 3; magik.cooldowns.fireball = 0;
@@ -546,6 +540,44 @@ export function demo() {
   console.assert(regen.mana > poCzarze, `mana regeneruje sie (${poCzarze} -> ${regen.mana})`);
   console.assert(regen.mana <= regen.maxMana, 'mana nie przekracza maksimum');
 
+  // AI: wrog bije w NAJGROZNIEJSZEGO w zasiegu, nie w pierwszego z brzegu.
+  const grozny = { ...P, name: 'Grozny', damage: 400, speed: 200, row: 1 };
+  const slaby  = { ...P, name: 'Slaby',  damage: 5,   speed: 60,  row: 1 };
+  const A1 = createFight({ party: [{ ...slaby }, { ...grozny }],
+    enemies: [{ ...E, accuracy: 5 }], potions: 0, wtype: 'mele', abilities: [] }, 5150, 'turowa');
+  console.assert(target1(A1.enemies[0], A1.party).name === 'Grozny',
+    'AI wybiera najgrozniejszego, nie pierwszego z tablicy');
+
+  // PROWOKACJA: sprowokowany bije w prowokujacego i przestaje podchodzic
+  const T = createFight({
+    party: [{ ...P, name: 'Tank', row: 1, damage: 5 }, { ...P, name: 'Mag', row: 2, damage: 400 }],
+    enemies: [{ ...E, name: 'Zbir', row: 1, reach: 1, accuracy: 5 }],
+    potions: 0, wtype: 'mele', abilities: ['prowokacja'] }, 606, 'turowa');
+  beginTurn(T);
+  console.assert(target1(T.enemies[0], T.party).name === 'Tank',
+    'bez prowokacji wrog i tak siega tylko pierwszego rzedu');
+  step(T, { type: 'ability', id: 'prowokacja' });
+  console.assert(T.enemies[0].taunt?.turns > 0, 'prowokacja nakłada taunt na wroga');
+  console.assert(target1(T.enemies[0], T.party).name === 'Tank', 'sprowokowany bije w prowokujacego');
+
+  // sprowokowany NIE podchodzi glebiej w szyk
+  const T2 = createFight({
+    // wrog musi byc SZYBSZY, inaczej beginTurn odda ture bohaterowi i wrog
+    // w ogole nie zdazy sie ruszyc przed sprawdzeniem
+    party: [{ ...P, name: 'Mag', row: 2, damage: 400, speed: 40 }],
+    enemies: [{ ...E, name: 'Zbir', row: 1, reach: 1, accuracy: 5, speed: 300 }],
+    potions: 0, wtype: 'mele', abilities: [] }, 707, 'turowa');
+  T2.enemies[0].taunt = { by: 9, turns: 3 };     // sprowokowany przez kogos, kto padl
+  beginTurn(T2);
+  // Wrog stoi DOPOKI trwa prowokacja: tyle wpisow "stoi sprowokowany",
+  // ile tur taunta — i dopiero potem rusza w glab szyku.
+  // Licznik schodzi na POCZATKU tury sprowokowanego, wiec z trzech tur
+  // dwie widac jako stanie, a w trzeciej taunt juz wygasl.
+  const stal = T2.log.filter(l => /stoi sprowokowany/.test(l.text)).length;
+  console.assert(stal >= 2, `sprowokowany stoi, dopoki trwa prowokacja (${stal})`);
+  const pierwszePodejscie = T2.log.findIndex(l => /podchodzi|dopadł/.test(l.text));
+  console.assert(pierwszePodejscie >= stal, 'podchodzi dopiero po wygasnieciu prowokacji');
+
   // Obrona: ten sam wrogi cios boli mniej, gdy gracz stanal w obronie.
   // Oba przebiegi maja to samo ziarno, wiec roznica bierze sie wylacznie z akcji.
   const obr = (akcja) => {
@@ -558,46 +590,6 @@ export function demo() {
   const hpZObrona = obr({ type: 'defend' });
   const hpBezObrony = obr({ type: 'attack', strength: 'lekki' });
   console.assert(hpZObrona > hpBezObrony, `obrona zbija obrazenia (${hpZObrona} vs ${hpBezObrony})`);
-
-  // pasek: trafienie laduje, pudlo zeruje
-  const P100 = { ...P, accuracy: 5 };      // zawsze trafia
-  const P0   = { ...P, accuracy: -5 };     // zawsze pudluje
-  const one  = (p, seed) => createFight(
-    { party: [{ ...p }], enemies: [{ ...E, hp: 99999, maxHp: 99999 }], potions: 0,
-      wtype: 'mele', abilities: [] }, seed, 'turowa');
-
-  const F = one(P100, 7); beginTurn(F);
-  console.assert(F.charge === 0, 'pasek startuje pusty');
-  step(F, { type: 'attack', strength: 'mocno' });
-  console.assert(F.charge === 3, 'mocny cios laduje 3');
-  step(F, { type: 'attack', strength: 'lekki' });
-  console.assert(F.charge === 4, 'lekki cios laduje 1');
-  step(F, { type: 'attack', strength: 'srednio' });
-  console.assert(F.charge === 6, 'sredni cios laduje 2');
-
-  const M = one(P0, 11); beginTurn(M);
-  M.charge = 8;
-  step(M, { type: 'attack', strength: 'mocno' });
-  console.assert(M.charge === 0, 'pudlo zeruje caly pasek');
-  console.assert(M.log.some(l => l.kind === 'lost'), 'utrata paska trafia do logu');
-
-  // umiejetnosci nie ruszaja paska przy pudle — maja wlasny koszt w cooldownie
-  const K = createFight({ party: [{ ...P0 }], enemies: [{ ...E, hp: 99999, maxHp: 99999 }],
-                          potions: 0, wtype: 'mele', abilities: ['wir'] }, 13, 'turowa');
-  beginTurn(K); K.charge = 5;
-  step(K, { type: 'ability', id: 'wir' });
-  console.assert(K.charge > 0, 'nieudana umiejetnosc nie kasuje paska');
-
-  // ultimate wymaga pelnego paska
-  const G = mk(8, 'turowa'); beginTurn(G);
-  const before = G.log.length;
-  step(G, { type: 'ultimate' });
-  console.assert(G.log.slice(before).some(l => l.text.includes('pasek')), 'ultimate blokowany przy pustym pasku');
-  G.charge = G.chargeMax;
-  const b2 = G.log.length;
-  step(G, { type: 'ultimate' });
-  console.assert(G.log.slice(b2).some(l => l.kind === 'ult'), 'ultimate idzie przy pelnym pasku');
-  console.assert(G.charge === 0, 'ultimate zeruje pasek');
 
   // umiejetnosci: cooldown i buff
   const H = mk(9, 'turowa'); beginTurn(H);

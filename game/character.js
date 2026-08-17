@@ -364,9 +364,10 @@ export function computeStats(ch) {
     blockCut: C.combat.blockCut + T.blockCut,
     potionPct: T.potionPct,
     wtype: ch.equipped.bron?.wtype ?? 'mele',
-    // Bohater stoi w pierwszym rzędzie, ale jego ZASIĘG zależy od broni:
-    // bronią białą dosięga tylko przodu, łukiem i różdżką bije w każdy rząd.
-    row: C.formation.rows.bohater,
+    // RZĄD I ZASIĘG BIORĄ SIĘ Z BRONI. Bijesz wręcz — stoisz z przodu i obrywasz.
+    // Różdżka stawia Cię w środku, łuk z tyłu, więc sojusznik-wojownik naprawdę
+    // Cię zasłania: wróg musi przejść jeden albo dwa kroki, żeby Cię dosięgnąć.
+    row: C.formation.heroRow[ch.equipped.bron?.wtype ?? 'mele'] ?? 1,
     reach: C.formation.reach[ch.equipped.bron?.wtype ?? 'mele'] ?? 1,
     crit: C.combat.critBase + critChance / 100 + a.zrecznosc / cc.agiCritDivisor + T.critChance,
     critMult: C.combat.critMultBase + critPower / 100 + T.critPower,

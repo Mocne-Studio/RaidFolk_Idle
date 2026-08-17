@@ -11,7 +11,7 @@ import CONFIG from './game/config.js';
 import { floorInfo, makeEnemy, makeEnemies, rollDrops, actForFloor, ACTS,
          rollTrophy, dropsOf, mulberry32 } from './game/content.js';
 import { createFight, step, beginTurn, runToEnd, summary, hitChance,
-         STRENGTHS, ABILITIES, ULTIMATES } from './game/combat.js';
+         STRENGTHS, ABILITIES } from './game/combat.js';
 import * as DB from './game/db.js';
 import {
   newCharacter, computeStats, equip, canEquip,
@@ -259,8 +259,6 @@ function view(ch) {
         return acc;
       }, {}),
     magiaLvl: ch.cskills?.magia?.lvl ?? 1,
-    ultimate: { ...(ULTIMATES[st.wtype] ?? ULTIMATES.mele), wtype: st.wtype },
-    chargeMax: C.combat.chargeMax,
     activeFight: ch.activeFight && !ch.activeFight.over ? summary(ch.activeFight) : null,
   };
 }
@@ -499,6 +497,13 @@ function expFinish(ch, out) {
   return out;
 }
 
+// Exp do samej Magii, poza normalnym podziałem według rąk.
+function addSkillXpDoMagii(ch, xp) {
+  const s = ch.cskills.magia ??= { lvl: 1, xp: 0 };
+  s.xp += xp;
+  while (s.xp >= cskillNeed(s.lvl)) { s.xp -= cskillNeed(s.lvl); s.lvl++; }
+}
+
 // Boss aktu zawsze idzie turowo — to jest cały eksperyment: zwykłe fale grają się
 // same, ważna walka wraca w ręce gracza. Przełącznik trybu bossa nie dotyczy.
 function fightMode(ch) {
@@ -627,6 +632,14 @@ function resolveFight(ch) {
       * (meta.variant === 'boss' ? 6 : meta.variant === 'plus' ? 2 : 1);
     out.skillXp = pula;
     out.skillAwans = addCombatXp(ch, pula);
+
+    // RZUCANIE CZARÓW ĆWICZY MAGIĘ. Bez tego Magia rosłaby tylko od bicia
+    // różdżką, czyli odwrotnie, niż podpowiada intuicja.
+    const czarow = res.spellsCast ?? 0;
+    if (czarow) {
+      out.magiaXp = czarow * C.combatSkills.xpPerSpell;
+      addSkillXpDoMagii(ch, out.magiaXp);
+    }
 
     // Kronika: licznik zabić i odsłanianie trofeów. Liczy się KAŻDY ubity,
     // nie tylko pierwszy — od piętra 3 wychodzą we dwóch.

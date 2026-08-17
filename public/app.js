@@ -205,12 +205,8 @@ function arenaHtml() {
   }
   h += '</div>';
 
-  h += `<div class="charge-wrap">
-    <div class="charge"><i style="width:${Math.round((F.charge ?? 0) / (S.chargeMax || 10) * 100)}%"></i></div>
-    <div class="charge-n">${F.charge ?? 0} / ${S.chargeMax || 10}</div>
-  </div>`;
-
-  // Mana pokazuje się tylko wtedy, gdy jest po co — bez zaklęć byłaby ozdobą.
+  // Pasek ładowania skasowany z gry. Została mana — i tylko wtedy,
+  // gdy gracz ma czym czarować.
   if (F.maxMana) {
     h += `<div class="charge-wrap mana">
       <div class="charge"><i style="width:${Math.round((F.mana ?? 0) / F.maxMana * 100)}%"></i></div>
@@ -258,32 +254,15 @@ function renderFightView() {
 function actionMenu() {
   const F = FIGHT;
   const cd = F.cooldowns ?? {};
-  const full = (F.charge ?? 0) >= (S.chargeMax || 10);
-  const U = S.ultimate;
-
-  const atRisk = (F.charge ?? 0) > 0;
 
   let h = `<div class="sec">${esc(S.name)}</div><div class="strikes">`;
   for (const [k, v] of Object.entries(S.strengths)) {
-    const risk = atRisk ? Math.round((1 - v.chance) * 100) : 0;
     h += `<button class="btn strike" data-act="strike" data-s="${k}">
       <b>${esc(v.label)}</b>
-      <span>×${v.dmg.toFixed(2)} · ładuje ${v.charge}</span>
-      <span class="ch">${Math.round(v.chance * 100)}% trafienia</span>
-      ${atRisk ? `<span class="risk">${risk}% utraty paska</span>` : ''}</button>`;
+      <span>×${v.dmg.toFixed(2)}</span>
+      <span class="ch">${Math.round(v.chance * 100)}% trafienia</span></button>`;
   }
   h += `</div>`;
-
-  if (atRisk) {
-    h += `<div class="card"><div class="t2">
-      Pudło zeruje pasek. Masz na nim <b style="color:var(--brass)">${F.charge}</b> —
-      im mocniej bijesz, tym większa szansa, że stracisz wszystko.</div></div>`;
-  }
-
-  h += `<button class="btn ult wide ${full ? 'ready' : ''}" data-act="ultimate" ${full ? '' : 'disabled'}>
-    <b>${esc(U.label)}</b>
-    <span>${full ? esc(U.desc) : `pasek ${F.charge ?? 0} / ${S.chargeMax}`}</span>
-  </button>`;
 
   h += `<div class="sec">Umiejętności</div>`;
   for (const a of S.abilities) {
@@ -419,7 +398,7 @@ function tickPlayback() {
   if (!entry) return finishPlayback();
   F.idx++;
 
-  F.party = entry.party; F.enemies = entry.enemies; F.charge = entry.charge;
+  F.party = entry.party; F.enemies = entry.enemies;
   if (entry.mana !== undefined) F.mana = entry.mana;
   paintArena();
   appendLog(entry);
@@ -437,8 +416,7 @@ function finishPlayback() {
   // dociągnij resztę logu bez animacji
   while (F.idx < F.log.length) { appendLog(F.log[F.idx]); F.idx++; }
   const last = F.log[F.log.length - 1];
-  if (last) { F.party = last.party; F.enemies = last.enemies; F.charge = last.charge;
-              if (last.mana !== undefined) F.mana = last.mana; paintArena(); }
+  if (last) { F.party = last.party; F.enemies = last.enemies; if (last.mana !== undefined) F.mana = last.mana; paintArena(); }
   F.result = F.pendingResult;
 
   // Ciąg fal: wygrana i piętro jeszcze niezdobyte — następna fala rusza sama.
@@ -479,8 +457,7 @@ function appendLog(entry) {
 function syncFightHp() {
   const F = FIGHT;
   const last = F.log[F.idx - 1];
-  if (last) { F.party = last.party; F.enemies = last.enemies; F.charge = last.charge;
-              if (last.mana !== undefined) F.mana = last.mana; }
+  if (last) { F.party = last.party; F.enemies = last.enemies; if (last.mana !== undefined) F.mana = last.mana; }
 }
 
 // Przerysowuje tylko menu akcji — arena i log zostają nietknięte,
@@ -1201,7 +1178,7 @@ function statsHtml() {
     ${w('Kryt', `${(st.crit * 100).toFixed(1)}% ×${st.critMult.toFixed(2)}`, 'Szansa na trafienie krytyczne i jego mnożnik.')}
     ${w('Prędkość', st.speed, 'Jak często bijesz. 100 to cios co dwie sekundy.')}
     ${w('Moc', nf(st.power), 'Jedna liczba na porównanie buildów: atak, zdrowie i pancerz razem.')}
-    ${w('Celność', `${Math.round(st.accuracy * 100)}%`, 'Szansa, że cios trafi. Pudło zeruje pasek ultimate.')}
+    ${w('Celność', `${Math.round(st.accuracy * 100)}%`, 'Szansa, że cios trafi. Pudło to stracona tura.')}
     ${w('Unik', `${(st.evasion * 100).toFixed(1)}%`, 'Szansa, że cios wroga Cię minie.')}
     ${st.block ? w('Blok', `${Math.round(st.block * 100)}%`, 'Wymaga tarczy w drugiej ręce. Zablokowany cios traci połowę obrażeń.') : ''}
   </div>`;
@@ -2069,7 +2046,7 @@ async function startWave() {
     foeName: S.nextEnemy.name,
     party: [{ name: S.name, hp: S.stats.hp, maxHp: S.stats.maxHp, alive: true }],
     enemies: [{ name: S.nextEnemy.name, hp: S.nextEnemy.maxHp, maxHp: S.nextEnemy.maxHp, alive: true }],
-    charge: 0, cooldowns: {},
+    cooldowns: {},
     mana: S.stats.maxMana, maxMana: S.stats.maxMana, blokady: {},
     log: [], idx: 0, playing: false, result: null,
   };
@@ -2192,12 +2169,10 @@ document.addEventListener('click', async (ev) => {
       logOpen = logOpen === btn.dataset.f ? null : btn.dataset.f;
       render();
 
-    } else if (act === 'strike' || act === 'strikepotion' || act === 'ability'
-               || act === 'ultimate' || act === 'defend') {
+    } else if (act === 'strike' || act === 'strikepotion' || act === 'ability' || act === 'defend') {
       const action =
         act === 'strikepotion' ? { type: 'potion' } :
         act === 'ability'      ? { type: 'ability', id: btn.dataset.id } :
-        act === 'ultimate'     ? { type: 'ultimate' } :
         act === 'defend'       ? { type: 'defend' } :
                                  { type: 'attack', strength: btn.dataset.s };
       const d = await api('act', { action });
