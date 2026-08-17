@@ -103,7 +103,8 @@ herb → imię → OD RAZU gra
 - **Drużyna** — bohater + jeden sojusznik + pet walczą. **Sloty 2 i 3 zamknięte**
   świadomie (`config.allies.lockedSlots`), więc pełna piątka jeszcze nie istnieje.
 - **Profesje** — wszystkie siedem gra. Łańcuch domknięty: ruda→sztaby→ulepszenia,
-  ryby+zboże→jedzenie→buff, zioła→mikstury. Liczby są testowe.
+  ryby+zboże→jedzenie→buff, zioła→mikstury, esencja+ruda→runa, runa+**Kryształ
+  Magii z wypraw**→runa mocy→Eliksir. Liczby są testowe.
 - **Przywołanie** — szanse są jawne, ale brak pity, duplikatów i gwiazdek.
 - **Kronika** — Przedmioty i Osiągnięcia to na razie karty wyjaśniające zamiar.
 - **Klasy Sojuszników** — nadają rząd w szyku, ale nie dają jeszcze umiejętności
@@ -123,7 +124,7 @@ umiejętności Sojuszników · **klasy gracza (skasowane na stałe)** ·
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `112372a` — „Wszystkie siedem profesji gra" |
+| HEAD | `5d5ab1b` — „Runy dwustopniowe, Krysztal Magii z wypraw" |
 | Working tree | **czysty** |
 
 Poprzednie punkty:

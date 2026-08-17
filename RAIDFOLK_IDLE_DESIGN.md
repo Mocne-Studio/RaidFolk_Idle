@@ -1354,3 +1354,28 @@ buff liczony czasem uciekałby graczowi, który odłożył telefon.
 Progi poziomów, czasy cykli, koszty wsadu i siła buffów są dobrane pod
 obejrzenie pętli, nie pod finalny balans. Wszystkie siedzą w `config.skills`
 i `config.upgrade`.
+
+### 21.6 Runy mają dwa stopnie i bramkę na wyprawie
+
+Runy to profesja przetwarzająca, ale **inna niż reszta** — jej drugi stopień
+wymaga zejścia w teren.
+
+```
+1. ESENCJA (Górnictwo) + RUDA        →  runa zwykła
+2. runa zwykła ×2 + KRYSZTAŁ MAGII   →  RUNA MOCY
+```
+
+**Kryształ Magii wypada wyłącznie z wypraw.** Nie da się go wykopać ani
+wytworzyć. To jest świadoma bramka: samo siedzenie przy kopalni nigdy nie da
+run mocy — trzeba zaryzykować sakwę.
+
+Górnictwo kopie teraz także esencje, przeplatane z rudami, więc jedna drabinka
+karmi i Kowalstwo, i Runy.
+
+Runy mocy mają odbiorcę od pierwszego dnia: **Eliksir w Alchemii** bierze Runę
+Mocy zamiast zwykłej. Docelowo pójdą też w magię.
+
+### 21.7 Składniki widać zawsze
+
+Receptura pokazuje wsad **także pod kłódką**. Gracz musi wiedzieć, na co zbiera,
+zanim odblokuje poziom — inaczej zbieranie jest ślepe.

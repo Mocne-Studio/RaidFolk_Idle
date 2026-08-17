@@ -334,3 +334,32 @@ Na 375×812 żaden ekran nie przewija się jako strona.
 
 Werdykt właściciela. Potem: umiejętności (zapowiedziane), sloty drużyny 2–3,
 Mokradła Szeptu jako druga wyprawa.
+
+---
+
+## 2026-08-17 (siódma sesja) — runy dwustopniowe
+
+**START HEAD:** `102de0a`
+**END HEAD:** `5d5ab1b`
+
+### DONE
+
+- **Poprawka:** składniki receptury pokazywały się tylko przy odblokowanych
+  pozycjach — nie dało się zobaczyć, na co się zbiera. Teraz widać zawsze.
+- **Runy na dwa stopnie:** esencja + ruda → runa zwykła; runa ×2 + **Kryształ
+  Magii** → runa mocy.
+- **Kryształ Magii wypada wyłącznie z wypraw** (14% na walkę). Świadoma bramka:
+  samo kopanie nigdy nie da run mocy.
+- **Górnictwo kopie esencje**, przeplatane z rudami (10 pozycji drabinki).
+- **Eliksir bierze Runę Mocy** — runy mocy mają odbiorcę od pierwszego dnia.
+- Tabela surowców wyprawy jest data-driven, nie zaszyta w kodzie.
+
+### TESTS
+
+`combat.js`, `character.js`, `expedition.test.js` — przechodzą.
+Ręcznie: trzy wyprawy oddały 7 miedzi i 1 Kryształ Magii; wszystkie receptury
+pokazują składniki pod kłódką; ekran Skilli się nie przewija.
+
+### NEXT
+
+Werdykt właściciela, potem umiejętności.
