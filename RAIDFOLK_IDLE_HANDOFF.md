@@ -89,11 +89,13 @@ etykiety klas na przedmiotach.
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `aeddb98` — „Vertical slice: szesc zakladek, staly pasek walki, wyczerpanie HP, Kronika" |
-| Working tree | czysty w chwili pisania tego pliku (poza dopisywanymi dokumentami) |
+| HEAD | `4dd5503` — „Dokumenty: HANDOFF, SESSION LOG, sekcja 17 w DESIGN, aktualizacja CLAUDE.md" |
+| Working tree | **czysty** |
 
 Poprzednie punkty:
 
+- `aeddb98` — cały vertical slice: sześć zakładek, stały pasek walki,
+  wyczerpanie HP, turowy boss, Kronika
 - `0739c17` — checkpoint pracy, która leżała niezacommitowana: drzewka klas,
   blok z tarczy, wprowadzenie, wybór klasy
 - `ed3d46a` — stan sprzed vertical slice
