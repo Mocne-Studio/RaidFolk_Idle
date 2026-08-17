@@ -376,6 +376,10 @@ export const CONFIG = {
     bossEvery: 10,            // co 10 piętro — boss aktu
     floorsPerAct: 10,
     plusStatMult: 1.30,       // wariant "+" ma o tyle mocniejsze statystyki
+    // Od tego piętra przeciwnicy wychodzą we dwóch. Wcześniej szyk nie ma sensu,
+    // bo nie ma kogo zasłaniać. Drugi jest słabszy, żeby trudność nie skoczyła dwa razy.
+    duoFromFloor: 3,
+    duoStatMult: 0.65,
     // Boss ma być sprawdzianem wytrzymałości, nie ściany obrażeń:
     // wysoki mnożnik HP, niski mnożnik obrażeń.
     bossStatMult: 1.15,
@@ -480,6 +484,23 @@ export const CONFIG = {
     },
   },
 
+  // ---------- SZYK ----------
+  // Trzy rzędy. Klasa decyduje, w którym stoisz, i to jest cała reguła:
+  //   1. przód   — Wojownik, Paladyn, Tancerz Ostrzy
+  //   2. środek  — Mag
+  //   3. tył     — Łowca, Tropiciel
+  //
+  // Zasięg zależy od broni. Broń biała dosięga TYLKO pierwszego rzędu — żeby
+  // dobrać się do łucznika z tyłu, trzeba najpierw podejść, a każde podejście
+  // kosztuje turę. Dystans i magia biją wszędzie od razu i to jest ich przewaga
+  // za cenę słabszych statystyk obronnych.
+  formation: {
+    rows: { wojownik: 1, paladyn: 1, tancerz: 1, mag: 2, lowca: 3, tropiciel: 3, bohater: 1 },
+    reach: { mele: 1, dystans: 3, magia: 3 },
+    petRow: 1,               // pet leci przodem, nie ma klasy
+    maxRow: 3,
+  },
+
   // ---------- SOJUSZNICY I PET ----------
   // Sojusznik jest UŁAMKIEM bohatera, nie drugim bohaterem. Statystyki liczą się
   // z jego statystyk, więc nie ma osobnej krzywej do strojenia i sojusznik nigdy
@@ -492,6 +513,19 @@ export const CONFIG = {
     pet:  { hpPct: 0.20, dmgPct: 0.18, armorPct: 0.15, speed: 112 },
     rarityMult: { common: 1.00, uncommon: 1.18, unique: 1.42, heroic: 1.75, legendary: 2.20 },
     // Pet bije szybciej, ale słabiej — ma dokładać stały strumyk, nie ciosy.
+
+    // Drużyna otwiera się po kawałku, a nie cała na starcie. Pierwsze piętra
+    // gra się samemu — inaczej gracz nie zdąży poczuć, po co mu ktoś obok.
+    //
+    // To są progi na PRZYWOŁANIE, nie darmowe prezenty. Sojusznika i peta
+    // trzeba sobie wylosować kluczem, gra tylko otwiera taką możliwość.
+    unlock: {
+      ally1: 3,     // piętro 3 — otwiera się slot i przywoływanie sojuszników
+      pet: 10,      // walka przed bossem aktu — otwiera się przywoływanie petów
+    },
+    // Sloty 2 i 3 są świadomie zamknięte — otworzą się, gdy będzie wiadomo,
+    // czym je wypełnić i ile drużyna psuje balans.
+    lockedSlots: [1, 2],
   },
 
   // ---------- PRZYWOŁANIE ----------
@@ -503,12 +537,13 @@ export const CONFIG = {
     keysPerFloor: 1,
     keysPerBoss: 3,
     weights: { common: 620, uncommon: 250, unique: 90, heroic: 32, legendary: 8 },
+    // [nazwa, klasa]. Klasa decyduje o rzędzie w szyku — patrz formation.rows.
     companions: {
-      common:    ['Leśny Łucznik', 'Wieśniak z Widłami', 'Zbieracz Chrustu'],
-      uncommon:  ['Strażniczka Ścieżki', 'Najemnik z Rozstajów'],
-      unique:    ['Kapłanka Świtu', 'Łowca Nagród'],
-      heroic:    ['Siostra Klingi', 'Zaklinacz Popiołu'],
-      legendary: ['Rycerz Płomienia', 'Wiedźma Otchłani'],
+      common:    [['Leśny Łucznik', 'lowca'], ['Wieśniak z Widłami', 'wojownik'], ['Zbieracz Chrustu', 'tropiciel']],
+      uncommon:  [['Strażniczka Ścieżki', 'paladyn'], ['Najemnik z Rozstajów', 'wojownik']],
+      unique:    [['Kapłanka Świtu', 'mag'], ['Łowca Nagród', 'lowca']],
+      heroic:    [['Siostra Klingi', 'tancerz'], ['Zaklinacz Popiołu', 'mag']],
+      legendary: [['Rycerz Płomienia', 'paladyn'], ['Wiedźma Otchłani', 'mag']],
     },
     pets: {
       common:    ['Leśny Lis', 'Kruk', 'Jeż Kolczasty'],
@@ -517,6 +552,29 @@ export const CONFIG = {
       heroic:    ['Cierniowy Ryś', 'Wilk Wataszki'],
       legendary: ['Młody Wiwerna', 'Duch Puszczy'],
     },
+  },
+
+  // ---------- WYPRAWA ----------
+  // JEDYNE ŹRÓDŁO PRZEDMIOTÓW. Wieża daje złoto, exp skilli i wiedzę o świecie,
+  // ale nie daje łupu — po to, żeby wspinaczka i zdobywanie sprzętu były dwiema
+  // różnymi decyzjami, a nie jedną pętlą, która robi wszystko naraz.
+  //
+  // Wyprawa ma prawdziwą stawkę: łup zbiera się do sakwy i wpada do plecaka
+  // DOPIERO po ukończeniu. Śmierć po drodze zabiera wszystko, co uzbierałeś.
+  expedition: {
+    fights: 8,                 // ile walk ma wyprawa
+    // Poziomy ryzyka. mob to mnożnik statystyk przeciwnika, loot mnożnik szans.
+    risks: {
+      niskie:  { label: 'Niskie ryzyko',  mob: 0.85, lootMult: 1.0, floorOffset: -2,
+                 desc: 'Przeciwnicy słabsi od tych z Twojego piętra. Łup skromny, ale pewny.' },
+      rowne:   { label: 'Równe ryzyko',   mob: 1.00, lootMult: 1.6, floorOffset: 0,
+                 desc: 'Przeciwnicy jak na Twoim piętrze. Uczciwa wymiana.' },
+      wysokie: { label: 'Wysokie ryzyko', mob: 1.30, lootMult: 2.6, floorOffset: 3,
+                 desc: 'Mocniejsi, niż powinieneś unieść. Sakwa puchnie, śmierć boli.' },
+    },
+    // HP nie wraca między walkami wyprawy — tak samo jak w wieży.
+    // Wyprawa zaczyna się jednak od PEŁNEGO zdrowia, bo to osobne wyjście.
+    goldMult: 1.4,
   },
 
   // ---------- ŁUP ----------

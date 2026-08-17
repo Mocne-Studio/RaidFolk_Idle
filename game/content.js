@@ -30,6 +30,16 @@ function weightedPick(rng, weights) {
 
 // ---------------------------------------------------------------- akty
 
+// Klasa przeciwnika decyduje o jego rzędzie w szyku, tak samo jak u sojuszników.
+// Goblin z procą stoi z tyłu i trzeba do niego podejść — na tym stoi cała
+// mechanika szyku.
+export const FAMILY_CLASS = {
+  'Leśny Szlam': 'wojownik',
+  'Goblin': 'lowca',
+  'Leśny Wilk': 'tancerz',
+  'Strażnik Puszczy': 'paladyn',
+};
+
 export const ACTS = [
   // Akt 1 to biom Puszcza — pierwsze dziesięć pięter i jedyny akt, który ma
   // dopracowaną obsadę pod bestiariusz. Reszta czeka na swoją kolej.
@@ -93,8 +103,15 @@ export function makeEnemy(floor, fightIdx) {
   if (variant === 'plus') { hp *= t.plusStatMult; dmg *= t.plusStatMult; name += ' +'; }
   if (variant === 'boss') { hp *= t.bossHpMult;   dmg *= t.bossStatMult; speed += 10; family = info.bossName; name = family; }
 
+  const klasa = FAMILY_CLASS[family] ?? 'wojownik';
+  const row = C.formation.rows[klasa] ?? 1;
+
   return {
     name, family, variant, level: floor,
+    klasa, row,
+    // Tylni przeciwnicy biją z dystansu, przednie wręcz — tak samo jak u gracza.
+    reach: row === 1 ? C.formation.reach.mele : C.formation.maxRow,
+    dtype: klasa === 'mag' ? 'mag' : 'fiz',
     hp: Math.round(hp), maxHp: Math.round(hp),
     damage: Math.round(dmg), speed: Math.round(speed),
     armor: Math.round(floor * 3.2),
@@ -207,6 +224,22 @@ export function rollDrops(seed, { floor, variant }) {
     out.push(rollItem(rng, { ilvl: floor, weights }));
   }
   return out;
+}
+
+// Ilu przeciwników staje naraz. Od piętra 3 wychodzą we dwóch — dopiero wtedy
+// szyk zaczyna znaczyć, bo jest kogo zasłaniać i do kogo podchodzić.
+export function makeEnemies(floor, fightIdx) {
+  const pierwszy = makeEnemy(floor, fightIdx);
+  if (floor < C.tower.duoFromFloor || pierwszy.variant === 'boss') return [pierwszy];
+
+  // Drugi bierze inne ziarno, żeby nie był kopią pierwszego, i jest słabszy —
+  // dwóch pełnych przeciwników podwajało trudność z piętra na piętro.
+  const drugi = makeEnemy(floor, fightIdx + 977);
+  const m = C.tower.duoStatMult;
+  drugi.hp = Math.max(1, Math.round(drugi.hp * m)); drugi.maxHp = drugi.hp;
+  drugi.damage = Math.max(1, Math.round(drugi.damage * m));
+  drugi.gold = Math.round(drugi.gold * m);
+  return [pierwszy, drugi];
 }
 
 // ---------------------------------------------------------------- bestiariusz

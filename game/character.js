@@ -56,6 +56,8 @@ export function migrate(ch) {
   for (const id of Object.keys(C.skills)) if (C.skills[id].grywalne) ch.prof[id] ??= { lvl: 1, xp: 0 };
   ch.materials ??= {};
   ch.activity ??= null;
+  ch.unlocked ??= {};
+  ch.expedition ??= null;
   ch.cskills ??= freshCombatSkills();
   for (const id of Object.keys(C.combatSkills.list)) ch.cskills[id] ??= { lvl: 1, xp: 0 };
 
@@ -64,6 +66,10 @@ export function migrate(ch) {
   // Sojusznik usunięty z kolekcji nie może zostać w slocie jako duch.
   ch.team.allies = ch.team.allies.map(i => (ch.collection.companions[i] ? i : null));
   if (!ch.collection.pets[ch.team.pet]) ch.team.pet = null;
+  // Slot, który jeszcze się nie otworzył, nie ma prawa nikogo trzymać. Postacie
+  // sprzed bramkowania miały obsadę w zamkniętych slotach — wraca do kolekcji.
+  ch.team.allies = ch.team.allies.map((v, i) => (slotOpen(ch, i) ? v : null));
+  if (!petSlotOpen(ch)) ch.team.pet = null;
 
   // Drzewko doszło później; postacie sprzed niego dostają puste.
   ch.tree ??= {};
@@ -109,6 +115,8 @@ export function newCharacter(name, crest = null) {
     activity: null,
     // Kto stoi w drużynie. Liczby to indeksy w collection.companions / .pets.
     team: { allies: [null, null, null], pet: null },
+    unlocked: {},          // co już zostało odblokowane (sojusznik, pet)
+    expedition: null,      // trwająca wyprawa albo null
     // Skille bojowe. Rosną z tego, czym bijesz. Dają bonusy, NIE bramkują sprzętu.
     cskills: freshCombatSkills(),
     // Co wypadło z Przywołania. Drużyna czyta stąd pierwszego sojusznika.
@@ -294,6 +302,10 @@ export function computeStats(ch) {
     blockCut: C.combat.blockCut + T.blockCut,
     potionPct: T.potionPct,
     wtype: ch.equipped.bron?.wtype ?? 'mele',
+    // Bohater stoi w pierwszym rzędzie, ale jego ZASIĘG zależy od broni:
+    // bronią białą dosięga tylko przodu, łukiem i różdżką bije w każdy rząd.
+    row: C.formation.rows.bohater,
+    reach: C.formation.reach[ch.equipped.bron?.wtype ?? 'mele'] ?? 1,
     crit: C.combat.critBase + critChance / 100 + a.zrecznosc / cc.agiCritDivisor + T.critChance,
     critMult: C.combat.critMultBase + critPower / 100 + T.critPower,
     attrs: a,
@@ -370,10 +382,18 @@ export function combatSkillBonus(ch) {
 export function allyStats(hero, wpis, rodzaj = 'ally') {
   const base = C.allies[rodzaj];
   const mult = C.allies.rarityMult[wpis.rarity] ?? 1;
+  // Klasa decyduje o rzędzie, rząd decyduje, kto do kogo dosięga.
+  const klasa = wpis.klasa ?? 'wojownik';
+  const row = rodzaj === 'pet' ? C.formation.petRow : (C.formation.rows[klasa] ?? 1);
+  // Tylni sojusznicy biją z dystansu — inaczej stanie z tyłu byłoby czystą karą.
+  const reach = row === 1 ? C.formation.reach.mele : C.formation.maxRow;
   return {
     name: wpis.name,
     rarity: wpis.rarity,
     kind: rodzaj,
+    klasa: rodzaj === 'pet' ? null : klasa,
+    row, reach,
+    dtype: klasa === 'mag' ? 'mag' : 'fiz',
     maxHp: Math.max(1, Math.round(hero.maxHp * base.hpPct * mult)),
     hp: Math.max(1, Math.round(hero.maxHp * base.hpPct * mult)),
     damage: Math.max(1, Math.round(hero.damage * base.dmgPct * mult)),
@@ -387,14 +407,27 @@ export function allyStats(hero, wpis, rodzaj = 'ally') {
   };
 }
 
+// Czy wolno już przywoływać. Piętro 3 otwiera sojuszników, piętro 10 — pety.
+// To są progi na DOSTĘP, nie prezenty: towarzysza trzeba sobie wylosować kluczem.
+export const canSummon = (ch, kind) =>
+  kind === 'pets' ? petSlotOpen(ch) : slotOpen(ch, 0);
+
+// Czy slot jest już otwarty. Sloty 2 i 3 są zamknięte świadomie — patrz config.
+export function slotOpen(ch, i) {
+  if (C.allies.lockedSlots.includes(i)) return false;
+  return poziom(ch) >= C.allies.unlock.ally1;
+}
+export const petSlotOpen = (ch) => poziom(ch) >= C.allies.unlock.pet;
+
 // Kto faktycznie wchodzi do walki, w kolejności slotów. Zwraca [{...staty}].
 export function teamUnits(ch, heroStats) {
   const out = [];
-  for (const i of ch.team?.allies ?? []) {
-    const w = ch.collection?.companions?.[i];
+  (ch.team?.allies ?? []).forEach((idx, i) => {
+    if (!slotOpen(ch, i)) return;              // zamknięty slot nie wystawia nikogo
+    const w = ch.collection?.companions?.[idx];
     if (w) out.push(allyStats(heroStats, w, 'ally'));
-  }
-  const p = ch.collection?.pets?.[ch.team?.pet];
+  });
+  const p = petSlotOpen(ch) ? ch.collection?.pets?.[ch.team?.pet] : null;
   if (p) out.push(allyStats(heroStats, p, 'pet'));
   return out;
 }

@@ -53,6 +53,12 @@ const mkUnit = (u, side, idx) => ({
   // wyłącznie do tego, żeby log walki miał kolor i żeby było widać, czym bijesz.
   // Wynikają z typu broni: różdżka i kostur to magia, reszta to fizyczne.
   dtype: u.dtype ?? 'fiz',
+  // Szyk. row: 1 przód, 2 środek, 3 tył. reach: do którego rzędu sięga broń.
+  // advance rośnie, gdy jednostka podchodzi — każde podejście to jedna tura.
+  row: u.row ?? 1,
+  reach: u.reach ?? C.formation.maxRow,
+  advance: 0,
+  klasa: u.klasa ?? null,
   next: interval(u.speed),
   effects: [],           // [{ id, turns, dmgMult, armorMult, stun, critTakenMult }]
   alive: true,
@@ -74,6 +80,30 @@ export function createFight({ party, enemies, potions = 0, wtype = 'mele', abili
 const hero = (F) => F.party[0];
 const livingEnemies = (F) => F.enemies.filter(e => e.alive);
 const livingParty = (F) => F.party.filter(u => u.alive);
+
+// ---------------------------------------------------------------- szyk
+
+// Kogo ta jednostka może w tej chwili dosięgnąć. Zawsze najbliższy rząd —
+// nie da się przeskoczyć obrońcy i uderzyć w maga za nim.
+export function reachable(attacker, pool) {
+  const zywi = pool.filter(u => u.alive);
+  if (!zywi.length) return [];
+  const zasieg = attacker.reach + attacker.advance;
+  const w = zywi.filter(u => u.row <= zasieg);
+  if (!w.length) return [];
+  const naj = Math.min(...w.map(u => u.row));
+  return w.filter(u => u.row === naj);
+}
+
+export const target1 = (attacker, pool) => reachable(attacker, pool)[0] ?? null;
+
+// Ile jeszcze podejść dzieli jednostkę od najbliższego żywego wroga.
+export function stepsNeeded(attacker, pool) {
+  const zywi = pool.filter(u => u.alive);
+  if (!zywi.length) return 0;
+  const naj = Math.min(...zywi.map(u => u.row));
+  return Math.max(0, naj - (attacker.reach + attacker.advance));
+}
 
 // Nazwa jedzie razem z HP. Klient odtwarza arenę wyłącznie z wpisów logu —
 // bez niej rysował „undefined" pod każdym paskiem.
@@ -159,9 +189,23 @@ function addCharge(F, n) {
   F.charge = Math.min(F.chargeMax, F.charge + n);
 }
 
+// Podejście. Broń biała nie dosięga tylnych rzędów — trzeba stracić turę,
+// żeby skrócić dystans. To jest cała cena za bicie wręcz i cały powód,
+// dla którego łucznik z tyłu jest wart ochrony.
+function advance(F, u, pool) {
+  const zostalo = stepsNeeded(u, pool);
+  if (zostalo <= 0) return false;
+  u.advance++;
+  const po = stepsNeeded(u, pool);
+  push(F, 'info', po > 0
+    ? `${u.name} podchodzi — jeszcze ${po}`
+    : `${u.name} dopadł tylny rząd`);
+  return true;
+}
+
 function playerBasic(F, u, strength) {
-  const target = livingEnemies(F)[0];
-  if (!target) return;
+  const target = target1(u, F.enemies);
+  if (!target) { advance(F, u, F.enemies); return; }
   const dmg = strike(F, u, target, { mult: STRENGTHS[strength].dmg, strength });
 
   // Pudło zeruje pasek. Dlatego mocny cios to hazard: ładuje 3, ale trafia rzadko,
@@ -188,7 +232,7 @@ function useAbility(F, u, id) {
     return;
   }
 
-  const targets = A.target === 'all' ? livingEnemies(F) : [livingEnemies(F)[0]].filter(Boolean);
+  const targets = A.target === 'all' ? livingEnemies(F) : reachable(u, F.enemies).slice(0, 1);
   if (!targets.length) return;
 
   const hits = A.hits ?? 1;
@@ -211,7 +255,7 @@ function useUltimate(F, u) {
   const U = ULTIMATES[F.wtype] ?? ULTIMATES.mele;
   F.charge = 0;
 
-  const targets = U.target === 'all' ? livingEnemies(F) : [livingEnemies(F)[0]].filter(Boolean);
+  const targets = U.target === 'all' ? livingEnemies(F) : reachable(u, F.enemies).slice(0, 1);
   const hits = U.hits ?? 1;
   push(F, 'ult', `${u.name} · ${U.label}`);
   for (let h = 0; h < hits; h++) {
@@ -258,8 +302,9 @@ function unitTurn(F, u, action) {
   if (isStunned(u)) {
     push(F, 'info', `${u.name} jest ogłuszony i traci turę`);
   } else if (u.side === 'wrog') {
-    const target = livingParty(F)[0];
+    const target = target1(u, F.party);
     if (target) strike(F, u, target, {});
+    else advance(F, u, F.party);
   } else if (action == null) {
     autoPotion(F, u);
     playerBasic(F, u, 'srednio');
@@ -396,6 +441,36 @@ export function demo() {
       wtype: 'magia', abilities: [] }, 55)));
   console.assert(magiczny.log.some(l => l.dtype === 'mag'), 'log niesie obrazenia magiczne');
   console.assert(magiczny.log.some(l => l.dtype === 'fiz'), 'wrog bije fizycznie');
+
+  // SZYK: bron biala nie dosiega tylnego rzedu, trzeba podejsc.
+  const melee = { ...P, name: 'Mieczyk', row: 1, reach: 1, accuracy: 5, damage: 1000 };
+  const lucznik = { ...E, name: 'Lucznik', row: 3, hp: 200, maxHp: 200, damage: 1 };
+  const F2 = createFight({ party: [{ ...melee }], enemies: [{ ...lucznik }],
+    potions: 0, wtype: 'mele', abilities: [] }, 4711, 'turowa');
+  beginTurn(F2);
+  console.assert(target1(F2.party[0], F2.enemies) === null, 'bron biala nie dosiega trzeciego rzedu');
+  console.assert(stepsNeeded(F2.party[0], F2.enemies) === 2, 'do trzeciego rzedu dwa podejscia');
+  step(F2, { type: 'attack', strength: 'srednio' });
+  console.assert(F2.enemies[0].hp === 200, 'pierwsza tura to podejscie, nie cios');
+  step(F2, { type: 'attack', strength: 'srednio' });
+  console.assert(F2.enemies[0].hp === 200, 'druga tura to nadal podejscie');
+  step(F2, { type: 'attack', strength: 'srednio' });
+  console.assert(F2.enemies[0].hp < 200, 'trzecia tura wreszcie trafia');
+  console.assert(F2.log.some(l => /podchodzi/.test(l.text)), 'log mowi o podchodzeniu');
+
+  // ...a luk siega od razu
+  const F3 = createFight({ party: [{ ...melee, reach: 3 }], enemies: [{ ...lucznik }],
+    potions: 0, wtype: 'dystans', abilities: [] }, 4711, 'turowa');
+  beginTurn(F3);
+  step(F3, { type: 'attack', strength: 'srednio' });
+  console.assert(F3.enemies[0].hp < 200, 'dystans bije w tylny rzad od razu');
+
+  // Przod zaslania tyl: dopoki stoi obronca, mag za nim jest nietykalny
+  const F4 = createFight({ party: [{ ...melee, reach: 3 }],
+    enemies: [{ ...E, name: 'Obronca', row: 1, hp: 500, maxHp: 500 },
+              { ...E, name: 'Mag', row: 2, hp: 100, maxHp: 100 }],
+    potions: 0, wtype: 'dystans', abilities: [] }, 99, 'turowa');
+  console.assert(target1(F4.party[0], F4.enemies).name === 'Obronca', 'cel to zawsze najblizszy rzad');
 
   // Obrona: ten sam wrogi cios boli mniej, gdy gracz stanal w obronie.
   // Oba przebiegi maja to samo ziarno, wiec roznica bierze sie wylacznie z akcji.

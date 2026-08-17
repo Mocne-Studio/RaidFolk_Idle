@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize } from 'node:path';
 
 import CONFIG from './game/config.js';
-import { floorInfo, makeEnemy, rollDrops, actForFloor, ACTS,
+import { floorInfo, makeEnemy, makeEnemies, rollDrops, actForFloor, ACTS,
          rollTrophy, dropsOf, mulberry32 } from './game/content.js';
 import { createFight, step, beginTurn, runToEnd, summary, hitChance,
          STRENGTHS, ABILITIES, ULTIMATES } from './game/combat.js';
@@ -18,7 +18,7 @@ import {
   classOf, migrate, poziom,
   treeOf, nodeState, spendTreePoint, resetTree, respecCost,
   xpNeed, profOf, addSkillXp, canGather, teamUnits, allyStats,
-  addCombatXp, skillSplit, cskillNeed,
+  addCombatXp, skillSplit, cskillNeed, canSummon, slotOpen, petSlotOpen,
 } from './game/character.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -134,6 +134,19 @@ function view(ch) {
         ? { idx: ch.team.pet, ...allyStats(st, ch.collection.pets[ch.team.pet], 'pet') } : null,
     },
     allySlots: C.allies.slots,
+    slotOpen: Array.from({ length: C.allies.slots }, (_, i) => slotOpen(ch, i)),
+    petOpen: petSlotOpen(ch),
+    unlockAt: C.allies.unlock,
+    formation: C.formation,
+    // Wyprawa — jedyne źródło przedmiotów.
+    expedition: ch.expedition
+      ? { ...ch.expedition, sakwaCount: ch.expedition.sakwa.length,
+          riskLabel: C.expedition.risks[ch.expedition.risk]?.label,
+          enemy: makeEnemy(Math.max(1, ch.maxFloor + (C.expedition.risks[ch.expedition.risk]?.floorOffset ?? 0)),
+                           ch.expedition.fight) }
+      : null,
+    expRisks: Object.entries(C.expedition.risks).map(([id, r]) => ({ id, ...r })),
+    expFights: C.expedition.fights,
     summonOdds: C.summon.weights,
     lastDefeat: ch.lastDefeat ?? null,
     // Skille bojowe policzone dla klienta: poziom, exp, próg i aktualny udział
@@ -164,6 +177,8 @@ function view(ch) {
     equipped: ch.equipped, backpack: ch.backpack,
     backpackMax: C.gear.backpackSize,
     nextEnemy: makeEnemy(ch.floor, ch.fight),
+    nextEnemies: makeEnemies(ch.floor, ch.fight),
+    canSummon: { companions: canSummon(ch, 'companions'), pets: canSummon(ch, 'pets') },
     rarities: C.rarities,
     slots: C.gear.slots,
     mode: ch.mode ?? 'auto',
@@ -179,6 +194,55 @@ function view(ch) {
 
 // ---------------------------------------------------------------- akcje
 
+// ---------------------------------------------------------------- wyprawa
+// Osobne wyjście poza wieżę i JEDYNE źródło przedmiotów. Łup zbiera się
+// do sakwy i wpada do plecaka dopiero po ukończeniu — śmierć zabiera wszystko.
+
+function expEnemy(ch) {
+  const E = C.expedition;
+  const r = E.risks[ch.expedition.risk] ?? E.risks.rowne;
+  const pietro = Math.max(1, ch.maxFloor + r.floorOffset);
+  const e = makeEnemy(pietro, ch.expedition.fight);
+  e.hp = Math.round(e.hp * r.mob); e.maxHp = e.hp;
+  e.damage = Math.round(e.damage * r.mob);
+  e.gold = Math.round(e.gold * E.goldMult);
+  e.expFloor = pietro;
+  return e;
+}
+
+function doExpStart(ch, risk) {
+  if (ch.activeFight && !ch.activeFight.over) return { error: 'Najpierw dokończ albo porzuć walkę' };
+  if (ch.expedition) return { error: 'Wyprawa już trwa' };
+  if (!C.expedition.risks[risk]) return { error: 'Nieznane ryzyko' };
+  ch.expedition = { risk, fight: 0, fights: C.expedition.fights, sakwa: [], gold: 0 };
+  ch.hpLost = 0;                 // wyprawa zaczyna się od pełnego zdrowia
+  return { ok: true };
+}
+
+// Porzucenie wyprawy w trakcie: sakwa przepada, tak samo jak przy śmierci.
+function doExpLeave(ch) {
+  if (!ch.expedition) return { error: 'Nie jesteś na wyprawie' };
+  const stracone = ch.expedition.sakwa.length;
+  ch.expedition = null;
+  ch.activeFight = null;
+  ch.hpLost = 0;
+  return { ok: true, stracone };
+}
+
+// Ukończona wyprawa oddaje sakwę do plecaka.
+function expFinish(ch, out) {
+  const sakwa = ch.expedition.sakwa;
+  out.expDone = true;
+  out.expLoot = [];
+  for (const d of sakwa) {
+    if (ch.backpack.length >= C.gear.backpackSize) { out.backpackFull = true; break; }
+    ch.backpack.push(d); out.expLoot.push(d);
+  }
+  ch.expedition = null;
+  ch.hpLost = 0;
+  return out;
+}
+
 // Boss aktu zawsze idzie turowo — to jest cały eksperyment: zwykłe fale grają się
 // same, ważna walka wraca w ręce gracza. Przełącznik trybu bossa nie dotyczy.
 function fightMode(ch) {
@@ -188,8 +252,10 @@ function fightMode(ch) {
 // Rozpoczyna walkę. W trybie auto od razu ją rozgrywa,
 // w turowym zapisuje stan i oddaje sterowanie graczowi.
 function startFight(ch) {
+  const naWyprawie = !!ch.expedition;
   const info = floorInfo(ch.floor);
-  if (ch.fight >= info.fights) return { error: 'Piętro zdobyte — idź wyżej' };
+  if (!naWyprawie && ch.fight >= info.fights) return { error: 'Piętro zdobyte — idź wyżej' };
+  if (naWyprawie && ch.expedition.fight >= ch.expedition.fights) return { error: 'Wyprawa skończona' };
 
   // Niedokończona walka turowa nie może być ślepym zaułkiem. Wcześniej zwracała
   // „Walka już trwa" i gracz zostawał z nią na zawsze, bo ekran jej nie pokazywał.
@@ -198,7 +264,9 @@ function startFight(ch) {
     return { fight: summary(ch.activeFight), enemy: ch.activeFight.enemies[0], awaiting: true, resumed: true };
   }
 
-  const enemy = makeEnemy(ch.floor, ch.fight);
+  // Od piętra 3 wychodzą we dwóch — dopiero wtedy szyk ma sens.
+  const wrogowie = naWyprawie ? [expEnemy(ch)] : makeEnemies(ch.floor, ch.fight);
+  const enemy = wrogowie[0];
   const st = computeStats(ch);
   const seed = (Date.now() ^ (ch.floor * 7919) ^ (ch.fight * 104729)) >>> 0;
 
@@ -213,20 +281,27 @@ function startFight(ch) {
       block: st.block, blockCut: st.blockCut, potionPct: st.potionPct,
       // Rodzaj obrażeń bierze się z broni w ręce. Log walki koloruje po tym.
       dtype: st.wtype === 'magia' ? 'mag' : 'fiz',
+      // Szyk: bohater stoi z przodu, ale zasięg ma z broni.
+      row: st.row, reach: st.reach,
     },
     // Sojusznicy i pet wchodzą do walki na tych samych prawach co bohater.
     // Ich HP nie przenosi się między falami — wyczerpanie dotyczy gracza.
     ...teamUnits(ch, st)],
-    enemies: [enemy],
+    enemies: wrogowie,
     potions: ch.potions,
     wtype: st.wtype,
     abilities: ch.abilities ?? Object.keys(ABILITIES),
   }, seed, fightMode(ch));
-  F.enemyMeta = { variant: enemy.variant, gold: enemy.gold, floor: ch.floor,
-                  fightIdx: ch.fight, family: enemy.family };
+  F.enemyMeta = { variant: enemy.variant,
+                  gold: wrogowie.reduce((s, w) => s + w.gold, 0),
+                  floor: naWyprawie ? enemy.expFloor : ch.floor,
+                  fightIdx: naWyprawie ? ch.expedition.fight : ch.fight,
+                  family: enemy.family,
+                  families: wrogowie.map(w => w.family),
+                  wyprawa: naWyprawie };
   ch.activeFight = F;
 
-  if (fightMode(ch) === 'auto') { runToEnd(F); return resolveFight(ch); }
+  if ((naWyprawie ? (ch.mode ?? 'auto') : fightMode(ch)) === 'auto') { runToEnd(F); return resolveFight(ch); }
 
   beginTurn(F);           // przewiń wrogie ciosy do pierwszej decyzji gracza
   if (F.over) return resolveFight(ch);
@@ -269,20 +344,41 @@ function resolveFight(ch) {
     out.skillXp = pula;
     out.skillAwans = addCombatXp(ch, pula);
 
-    // Kronika: licznik zabić i odsłanianie trofeów.
-    const wpis = ch.bestiary[meta.family] ??= { kills: 0, drops: [] };
-    wpis.kills++;
-    const trofeum = rollTrophy((F.seed ^ 0x5EED) >>> 0, meta.family, wpis.drops, meta.variant);
-    if (trofeum) { wpis.drops.push(trofeum); out.trophy = trofeum; }
-
-    const drops = rollDrops((F.seed ^ 31337) >>> 0, { floor: meta.floor, variant: meta.variant });
-    for (const d of drops) {
-      if (ch.backpack.length >= C.gear.backpackSize) { out.backpackFull = true; break; }
-      giveId(d); ch.backpack.push(d); out.loot.push(d);
+    // Kronika: licznik zabić i odsłanianie trofeów. Liczy się KAŻDY ubity,
+    // nie tylko pierwszy — od piętra 3 wychodzą we dwóch.
+    for (const fam of meta.families ?? [meta.family]) {
+      const wpis = ch.bestiary[fam] ??= { kills: 0, drops: [] };
+      wpis.kills++;
+      const trofeum = rollTrophy((F.seed ^ 0x5EED ^ fam.length) >>> 0, fam, wpis.drops, meta.variant);
+      if (trofeum) { wpis.drops.push(trofeum); out.trophy = trofeum; }
     }
 
-    ch.fight++;
-    if (ch.fight >= info.fights) out.floorCleared = true;
+    // ŁUP TYLKO Z WYPRAWY. Wieża daje złoto, exp skilli i wpisy w Kronice,
+    // ale przedmiotów nie daje — to są dwie różne decyzje, nie jedna pętla.
+    if (meta.wyprawa) {
+      const r = C.expedition.risks[ch.expedition.risk] ?? C.expedition.risks.rowne;
+      const ile = Math.random() < (C.loot.dropChance * r.lootMult) ? 1 : 0;
+      const drops = ile
+        ? rollDrops((F.seed ^ 31337) >>> 0, { floor: meta.floor, variant: 'plus' })
+        : [];
+      for (const d of drops) { giveId(d); ch.expedition.sakwa.push(d); out.loot.push(d); }
+      ch.expedition.gold += meta.gold;
+      ch.expedition.fight++;
+      out.expWave = ch.expedition.fight;
+      out.expWaves = ch.expedition.fights;
+      out.sakwa = ch.expedition.sakwa.length;
+      if (ch.expedition.fight >= ch.expedition.fights) expFinish(ch, out);
+    } else {
+      ch.fight++;
+      if (ch.fight >= info.fights) out.floorCleared = true;
+    }
+  } else if (meta.wyprawa) {
+    // Śmierć na wyprawie zabiera CAŁĄ sakwę. To jest ta prawdziwa stawka,
+    // której wieża nie ma.
+    out.expLost = ch.expedition.sakwa.length;
+    out.expFailed = true;
+    ch.expedition = null;
+    ch.hpLost = 0;
   } else {
     // Porażka cofa na początek piętra i oddaje pełne HP. Bez tego wyczerpanie
     // zamyka gracza w pętli, z której nie da się wyjść — a nic nie tracisz
@@ -398,6 +494,11 @@ function doMineTick(ch) {
 // ani pity. Wynik ląduje w kolekcji, którą czyta Drużyna i Kronika.
 function doSummon(ch, rodzaj) {
   const kind = rodzaj === 'pets' ? 'pets' : 'companions';
+  if (!canSummon(ch, kind)) {
+    return { error: kind === 'pets'
+      ? `Pety otwierają się na piętrze ${C.allies.unlock.pet}`
+      : `Sojusznicy otwierają się na piętrze ${C.allies.unlock.ally1}` };
+  }
   if (ch.currency < C.summon.keyCost) return { error: 'Brak kluczy' };
   ch.currency -= C.summon.keyCost;
 
@@ -408,8 +509,11 @@ function doSummon(ch, rodzaj) {
   for (const [k, w] of wagi) { if ((r -= w) <= 0) { rarity = k; break; } }
 
   const pula = C.summon[kind][rarity];
-  const name = pula[Math.floor(rng() * pula.length)];
-  const wynik = { name, rarity, kind };
+  const wpis = pula[Math.floor(rng() * pula.length)];
+  // Sojusznicy mają klasę (decyduje o rzędzie w szyku), pety nie — pet zawsze
+  // leci przodem.
+  const [name, klasa] = Array.isArray(wpis) ? wpis : [wpis, null];
+  const wynik = { name, rarity, kind, klasa };
   ch.collection[kind].push(wynik);
   return { ok: true, summon: wynik };
 }
@@ -498,6 +602,8 @@ const server = http.createServer(async (req, res) => {
         case '/api/minestop':result = doMineStop(ch); break;
         case '/api/minetick':result = doMineTick(ch); break;
         case '/api/team':    result = doTeam(ch, body.slot, body.idx); break;
+        case '/api/expstart':result = doExpStart(ch, String(body.risk)); break;
+        case '/api/expleave':result = doExpLeave(ch); break;
         case '/api/equip':   result = equip(ch, String(body.itemId)); break;
         case '/api/potion': {
           if (ch.potions <= 0) { result = { error: 'Brak mikstur' }; break; }

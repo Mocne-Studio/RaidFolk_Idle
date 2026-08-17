@@ -309,16 +309,21 @@ function renderFightResult(f) {
 
   if (!f.win) {
     h += `<div class="card bad cleared">
-      <div class="big-word bad">PORAŻKA</div>
+      <div class="big-word bad">${f.expFailed ? 'WYPRAWA PRZEPADŁA' : 'PORAŻKA'}</div>
       <div class="t2" style="text-align:center">${esc(f.enemy.name)} był za mocny.
-        Wracasz na pierwszą falę tego piętra z pełnym zdrowiem —
-        nie tracisz nic poza czasem i wypitymi miksturami.</div>
-      <button class="btn solid big wide" style="margin-top:12px" data-act="closefight">Spróbuj jeszcze raz</button>
+        ${f.expFailed
+          ? `Sakwa została w lesie — <b>${f.expLost} przedmiotów przepadło</b>. Zdrowie wraca pełne.`
+          : 'Wracasz na pierwszą falę tego piętra z pełnym zdrowiem — nie tracisz nic poza czasem i wypitymi miksturami.'}</div>
+      <button class="btn solid big wide" style="margin-top:12px" data-act="closefight">
+        ${f.expFailed ? 'Wróć do huba' : 'Spróbuj jeszcze raz'}</button>
     </div>`;
     return h;
   }
 
-  if (f.floorCleared) {
+  if (f.expDone) {
+    h += `<div class="card hi cleared"><div class="big-word">WYPRAWA UKOŃCZONA</div>
+      <div class="t2" style="text-align:center">Sakwa wpadła do plecaka.</div></div>`;
+  } else if (f.floorCleared) {
     h += `<div class="card hi cleared"><div class="big-word">PIĘTRO ZDOBYTE</div></div>`;
   }
 
@@ -337,11 +342,19 @@ function renderFightResult(f) {
         <div class="t2">Odsłonięte na zawsze w Kronice, w karcie ${esc(f.enemy.name)}.</div></div>`;
   }
 
-  if (f.loot.length) h += `<div class="sec">Łup · ${f.loot.length}</div>` + f.loot.map(it => itemRow(it)).join('');
+  if (f.expWave) {
+    h += `<div class="card"><div class="stat"><span class="k">Sakwa</span>
+      <span class="v" style="color:var(--brass)">${f.sakwa} przedmiotów</span></div>
+      <div class="t2" style="margin-top:5px">Wpadnie do plecaka po ukończeniu wyprawy. Padniesz — przepadnie.</div></div>`;
+  }
+
+  const lista = f.expDone ? (f.expLoot ?? []) : f.loot;
+  if (lista.length) h += `<div class="sec">${f.expDone ? 'Sakwa' : 'Znalezione'} · ${lista.length}</div>`
+    + lista.map(it => itemRow(it, { equipped: !f.expDone })).join('');
   if (f.backpackFull) h += `<div class="card bad"><div class="t2">Plecak pełny — reszta łupu przepadła.</div></div>`;
 
   h += `<div class="actions">
-    <button class="btn solid" data-act="closefight">${f.floorCleared ? 'Dalej' : 'Następna fala'}</button>
+    <button class="btn solid" data-act="closefight">${f.floorCleared || f.expDone ? 'Dalej' : 'Następna walka'}</button>
   </div>`;
   return h;
 }
@@ -392,7 +405,7 @@ function finishPlayback() {
 
   // Ciąg fal: wygrana i piętro jeszcze niezdobyte — następna fala rusza sama.
   // Przegrana albo zdobyte piętro zatrzymują ciąg i oddają ekran graczowi.
-  if (AUTO && F.result?.win && !F.result.floorCleared) {
+  if (AUTO && F.result?.win && !F.result.floorCleared && !F.result.expDone) {
     setTimeout(() => { if (AUTO) { FIGHT = null; startWave(); } }, 600 / SPEED);
     paintCombatBar();
     return;
@@ -470,9 +483,9 @@ let advView = 'hub';     // 'hub' | 'wieza'
 
 const TRYBY = [
   { id: 'wieza',  ic: '🗼', label: 'Wieża',      stan: 'on',
-    desc: 'Wspinaczka bez końca. Piętro to od sześciu do dziesięciu fal, co dziesiąte pilnuje boss.' },
-  { id: 'wyprawa',ic: '🧭', label: 'Wyprawa',    stan: 'soon',
-    desc: 'Dłuższy wypad poza wieżę, z prawdziwą stawką i śmiercią, która coś kosztuje.' },
+    desc: 'Wspinaczka bez końca. Złoto i exp, ale ŻADNYCH przedmiotów.' },
+  { id: 'wyprawa',ic: '🧭', label: 'Wyprawa',    stan: 'on',
+    desc: 'Jedyne źródło przedmiotów. Osiem walk, sakwa wpada do plecaka dopiero na końcu.' },
   { id: 'wboss',  ic: '🐉', label: 'World Boss', stan: 'lock',
     desc: 'Jeden przeciwnik dla całego serwera, bity przez wielu graczy naraz.' },
   { id: 'kolos',  ic: '🗿', label: 'Kolos',      stan: 'lock',
@@ -488,19 +501,100 @@ function renderHub() {
   h += `<div class="modes">`;
   for (const t of TRYBY) {
     const czynny = t.stan === 'on';
+    const akcja = t.id === 'wieza' ? 'opentower' : t.id === 'wyprawa' ? 'openexp' : null;
+    const podpis = t.id === 'wieza' ? `${S.actName} · piętro ${S.floor} z ${S.actId * 10}`
+      : t.id === 'wyprawa' ? (S.expedition
+          ? `TRWA · fala ${S.expedition.fight + 1} z ${S.expedition.fights} · sakwa ${S.expedition.sakwaCount}`
+          : t.desc)
+      : t.desc;
     h += `<button class="card row mode-card compact ${czynny ? 'hi' : 'off'}" title="${esc(t.desc)}"
-      ${czynny ? `data-act="opentower"` : ''} ${czynny ? '' : 'disabled'}>
+      ${akcja ? `data-act="${akcja}"` : ''} ${czynny ? '' : 'disabled'}>
       <div class="icon lg">${t.ic}</div>
       <div class="grow">
         <div class="t1">${esc(t.label)}</div>
-        <div class="t2">${czynny
-          ? `${esc(S.actName)} · piętro ${S.floor} z ${S.actId * 10}`
-          : esc(t.desc)}</div>
+        <div class="t2">${esc(podpis)}</div>
       </div>
-      <span class="badge ${czynny ? 'on' : ''}">${STAN_BADGE[t.stan]}</span>
+      <span class="badge ${czynny ? 'on' : ''}">${S.expedition && t.id === 'wyprawa' ? 'TRWA' : STAN_BADGE[t.stan]}</span>
     </button>`;
   }
   return h + `</div>`;
+}
+
+// ---------------------------------------------------------------- WYPRAWA
+// Jedyne źródło przedmiotów. Osiem walk, HP nie wraca, sakwa wpada do plecaka
+// dopiero po ukończeniu — śmierć zabiera wszystko.
+
+function renderWyprawaTryb() {
+  const st = S.stats;
+  const hpPct = Math.round(st.hp / st.maxHp * 100);
+  const E = S.expedition;
+
+  let h = `<div class="scr-head">
+    <button class="lnk" data-act="hub">‹ Wyprawa</button>
+    <span>${E ? 'W DRODZE' : 'WYBIERZ RYZYKO'}</span></div>`;
+
+  if (!E) {
+    h += `<div class="card"><div class="t2">Wieża daje złoto i exp, ale <b>nie daje przedmiotów</b>.
+      Sprzęt zdobywa się tutaj. Osiem walk pod rząd, zdrowie nie wraca między nimi,
+      a <b>sakwa wpada do plecaka dopiero na końcu</b>. Padniesz po drodze — tracisz wszystko,
+      co uzbierałeś.</div></div>`;
+    h += `<div class="scrollbox">`;
+    for (const r of S.expRisks ?? []) {
+      h += `<button class="card row res-row" data-act="expstart" data-r="${r.id}">
+        <div class="icon">${r.id === 'wysokie' ? '🔥' : r.id === 'niskie' ? '🌿' : '⚖'}</div>
+        <div class="grow"><div class="t1">${esc(r.label)}</div>
+          <div class="t2">${esc(r.desc)}</div></div>
+        <span class="badge on">×${r.lootMult.toFixed(1)} łup</span>
+      </button>`;
+    }
+    h += `</div>`;
+    return h;
+  }
+
+  const e = E.enemy;
+  h += `<div class="two-col"><div class="col">
+    <div class="card hi">
+      <div class="row" style="margin-bottom:7px">
+        <div class="grow"><div class="t1">${esc(E.riskLabel ?? 'Wyprawa')}</div>
+          <div class="t2">Walka ${E.fight + 1} z ${E.fights}</div></div>
+        <span class="badge on">SAKWA ${E.sakwaCount}</span>
+      </div>
+      <div class="waves">${Array.from({ length: E.fights }, (_, i) =>
+        `<i class="${i < E.fight ? 'done' : i === E.fight ? 'now' : ''}"></i>`).join('')}</div>
+    </div>
+
+    <div class="card ${hpPct < 40 ? 'bad' : ''}">
+      <div class="row" style="margin-bottom:6px">
+        <div class="grow"><div class="t1">Zdrowie ${nf(st.hp)} / ${nf(st.maxHp)}</div>
+          <div class="t2">Mikstury: ${S.potions}</div></div>
+        <span class="num" style="font-size:17px;color:${hpPct < 40 ? 'var(--blood)' : 'var(--brass)'}">${hpPct}%</span>
+      </div>
+      <div class="bar hp big"><i style="width:${hpPct}%"></i></div>
+      <div class="actions">
+        <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij</button>
+        <button class="btn ghost" data-act="expleave">Zawróć</button>
+      </div>
+      <div class="t2" style="margin-top:6px">Zawrócenie też zabiera sakwę.</div>
+    </div>
+  </div><div class="col">
+    <div class="units">
+      <div class="unit me"><div class="png">${heroCrest(38)}</div>
+        <div class="nm">${esc(S.name)}</div>
+        <div class="bar hp"><i style="width:${hpPct}%"></i></div>
+        <div class="hpn">${nf(st.hp)}</div></div>
+      <div class="unit"><div class="png">👹</div>
+        <div class="nm">${esc(e?.name ?? '—')}</div>
+        <div class="bar foe"><i style="width:100%"></i></div>
+        <div class="hpn">${nf(e?.maxHp ?? 0)}</div></div>
+    </div>
+    <div class="card">
+      <div class="stat"><span class="k">Atak</span><span class="v">${nf(st.damage)} vs ${nf(e?.damage ?? 0)}</span></div>
+      <div class="stat"><span class="k">Obrona</span><span class="v">${st.armor} vs ${e?.armor ?? 0}</span></div>
+    </div>
+    <button class="btn solid big wide" style="margin-top:8px" data-act="fight">
+      ${S.mode === 'auto' ? 'Ruszaj — walki lecą same' : 'Walcz'}</button>
+  </div></div>`;
+  return h;
 }
 
 // Lista pięter biomu. Zamknięte piętra pokazują tylko numer — co jest wyżej,
@@ -626,6 +720,9 @@ function renderWieza() {
 
 function renderWyprawa() {
   if (FIGHT) return renderFightView();
+  // Trwająca wyprawa zawsze wygrywa nad hubem — inaczej gracz gubi, gdzie jest.
+  if (S.expedition) return renderWyprawaTryb();
+  if (advView === 'exp') return renderWyprawaTryb();
   return advView === 'wieza' ? renderWieza() : renderHub();
 }
 
@@ -709,7 +806,7 @@ function renderPostac() {
     <div class="card row">
       <div class="grow"><div class="t1">Skille bojowe</div>
         <div class="t2">Rosną z tego, czym bijesz</div></div>
-      <button class="btn" data-act="tab" data-tab="drzewko">Otwórz</button>
+      <button class="btn" data-act="skillgo" data-t="bojowe">Otwórz</button>
     </div>
 
     <div class="sec">Kod postaci</div>
@@ -737,15 +834,13 @@ const UDZIAL_OPIS = {
   1: '100% expa', 0.5: '50% expa', 0: 'nic nie dostaje',
 };
 
-function renderDrzewko() {
+function sekcjaBojowe() {
   const lista = S.cskills ?? [];
   const dwureczna = S.hands?.offBlocked;
   const bron = S.equipped?.bron;
   const off = S.equipped?.offhand;
 
-  let h = `<div class="scr-head">
-    <button class="lnk" data-act="tab" data-tab="druzyna">‹ Drużyna</button>
-    <span>SKILLE BOJOWE</span></div>`;
+  let h = '';
 
   // Skąd bierze się podział — najważniejsza informacja na tym ekranie.
   const rece = !bron ? 'Gołe pięści — cały exp idzie w Broń białą.'
@@ -1109,22 +1204,8 @@ function panelGracza() {
       <div class="stat-box"><span class="k">Kryt</span><span class="v">${(st.crit * 100).toFixed(1)}%</span></div>
       <div class="stat-box"><span class="k">Moc</span><span class="v">${nf(st.power)}</span></div>
     </div>
-    <div class="sec">Ulepszenia</div>
-    <button class="card row team-go" data-act="tab" data-tab="postac">
-      <div class="icon">⬆</div>
-      <div class="grow"><div class="t1">Atrybuty</div>
-        <div class="t2">${S.unspentAttr ? `${S.unspentAttr} punktów czeka` : 'wszystko rozdane'}</div></div>
-    </button>
-    <button class="card row team-go" data-act="tab" data-tab="drzewko">
-      <div class="icon">⚔</div>
-      <div class="grow"><div class="t1">Skille bojowe</div>
-        <div class="t2">Rosną z tego, czym bijesz</div></div>
-    </button>
-    <button class="card row team-go" data-act="tab" data-tab="eq">
-      <div class="icon">🎒</div>
-      <div class="grow"><div class="t1">Ekwipunek</div>
-        <div class="t2">Osiem slotów, makieta postaci</div></div>
-    </button>`;
+    <div class="card"><div class="t2">Ulepszenia siedzą w zakładce <b>Skille</b> —
+      tam rozdajesz atrybuty i tam rosną skille bojowe. Tu jest sam podgląd składu.</div></div>`;
 }
 
 function panelTowarzysza() {
@@ -1241,12 +1322,57 @@ function stopMineLoop() {
   MINE = null;
 }
 
+// Skille to jedno miejsce na wszystko, co się rozwija: zbieranie, walkę
+// i atrybuty. Drużyna została podglądem składu i niczym więcej.
+let skillTab = 'zbierackie';   // 'zbierackie' | 'bojowe' | 'atrybuty'
+
 function renderSkille() {
+  let h = `<div class="scr-head">Skille
+    <span>${skillTab === 'bojowe' ? 'BOJOWE' : skillTab === 'atrybuty' ? 'ATRYBUTY' : 'ZBIERACKIE'}</span></div>`;
+
+  h += `<div class="segs">
+    <button data-act="skilltab" data-t="zbierackie" aria-selected="${skillTab === 'zbierackie'}">Zbierackie</button>
+    <button data-act="skilltab" data-t="bojowe" aria-selected="${skillTab === 'bojowe'}">Bojowe</button>
+    <button data-act="skilltab" data-t="atrybuty" aria-selected="${skillTab === 'atrybuty'}">
+      Atrybuty${S.unspentAttr ? ` · ${S.unspentAttr}` : ''}</button>
+  </div>`;
+
+  if (skillTab === 'bojowe') return h + sekcjaBojowe();
+  if (skillTab === 'atrybuty') return h + sekcjaAtrybuty();
+  return h + sekcjaZbierackie();
+}
+
+function sekcjaAtrybuty() {
+  const st = S.stats;
+  let h = `<div class="scrollbox">`;
+  h += `<div class="card ${S.unspentAttr ? 'hi' : ''} row">
+    <div class="grow"><div class="t1">Punkty do rozdania</div>
+      <div class="t2">10 na start, 3 za każde zdobyte piętro</div></div>
+    <span class="num big-n">${S.unspentAttr}</span>
+  </div>`;
+  for (const k of ['sila', 'intelekt', 'zrecznosc', 'wytrzymalosc']) {
+    h += `<div class="card row attr-row" title="${esc(ATTR_DESC[k])}">
+      <div class="grow"><div class="t1">${ATTR_LABEL[k]}</div><div class="t2">${ATTR_DESC[k]}</div></div>
+      <span class="num" style="font-size:17px;width:38px;text-align:right">${st.attrs[k]}</span>
+      <button class="btn" data-act="attr" data-attr="${k}" ${S.unspentAttr ? '' : 'disabled'}>+</button>
+    </div>`;
+  }
+  h += `<div class="statgrid" style="margin-top:8px">
+    <div class="stat-box"><span class="k">Zdrowie</span><span class="v">${nf(st.maxHp)}</span></div>
+    <div class="stat-box"><span class="k">Atak</span><span class="v">${nf(st.damage)}</span></div>
+    <div class="stat-box"><span class="k">Obrona</span><span class="v">${nf(st.armor)}</span></div>
+    <div class="stat-box"><span class="k">Prędkość</span><span class="v">${st.speed}</span></div>
+    <div class="stat-box"><span class="k">Kryt</span><span class="v">${(st.crit * 100).toFixed(1)}%</span></div>
+    <div class="stat-box"><span class="k">Moc</span><span class="v">${nf(st.power)}</span></div>
+  </div>`;
+  return h + `</div>`;
+}
+
+function sekcjaZbierackie() {
   const s = S.skills[skillOpen];
   const akt = S.activity;
 
-  let h = `<div class="scr-head">Skille <span>ZBIERACKIE</span></div>`;
-
+  let h = '';
   h += `<div class="three-col">`;
 
   // ---- lewa: lista profesji ----
@@ -1527,7 +1653,6 @@ function render() {
   $('#s-summon').innerHTML  = renderSummon();
   $('#s-kronika').innerHTML = renderKronika();
   $('#s-postac').innerHTML  = renderPostac();
-  $('#s-drzewko').innerHTML = renderDrzewko();
   paintCombatBar();
 }
 
@@ -1583,8 +1708,21 @@ document.addEventListener('click', async (ev) => {
     } else if (act === 'opentower') {
       advView = 'wieza'; render();
 
+    } else if (act === 'openexp') {
+      advView = 'exp'; render();
+
     } else if (act === 'hub') {
       advView = 'hub'; render();
+
+    } else if (act === 'expstart') {
+      const d = await api('expstart', { risk: btn.dataset.r });
+      if (!d.error) { advView = 'exp'; render(); }
+
+    } else if (act === 'expleave') {
+      if (!confirm('Zawrócić z wyprawy?\n\nSakwa przepada — wszystko, co uzbierałeś, zostaje w lesie.')) return;
+      stopPlayback();
+      const d = await api('expleave', {});
+      if (!d.error) { advView = 'hub'; toast(d.stracone ? `Przepadło ${d.stracone} przedmiotów` : 'Zawróciłeś'); render(); }
 
     } else if (act === 'goto') {
       const d = await api('goto', { floor: Number(btn.dataset.f) });
@@ -1592,6 +1730,12 @@ document.addEventListener('click', async (ev) => {
 
     } else if (act === 'skill') {
       skillOpen = btn.dataset.id; render();
+
+    } else if (act === 'skilltab') {
+      skillTab = btn.dataset.t; render();
+
+    } else if (act === 'skillgo') {
+      skillTab = btn.dataset.t; openTab('skille'); render();
 
     } else if (act === 'summonkind') {
       summonKind = btn.dataset.k; summonResult = null; render();
@@ -1644,8 +1788,9 @@ document.addEventListener('click', async (ev) => {
       finishPlayback();
 
     } else if (act === 'closefight') {
+      const byloWyprawa = FIGHT?.result?.expDone || FIGHT?.result?.expFailed;
       FIGHT = null; AUTO = false;
-      advView = 'wieza';
+      advView = byloWyprawa ? 'hub' : (S.expedition ? 'exp' : 'wieza');
       render();
 
     } else if (act === 'mode') {
