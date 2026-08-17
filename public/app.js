@@ -575,6 +575,14 @@ function renderPostac() {
       <div class="actions">
         <button class="btn" data-act="copycode">Kopiuj kod</button>
       </div>
+    </div>
+
+    <div class="sec">Zmiana postaci</div>
+    <div class="card">
+      <div class="t2" style="margin-bottom:9px">Wraca do ekranu startowego, gdzie zrobisz nową postać
+      albo wczytasz inną kodem. <b style="color:var(--brass)">Ta postać nie znika</b> — wrócisz do niej
+      swoim kodem, więc najpierw go skopiuj.</div>
+      <button class="btn wide" data-act="logout">Zmień postać</button>
     </div>`;
 
   return h;
@@ -708,6 +716,10 @@ document.addEventListener('click', async (ev) => {
       await api('attr', { attr: btn.dataset.attr }); render();
     } else if (act === 'potion') {
       await api('potion', {}); render();
+    } else if (act === 'logout') {
+      if (!confirm('Wrócić do ekranu startowego?\n\nPostać zostaje na serwerze — wrócisz do niej kodem z zakładki Konto.')) return;
+      localStorage.removeItem('rf_token');
+      location.reload();
     } else if (act === 'copycode') {
       try { await navigator.clipboard.writeText(TOKEN); toast('Kod skopiowany'); }
       catch { toast('Zaznacz i skopiuj ręcznie', true); }
