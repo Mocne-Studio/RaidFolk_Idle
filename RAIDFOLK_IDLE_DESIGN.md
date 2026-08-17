@@ -1228,3 +1228,78 @@ i ustawianiem slotów — niczym więcej.
 
 Funkcjonalność i czytelność na telefonie przed wszystkim innym. Żaden ekran
 gameplayowy nie przewija się jako strona na 375×812.
+
+---
+
+## 20. WYPRAWA V1 (17 sierpnia 2026)
+
+Decyzje trwałe, wdrożone. Uzupełniają i **korygują** sekcję 19.1.
+
+### 20.1 Podział ról
+
+```
+WIEŻA        postęp kampanii, biomy, odblokowania, złoto, exp skilli
+WYPRAWA      grind, sprzęt, materiały, klucze, ryzyko, decyzje
+```
+
+Wieża jest liniowa. Wyprawa jest powtarzalnym runem, do którego się wraca.
+
+### 20.2 Struktura runu
+
+`config.expedition.szkielet`, generowana z ziarna (ten sam seed = ten sam run):
+
+```
+walka → walka → ROZDROŻE → walka → ZDARZENIE
+→ POSTÓJ → walka → ROZDROŻE → ELITA → BOSS
+```
+
+**Rozdroże i zdarzenie zatrzymują run.** Automat nie wybiera drogi za gracza;
+`/api/fight` odmawia, a stały pasek pokazuje `DECYZJA` także z innych zakładek.
+To jest główna interakcja Wyprawy: **walkę wykonuje drużyna, ryzyko wybiera gracz.**
+
+### 20.3 Sakwa i brak wcześniejszej ekstrakcji
+
+Łup i surowce z runu trafiają do **sakwy**, nie do plecaka. Do plecaka wpadają
+**dopiero po pokonaniu bossa**.
+
+- **Śmierć** — sakwa przepada w całości.
+- **Porzucenie** — to samo. Nie jest darmową ekstrakcją i nie leczy.
+- **Noszony sprzęt i plecak sprzed wyprawy są nietknięte.** Zawsze.
+
+### 20.4 Postój — jedyny wyjątek
+
+W połowie runu gracz odsyła do plecaka **jeden przedmiot** i **jeden rodzaj
+surowca** (cały stos). Reszta sakwy zostaje na szali aż do bossa.
+
+To świadome zmiękczenie zasady „nic przed bossem": run bez żadnego wyjścia
+zamieniał serię pechowych prób w godzinę bez jednej nagrody. Postój jest wąski
+z definicji (`config.expedition.safepoint`) i to ma zostać.
+
+### 20.5 Zdrowie i mikstury
+
+**Wyprawa nie leczy na wejściu.** Wchodzisz z tym, co masz — leczysz się
+**przed** wyjściem. Inaczej start wyprawy byłby darmowym resetem HP i wywracał
+karę za porażkę.
+
+Limity noszenia: **3 mikstury na wieżę, 10 na całą wyprawę.**
+
+### 20.6 Boss wyprawy idzie turowo
+
+Priorytetowo, tak jak boss aktu — to moment, w którym **cała sakwa stoi na stole**,
+więc powinien go rozegrać gracz. Wyjątek: przełącznik „zawsze automatyczna"
+(`/api/autoboss`) dla kogoś, kto chce czystego idle.
+
+### 20.7 Porażka nie leczy nigdzie
+
+Ani w wieży, ani po wyprawie. Wyjścia są dwa: **mikstury** (docelowo z Alchemii)
+albo **regeneracja 2%/min** między sesjami.
+
+**ZNANE RYZYKO:** przy niskim złocie i zerze mikstur da się utknąć — zmierzone
+9 HP z 245, 0 mikstur, 37 złota przy koszcie mikstury 52. Jedyne wyjście to
+czekanie. Do rozstrzygnięcia razem z Alchemią.
+
+### 20.8 Czego świadomie NIE MA w V1
+
+Modyfikatory trudności i ich odblokowania (sekcje 17–18 promptu) — odłożone,
+dopóki nie wiadomo, czy bazowy run jest dobry. Reszta promptu buduje odczucie;
+modyfikatory tylko je skalują.

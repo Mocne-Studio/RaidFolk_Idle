@@ -214,3 +214,49 @@ wyczyszczona. Ekwipunek i złoto zostały.
 ### NEXT
 
 - Werdykt właściciela. Potem: Kowalstwo (ruda nie ma gdzie trafiać) i sloty 2–3.
+
+---
+
+## 2026-08-17 (czwarta sesja) — Wyprawa V1
+
+**START HEAD:** `06f6401`
+**END HEAD:** `f4b1ca1`
+
+### DONE
+
+- **Wyprawa przebudowana na roguelite run**: dziesięć etapów z szkieletu
+  generowanego z ziarna — walki, dwa rozdroża, zdarzenie, postój, elita, boss.
+- **Rozdroża i zdarzenia zatrzymują run.** Trzy rozdroża i trzy zdarzenia
+  z realnymi konsekwencjami: leczenie, klątwa (+15% obrażeń wroga na resztę runu),
+  surowiec do sakwy, mnożniki łupu, mikstura.
+- **Sakwa** — łup i surowce runu wiszą osobno, wpadają do plecaka dopiero po bossie.
+- **Postój w połowie** — odsyłasz jeden przedmiot i jeden rodzaj surowca.
+- **Boss wyprawy turowo** priorytetowo, z przełącznikiem „zawsze automatyczna".
+- **Porażka nie leczy** — nigdzie.
+- **Limity mikstur**: 3 na wieżę, 10 na wyprawę.
+- Zakładka **Przygody** (dawniej Wyprawa), z Wieżą i Wyprawą w środku.
+- UI: pasek trasy `●●◆●?⛺●◆★☠`, ekran decyzji, ekran postoju, podgląd sakwy,
+  efekty runu, podsumowania ukończenia i porażki, „Jeszcze raz".
+
+### TESTS
+
+- `node game/combat.js`, `node game/character.js` — przechodzą
+- **nowy** `node game/expedition.test.js` (wymaga `PORT=8099 node server.js`) —
+  brak leczenia na wejściu, brak wcześniejszej ekstrakcji, porzucenie niszczy
+  sakwę ale nie plecak, rozdroże zatrzymuje run i blokuje walkę, struktura runu,
+  limity mikstur, wąskość postoju
+- Ręcznie na **375×812**: pełny run od wyboru ryzyka przez rozdroże (obóz
+  wyleczył 186/212), postój (przedmiot z sakwy do plecaka, 2→1), po śmierć
+  z utratą reszty sakwy. Żaden ekran nie przewija się jako strona.
+
+### ZNANE RYZYKO
+
+Porażka bez leczenia + brak łupu z wieży potrafi zabetonować postać:
+zmierzone **9 HP z 245, 0 mikstur, 37 złota** przy koszcie mikstury 52.
+Jedyne wyjście to regeneracja 2%/min. Do rozstrzygnięcia z Alchemią.
+
+### NEXT
+
+- Werdykt właściciela o Wyprawie: długość runu, rozdroża, napięcie sakwy,
+  attrition, czytelność, chęć kliknięcia „Jeszcze raz".
+- Potem: Alchemia (mikstury) i modyfikatory trudności.
