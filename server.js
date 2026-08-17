@@ -222,7 +222,9 @@ const server = http.createServer(async (req, res) => {
         const cr = body.crest && typeof body.crest === 'object'
           ? { shape: String(body.crest.shape ?? 'tarcza').slice(0, 20),
               symbol: String(body.crest.symbol ?? 'miecz').slice(0, 20),
-              color: String(body.crest.color ?? 'mosiadz').slice(0, 20) }
+              color: String(body.crest.color ?? 'mosiadz').slice(0, 20),
+              border: String(body.crest.border ?? 'smola').slice(0, 20),
+              ink: String(body.crest.ink ?? 'smola').slice(0, 20) }
           : null;
         const ch = newCharacter(name, klasa, cr);
         const t = DB.newToken();

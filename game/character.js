@@ -37,7 +37,7 @@ export function newCharacter(name, klasa = 'wedrowiec', crest = null) {
 
   return {
     name, klasa,
-    crest: crest ?? { shape: 'tarcza', symbol: 'miecz', color: 'mosiadz' },
+    crest: crest ?? { shape: 'tarcza', symbol: 'miecz', color: 'mosiadz', border: 'smola', ink: 'smola' },
     floor: 1, fight: 0, maxFloor: 1,
     attrs, unspentAttr: 0,
     treePoints: 0,

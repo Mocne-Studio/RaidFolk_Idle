@@ -19,6 +19,8 @@
   <h1>RaidFolk Idle</h1>
   <p class="sub">Wieża · wersja testowa 0.1</p>
 
+  <h2 class="maker-title">Wybierz swoje logo</h2>
+
   <div class="maker">
     <div class="maker-preview">
       <div id="crestPreview"></div>
@@ -37,20 +39,23 @@
   <div class="sec">Symbol</div>
   <div class="picker" id="pickSymbol"></div>
 
-  <div class="sec">Kolor</div>
+  <div class="sec">Kolor środka</div>
   <div class="picker colors" id="pickColor"></div>
+
+  <div class="sec">Kolor obramowania</div>
+  <div class="picker colors" id="pickBorder"></div>
+
+  <div class="sec">Kolor symbolu</div>
+  <div class="picker colors" id="pickInk"></div>
 
   <button class="btn solid big wide" id="create" style="margin-top:16px">Wejdź do wieży</button>
 
-  <div class="sec" style="margin-top:26px">Masz już postać?</div>
+  <div class="sec" style="margin-top:24px">Masz już postać?</div>
   <div class="card">
-    <div class="t2" style="margin-bottom:9px">Wklej kod postaci, jeśli grasz z innego adresu albo z innego urządzenia. Kod znajdziesz w grze, w zakładce Konto.</div>
+    <div class="t2" style="margin-bottom:9px">Wklej kod postaci, jeśli grasz z innego adresu albo z innego urządzenia. Kod znajdziesz w grze, w zakładce Postać.</div>
     <input type="text" id="code" maxlength="40" placeholder="kod postaci" autocomplete="off" spellcheck="false">
     <button class="btn wide" id="restore" style="margin-top:9px">Wczytaj postać</button>
   </div>
-
-  <div class="sec" style="margin-top:26px">Kto już gra</div>
-  <div id="roster"></div>
 </div>
 
 <div id="app" hidden>
@@ -59,10 +64,6 @@
     <div class="who">
       <div class="n" id="hdrName">—</div>
       <div class="m" id="hdrMeta">—</div>
-    </div>
-    <div class="purse">
-      <div id="hdrGold">0 zł</div>
-      <div id="hdrPot">0 mikstur</div>
     </div>
   </div>
 

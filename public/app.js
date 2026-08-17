@@ -40,29 +40,42 @@ let crest = { ...DEFAULT_CREST };
 const heroCrest = (size) => crestSvg(S?.crest ?? DEFAULT_CREST, size);
 
 function paintMaker() {
-  $('#crestPreview').innerHTML = crestSvg(crest, 96);
+  $('#crestPreview').innerHTML = crestSvg(crest, 104);
   $('#crestName').textContent = $('#name').value.trim() || '—';
   $$('#pickShape  button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.shape));
   $$('#pickSymbol button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.symbol));
   $$('#pickColor  button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.color));
+  $$('#pickBorder button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.border));
+  $$('#pickInk    button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.ink));
 }
 
 function buildPickers() {
   $('#pickShape').innerHTML = Object.entries(SHAPES).map(([k, v]) =>
-    `<button data-v="${k}" title="${esc(v.label)}">${crestSvg({ ...crest, shape: k }, 34)}</button>`).join('');
+    `<button data-v="${k}" title="${esc(v.label)}">${crestSvg({ ...crest, shape: k }, 36)}</button>`).join('');
+  // Kafelek symbolu dostaje tło w kolorze środka herbu — inaczej ciemny symbol
+  // znika na ciemnym tle, a przy okazji od razu widać, jak wyjdzie na herbie.
+  const inkCol = (COLORS[crest.ink] ?? COLORS.smola).base;
+  const fillCol = (COLORS[crest.color] ?? COLORS.mosiadz).base;
   $('#pickSymbol').innerHTML = Object.entries(SYMBOLS).map(([k, v]) =>
-    `<button data-v="${k}" title="${esc(v.label)}"><span class="glyph">${v.g}</span></button>`).join('');
-  $('#pickColor').innerHTML = Object.entries(COLORS).map(([k, v]) =>
+    `<button data-v="${k}" title="${esc(v.label)}" style="background:${fillCol}">
+       <span class="glyph" style="color:${inkCol}">${v.g}</span></button>`).join('');
+
+  const swatches = () => Object.entries(COLORS).map(([k, v]) =>
     `<button data-v="${k}" title="${esc(v.label)}"><i style="background:${v.base}"></i></button>`).join('');
+  $('#pickColor').innerHTML = swatches();
+  $('#pickBorder').innerHTML = swatches();
+  $('#pickInk').innerHTML = swatches();
 
   const wire = (sel, key) => $$(sel + ' button').forEach(b => b.onclick = () => {
     crest[key] = b.dataset.v;
-    if (key !== 'symbol') buildPickers();     // podgląd kształtów zmienia kolor razem z herbem
+    if (key !== 'symbol') buildPickers();     // podgląd kształtów przejmuje aktualne kolory
     paintMaker();
   });
   wire('#pickShape', 'shape');
   wire('#pickSymbol', 'symbol');
   wire('#pickColor', 'color');
+  wire('#pickBorder', 'border');
+  wire('#pickInk', 'ink');
 }
 
 async function boot() {
@@ -79,14 +92,6 @@ async function boot() {
     $('#crestName').textContent = $('#name').value.trim() || '—';
   });
   $('#roll').onclick = () => { crest = randomCrest(); buildPickers(); paintMaker(); };
-
-  const r = await fetch('/api/roster').then(r => r.json());
-  $('#roster').innerHTML = r.roster.length
-    ? r.roster.slice(0, 8).map(p => `<div class="card row">
-        <div class="icon">${crestSvg(p.crest, 26)}</div>
-        <div class="grow"><div class="t1">${esc(p.name)}</div>
-        <div class="t2 num">piętro ${p.floor}</div></div></div>`).join('')
-    : `<div class="card"><div class="t2">Nikt jeszcze nie wszedł. Będziesz pierwszy.</div></div>`;
 
   $('#create').onclick = async () => {
     const name = $('#name').value.trim();
@@ -123,8 +128,6 @@ function header() {
   if (box) box.innerHTML = heroCrest(30);
   $('#hdrName').textContent = S.klasa === 'wedrowiec' ? S.name : `${S.name} · ${S.klasaLabel}`;
   $('#hdrMeta').textContent = `PIĘTRO ${S.maxFloor} · MOC ${nf(S.stats.power)} · ${S.actName.toUpperCase()}`;
-  $('#hdrGold').textContent = `${nf(S.gold)} zł`;
-  $('#hdrPot').textContent = `${S.potions} mikstur`;
 }
 
 function hpCard() {
@@ -513,6 +516,12 @@ const ATTR_DESC = {
 function renderPostac() {
   const st = S.stats;
   let h = `<div class="scr-head">${esc(S.name)} <span>${S.klasaLabel.toUpperCase()}</span></div>`;
+
+  h += `<div class="card">
+    <div class="stat"><span class="k">Złoto</span><span class="v" style="color:var(--brass)">${nf(S.gold)}</span></div>
+    <div class="stat"><span class="k">Waluta specjalna</span><span class="v">${S.currency}</span></div>
+    <div class="stat"><span class="k">Mikstury</span><span class="v">${S.potions}</span></div>
+  </div>`;
 
   h += `<div class="card ${S.unspentAttr ? 'hi' : ''}">
     <div class="row"><div class="grow"><div class="t1">Punkty do rozdania</div>

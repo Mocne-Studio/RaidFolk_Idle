@@ -18,6 +18,10 @@ body{
 button{font:inherit;color:inherit}
 
 #app{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto;background:var(--stone)}
+/* display:flex bije domyslne [hidden]{display:none} — bez tego pusty ekran gry
+   wisial pod ekranem startowym i dalo sie do niego doskrolowac */
+#app[hidden],#start[hidden]{display:none}
+#start{max-width:520px}
 
 /* ---------- nagłówek ---------- */
 .topbar{flex:none;display:flex;align-items:center;gap:10px;padding:10px 14px;
@@ -190,8 +194,10 @@ button.card:active{background:#26211B}
 /* ---------- start ---------- */
 .start{padding:28px 20px;max-width:520px;margin:0 auto}
 /* generator herbu */
+.maker-title{font-family:var(--display);font-size:19px;font-weight:400;
+  margin:0 0 12px;color:var(--ink)}
 .maker{display:flex;gap:14px;align-items:flex-start;margin-bottom:6px}
-.maker-preview{flex:none;width:110px;text-align:center}
+.maker-preview{flex:none;width:118px;text-align:center}
 .maker-preview svg{display:block;margin:0 auto}
 .maker-name{font-family:var(--display);font-size:14px;margin-top:8px;color:var(--ink-dim);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
