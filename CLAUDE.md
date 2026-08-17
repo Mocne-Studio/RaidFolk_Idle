@@ -251,8 +251,9 @@ Stara zasada zostaje w mocy tam, gdzie tekst jednak jest: **opisuj TYLKO to,
 co faktycznie działa w buildzie.** Nie obiecuj klas, wypraw ani offline’u,
 dopóki ich nie ma.
 
-Świadomie pominięte, bo w kodzie tego nie ma: mana (Intelekt daje tylko obrażenia)
-i regeneracja poza tą 2%/min między sesjami.
+**Mana już jest** — zaklęcia nią płacą, rośnie z Intelektu (`character.manaBase`,
+`manaPerInt`). Pasek ultimate został przy umiejętnościach zwykłych.
+Świadomie pominięta zostaje tylko regeneracja poza tą 2%/min między sesjami.
 
 ---
 

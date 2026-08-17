@@ -400,3 +400,39 @@ Na 375×812 ekran Skilli się nie przewija.
 
 Werdykt właściciela. Otwarte: co dają runy poza czarami, drugie zaklęcia
 pozostałych żywiołów, rzadsze runy z dropu.
+
+---
+
+## 2026-08-17 (dziewiąta sesja) — mana i skalowanie od broni
+
+**START HEAD:** `d70eb0d`
+**END HEAD:** `efb9703`
+
+### DONE
+
+- **Broń decyduje o atrybucie obrażeń** — biała/Siła, dystans/Zręczność,
+  różdżka/Intelekt. Autoatak różdżką jest magiczny. Pozostałe atrybuty liczą się
+  z wagą 0.35, więc martwy drop nie wraca.
+- **Mana** — zaklęcia kosztują manę zamiast ładunków paska. 20 + Intelekt×3,
+  regen 2 na turę, start pełny. Automat rzuca najdroższy dostępny czar.
+- **Punkty za piętro przy ostatnim mobie**, nie przy wejściu wyżej.
+  `ch.nagrodzone` blokuje podwójną wypłatę za to samo piętro.
+- **Przewijanie przeżywa render** — kopanie nie wyrzuca już na górę listy.
+
+### POPRAWKI
+
+- `charge` przy umiejętności to ile ŁADUJE pasek, nie koszt. Potraktowanie go
+  jako kosztu zablokowało wszystkie zwykłe umiejętności. Złapane testami.
+
+### TESTS
+
+`combat.js` (nowe testy many: koszt, blokada przy braku, regeneracja, brak
+ładowania paska), `character.js` (skalowanie od broni w obie strony, mana tylko
+z Intelektu), `expedition.test.js` — przechodzą.
+Ręcznie: pozycja przewijania 220 przed i po cyklu kopania; zdobycie piętra
+wypłaciło +3 punkty i +1 klucz przy ostatnim mobie.
+
+### NEXT
+
+Werdykt właściciela. Otwarte: drugie zaklęcia pozostałych żywiołów,
+czy rzucanie czarów ma dawać exp do Magii.

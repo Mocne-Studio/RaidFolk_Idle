@@ -1427,3 +1427,57 @@ należą do obu profesji, więc obie rosną, gdy kopiesz pod magię.
 Przebudowa run raz zostawiła Eliksir wskazujący na nieistniejący składnik.
 Każdy koszt receptury i każda runa czaru muszą wskazywać na istniejący surowiec —
 sprawdzane skryptem przy zmianach w `config.skills`.
+
+---
+
+## 23. BROŃ, MANA I NAGRODY (17 sierpnia 2026)
+
+### 23.1 Broń decyduje, który atrybut niesie obrażenia
+
+```
+biała    → Siła
+dystans  → Zręczność
+różdżka  → Intelekt   (autoatak jest wtedy MAGICZNY)
+```
+
+**Ale pozostałe atrybuty nie są martwe.** Liczą się z wagą
+`character.offAttrWeight` (0.35), więc pierścień z Intelektem dalej coś daje
+wojownikowi. To pokrętło pilnuje decyzji z sekcji 18.1 o braku martwego dropu —
+ustawienie go na 0 daje czyste skalowanie od broni i przywraca stary problem.
+
+### 23.2 Mana — drugi zasób obok paska
+
+**Zaklęcia kosztują manę. Umiejętności zwykłe i ultimate ładują pasek.**
+Dwa zasoby, dwie osie decyzji: pasek zarabiasz biciem, mana wraca sama.
+
+```
+maxMana  = 20 + Intelekt × 3
+regen    = 2 na każdą Twoją turę
+start    = pełna
+```
+
+Mag opłaca manę tym samym atrybutem, którym bije — a wojownik jej po prostu
+nie potrzebuje. Automat rzuca najdroższe dostępne zaklęcie, żeby mana nie stała
+pełna w trybie idle.
+
+**PUŁAPKA:** pole `charge` przy umiejętności to ile ona **ładuje** pasek,
+nie ile kosztuje. Potraktowanie go jako kosztu blokuje wszystkie zwykłe
+umiejętności naraz.
+
+Mana zamyka lukę z CLAUDE.md, gdzie była świadomie pominięta.
+
+### 23.3 Punkty za piętro lecą przy ostatnim mobie
+
+Nie przy wejściu wyżej. Nagroda ma przyjść wtedy, kiedy gracz na nią zapracował.
+
+`ch.nagrodzone` trzyma piętra już opłacone — powtórne czyszczenie tego samego
+piętra nie płaci drugi raz, bo inaczej dałoby się farmić punkty na pierwszym.
+
+### 23.4 Przerysowanie nie może gubić przewijania
+
+`render()` podmienia innerHTML, więc każde przewijane pudełko wracało na górę.
+Przy kopaniu render leci co cykl i wyrzucało gracza na początek listy w połowie
+klikania. Pozycje przewijania są zapamiętywane przed renderem i odtwarzane po.
+
+**Zasada:** każdy nowy ekran z własnym przewijaniem musi trafić do selektora
+`PRZEWIJANE` w `public/app.js`, inaczej wróci ten sam błąd.

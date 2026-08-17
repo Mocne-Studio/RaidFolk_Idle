@@ -125,7 +125,7 @@ umiejętności Sojuszników · **klasy gracza (skasowane na stałe)** ·
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `755524f` — „Magia z run: esencja + krysztal, podpiecie, Fireball" |
+| HEAD | `efb9703` — „Mana, skalowanie od broni, punkty przy ostatnim mobie" |
 | Working tree | **czysty** |
 
 Poprzednie punkty:
