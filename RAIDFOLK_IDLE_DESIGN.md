@@ -885,3 +885,107 @@ Pełny opis: `makieta_ui.html`. Tu tylko zasady.
 - Co zastąpi synergię frakcyjną jako powód, żeby polować na konkretnego sojusznika.
 
 **Na później:** sezony, endgame powyżej 200, handel, gildie, frakcje w nowej formie, nazewnictwo warstw przeciwnika.
+
+---
+
+## 17. DECYZJE Z VERTICAL SLICE (17 sierpnia 2026)
+
+Ta sekcja notuje ustalenia, które powstały przy budowie pierwszej grywalnej wersji.
+Są **zatwierdzone i wdrożone w kodzie** — nie są propozycją. Reszta dokumentu opisuje
+docelową grę; ta sekcja opisuje to, co już stoi, i tam, gdzie się różnią, **wygrywa ta sekcja**.
+
+### 17.1 Zdrowie nie wraca między falami
+
+Wcześniej wieża oddawała pełne HP przed każdą walką, a wyczerpanie należało do wypraw.
+**Teraz wyczerpanie jest w wieży i to ono jest osią napięcia piętra.**
+
+- HP wychodzi z fali takie, jakie było, i takie wchodzi w następną.
+- Pełne zdrowie oddaje **wejście na nowe piętro** albo **porażka**.
+- Porażka cofa na **pierwszą falę piętra** i nie kosztuje nic poza czasem
+  i wypitymi miksturami. Bez tego wyczerpanie zamyka gracza w pętli bez wyjścia.
+- Odzyskiwanie HP w trakcie piętra: na razie **tylko mikstury** (własne i kupione).
+  Healer, sojusznicy, kradzież życia, regeneracja i jedzenie dojdą później —
+  wtedy trzeba przeliczyć piętro od nowa.
+
+**Konsekwencja do zapamiętania:** liczba fal na piętrze (6–10) przestała być kosmetyką.
+Ośmiofalowe piętro jest istotnie trudniejsze od sześciofalowego przy tych samych mobach.
+
+### 17.2 Boss aktu zawsze idzie turowo
+
+Przełącznik trybu walki znika na piętrze bossa. Zwykłe fale grają się same,
+**ważna walka wraca w ręce gracza** — to jest główny eksperyment tej wersji.
+
+Menu tury: trzy siły ciosu · umiejętności · ultimate · **Obrona** · mikstura.
+
+### 17.3 Obrona jako akcja tury
+
+Nowa akcja: oddajesz cios, a obrażenia do Twojej następnej tury bolą o połowę mniej
+(`config.combat.defendCut`). Sensowna tylko tam, gdzie tury istnieją, czyli u bossa.
+
+Technicznie: efekt `takenMult`, zdejmowany na początku kolejnej tury tej samej jednostki.
+
+### 17.4 Automat obejmuje całe piętro
+
+Tryb automatyczny nie rozgrywa jednej walki, tylko **ciąg fal aż do zdobycia piętra
+albo porażki**. Odtwarzanie chodzi po stronie klienta, dzięki czemu walka trwa także
+wtedy, gdy gracz jest w Ekwipunku czy Kronice.
+
+Z tego wynika **stały pasek walki** — widoczny na każdej zakładce, dopóki coś się bije.
+To jest element tożsamości gry, nie ozdoba: przygotowujesz build, a walka leci obok.
+
+Tempo odtwarzania: ×1 i ×2.
+
+### 17.5 Nawigacja — sześć zakładek
+
+`Wyprawa · Drużyna · Ekwipunek · Skille · Przywołanie · Kronika`
+
+**Postać i Drzewko nie mają własnej zakładki** — siedzą pod przyciskiem profilu
+w nagłówku (herb, nick, poziom, moc, sakiewka). Sześć pozycji to maksimum, jakie
+mieści się czytelnie na dole ekranu telefonu.
+
+Wyprawa jest hubem trybów: Wieża otwarta, Wyprawa `WKRÓTCE`,
+World Boss / Kolos / Tytan `ZAMKNIĘTE`. **Tryby, których nie ma, są widoczne
+i wyłączone** — gracz ma wiedzieć, dokąd to idzie, i nie móc kliknąć w obietnicę.
+
+### 17.6 Wieża ma listę pięter i wolno się cofać
+
+Piętra biomu widać jako siatkę dziesięciu kafelków. Odblokowanie jest sekwencyjne
+(na piętro N wchodzisz po zdobyciu N−1), ale **na zdobyte piętro wolno wrócić** —
+cofanie się po sprzęt jest zaplanowaną częścią pętli, nie porażką.
+
+Zamknięte piętra pokazują wyłącznie numer. Co jest wyżej, zobaczysz, gdy tam wejdziesz.
+
+### 17.7 Pierwszy biom: Puszcza
+
+Akt 1 to **Puszcza**: Leśny Szlam, Goblin, Leśny Wilk, boss **Strażnik Puszczy**.
+Obsada dobrana pod bestiariusz — cztery wpisy, które da się skompletować.
+
+### 17.8 Kronika i trofea
+
+Bestiariusz liczy zabicia i odsłania **trofea**: po cztery na przeciwnika, nazwa bez
+statystyk, nie wchodzą do plecaka. Istnieją wyłącznie po to, żeby wpis miał co
+odsłaniać — i po to, żeby później dało się je wymienić na nagrody wracające do herbu.
+
+Boss zawsze oddaje trofeum; zwykły przeciwnik z szansą 35%.
+
+### 17.9 Klucze Przywołania to waluta bossów
+
+„Waluta specjalna" z wcześniejszej wersji jest teraz **Kluczem Przywołania**.
+Jeden portfel, nie dwa — dopóki nie wiadomo, czy Przywołanie zostaje w grze.
+
+Jeden klucz za zdobyte piętro, trzy za bossa aktu, trzy na start.
+Sojusznicy i pety losują się z **osobnych pul** — jedno losowanie nie może dać drugiego.
+
+### 17.10 Skille zbierackie nie mają stanu
+
+Siedem profesji z prawdziwymi drabinkami, ale poziomy stoją na 1 i nic się nie zbiera.
+Ekran renderuje się w całości z `config.skills`. **Nic nie jest zapisywane**, więc nic
+nie może się zepsuć przy migracji, gdy pętla zbierania w końcu wejdzie.
+
+Zasada, którą drabinka ma unieść już teraz: **poziom decyduje CO, narzędzie decyduje JAK SZYBKO.**
+
+### 17.11 Język interfejsu
+
+**Polski.** Specyfikacja vertical slice’a używała angielskich etykiet
+(`ADVENTURE`, `TEAM`, `SUMMON`) — przeczytane jako nazwy systemów, nie tekst do
+wyświetlenia. Cała gra, dokumenty i commity są polskie.

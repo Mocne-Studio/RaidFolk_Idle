@@ -13,9 +13,14 @@ nic wspólnego, nie jest jej trybem ani gałęzią. Nie sięgaj do niej po nic.
 
 | Plik | Co zawiera |
 |---|---|
+| `RAIDFOLK_IDLE_HANDOFF.md` | **zacznij tutaj** — stan gry, stan Gita, następny krok, mapa plików |
+| `RAIDFOLK_IDLE_SESSION_LOG.md` | historia prac bez czytania diffów |
 | `RAIDFOLK_IDLE_DESIGN.md` | **pełny projekt gry** — systemy, ekonomia, świat, UI |
 | `makieta_ui.html` | klikalna makieta wszystkich ekranów, także tych niezaimplementowanych |
 | `README.md` | uruchomienie, strojenie, struktura |
+
+**Sekcja 17 dokumentu projektowego opisuje to, co faktycznie stoi w kodzie.** Gdzie
+reszta dokumentu mówi co innego, wygrywa sekcja 17.
 
 **Dokument projektowy wyprzedza implementację.** Opisuje docelową grę; kod ma na razie
 pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan na później.
@@ -24,9 +29,18 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 
 ## Co JEST zaimplementowane
 
-- **Wieża** — piętra po 6–10 fal, wariant „+" co 5, boss aktu co 10, akty po 10 pięter
+- **Sześć zakładek** — Wyprawa, Drużyna, Ekwipunek, Skille, Przywołanie, Kronika.
+  Postać i Drzewko siedzą pod przyciskiem profilu w nagłówku, nie mają zakładki
+- **Stały pasek walki** — nad zakładkami, żyje na każdym ekranie, dopóki coś się bije
+- **Hub Wyprawy** — Wieża otwarta, Wyprawa `WKRÓTCE`, World Boss / Kolos / Tytan `ZAMKNIĘTE`
+- **Wieża** — piętra po 6–10 fal, wariant „+" co 5, boss aktu co 10, akty po 10 pięter;
+  siatka dziesięciu pięter biomu, odblokowanie sekwencyjne, powrót na zdobyte piętro
+- **Wyczerpanie HP** — zdrowie **nie wraca między falami**; pełne oddaje wejście
+  na nowe piętro albo porażka, która cofa na pierwszą falę
 - **Walka** — symulacja serwerowa, attack speed steruje częstotliwością ciosów
-  - dwa tryby: **automatyczny** i **turowy**
+  - dwa tryby: **automatyczny** i **turowy**; automat leci przez **całe piętro**
+  - **boss aktu zawsze turowy**, przełącznik trybu na jego piętrze znika
+  - **Obrona** jako akcja tury — połowa obrażeń do następnej tury
   - trzy siły ciosu: lekki, średni, mocny — mocniej znaczy rzadziej
   - **celność** i **unik**, obie rosną ze Zręczności
   - **pasek ultimate** (0–10): lekki ładuje 1, średni 2, mocny 3;
@@ -43,14 +57,26 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 - **Ekran wprowadzenia** — cztery ekrany, z pominięciem; treść w `public/app.js`
   (stała `INTRO`). Pokazuje się raz, tylko nowej postaci
 - **Wybór klasy** — sześć klas z opisem i skalowaniem, zaraz po wprowadzeniu
-- **Drzewka klas** — własna zakładka; 3 gałęzie × 5 węzłów × 5 rang dla każdej klasy,
+- **Drzewka klas** — 3 gałęzie × 5 węzłów × 5 rang dla każdej klasy,
   węzeł `i` wymaga `i × 2` punktów w swojej gałęzi, reset za złoto
+- **Kronika** — bestiariusz z licznikiem zabić i trofeami (4 na przeciwnika,
+  odsłaniane na zawsze); obsada biomu Puszcza
+- **Przywołanie** — klucze (dawna „waluta specjalna"), osobne pule sojuszników i petów
+
+## Zrobione w połowie
+
+- **Drużyna** — struktura pięciu slotów stoi, przywołani lądują w kolekcji,
+  ale **jeszcze nie wchodzą do walki**
+- **Skille zbierackie** — siedem profesji z drabinkami, ale to **sama makieta**:
+  poziomy stoją na 1, nic się nie zbiera, **nic się nie zapisuje**
+- **Przywołanie** — brak prawdziwych szans, pity, duplikatów i gwiazdek
+- **Kronika** — Przedmioty i Osiągnięcia to karty opisujące zamiar
 
 ## Czego NIE MA
 
-Sojusznicy i pet (sloty w arenie stoją puste, silnik gotowy) · Przywołanie i klucze · przepalanie i energia ·
-kowal i afiksy · wyprawy · world boss · rajdy · bank · skille zbierackie · offline ·
-**Dusze** · **wiele postaci na koncie**.
+Sojusznicy i pet w walce (sloty w arenie stoją puste, silnik gotowy) ·
+przepalanie i energia · kowal i afiksy · wyprawy · world boss · Kolos · Tytan ·
+rajdy · bank · pętla zbierania · offline · **Dusze** · **wiele postaci na koncie**.
 
 ---
 
@@ -70,6 +96,8 @@ pierwsza i okazała się karą, nie wyborem — Paladyn dostawał 37% mniej obra
 samych punktów. Nie wracaj do niej bez policzenia.
 
 **Skille bojowe skasowane.** Atak, Dystansowy, Magia, Obrona i Zdrowie zniknęły z gry.
+(Nie myl skasowanego **skilla** Obrona z **akcją tury** Obrona, która doszła później —
+to dwie różne rzeczy o tej samej nazwie.)
 Sprzęt bramkuje wyłącznie **poziom postaci = najwyższe zdobyte piętro** (`poziom()`
 w `game/character.js`). Po skasowaniu skilla Zdrowie darmowy przyrost HP niesie poziom
 (`hpPerLevel` × piętro), inaczej wieża robiłaby się coraz ostrzejsza dla każdego,
@@ -128,8 +156,16 @@ Powyżej 1.01 moby uciekają bezpowrotnie po dwudziestu piętrach. To już raz w
 automatyczny i turowy, a walkę turową da się zapisać do bazy i wznowić. Generator liczb
 losowych ma jawny stan (`nextRandom`), nie domknięcie.
 
-**Log walki niesie stan HP obu stron przy każdym wpisie.** Na tym stoi animacja pasków
-po stronie klienta. Nie usuwaj `party`/`enemies` ze wpisów logu.
+**Log walki niesie stan HP i NAZWY obu stron przy każdym wpisie.** Na tym stoi cała
+arena po stronie klienta — nie tylko animacja pasków. Nie usuwaj `party`/`enemies`
+ani `name` ze wpisów logu; bez nazw klient rysował „undefined" pod każdym paskiem.
+
+**Zdrowie nie wraca między falami.** Wcześniej wracało i to jest odwrócona decyzja,
+nie błąd. `startFight` wchodzi w walkę z `stats.hp`, `resolveFight` zapisuje, ile
+zostało. Pełne HP oddaje tylko `doAdvance` i porażka. Nie „naprawiaj" tego z powrotem.
+
+**Automat rozgrywa całe piętro, nie jedną walkę.** Ciąg fal siedzi po stronie klienta
+(`AUTO` w `public/app.js`), bo na tym stoi stały pasek walki widoczny na innych zakładkach.
 
 **Strona gracza to tablica jednostek**, choć na razie jest w niej jedna. Układ jest
 przygotowany na 1 + 3 sojuszników + pet.
@@ -178,9 +214,9 @@ Baza to plik `raidfolk.db`. Skasowanie go czyści świat.
 
 ## Ekran wprowadzenia — zasada na przyszłość
 
-Zrobiony: cztery ekrany po stworzeniu postaci (wieża bez końca → ściana wewnątrz
-piętra → tryby i siły ciosu → pasek ultimate i atrybuty), przycisk dalej i pominięcie.
-Treść siedzi w stałej `INTRO` w `public/app.js`.
+Zrobiony: cztery ekrany po stworzeniu postaci (wieża bez końca → **zdrowie nie wraca
+między falami** → tryby, siły ciosu i turowy boss → pasek ultimate i atrybuty),
+przycisk dalej i pominięcie. Treść siedzi w stałej `INTRO` w `public/app.js`.
 
 **Ustalona zasada: wprowadzenie opisuje TYLKO to, co faktycznie działa w buildzie.**
 Nie opisuj klas, wypraw ani drzewka, dopóki ich nie ma — gracz zobaczyłby obietnice,
