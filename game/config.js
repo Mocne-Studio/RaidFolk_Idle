@@ -29,6 +29,10 @@ export const CONFIG = {
     blockCut: 0.50,           // zablokowany cios traci połowę obrażeń
     blockChanceMax: 0.60,
 
+    // Obrona — akcja tury. Oddajesz cios, dostajesz o tyle mniej do swojej
+    // następnej tury. Sensowna tylko tam, gdzie tury są, czyli u bossa.
+    defendCut: 0.50,
+
     // Pasek ultimate. Lekki cios ładuje 1, średni 2, mocny 3.
     chargeMax: 10,
   },
@@ -341,6 +345,52 @@ export const CONFIG = {
     goldBase: 8, goldPerFloor: 3,
     treePointsPerFloor: 1,
     treePointsPerBoss: 5,
+  },
+
+  // ---------- SKILLE ZBIERACKIE ----------
+  // Na razie SAMA MAKIETA: poziomy stoją na 1, nic się nie zbiera, nie ma pętli
+  // ani postępu offline. Drabinki są prawdziwe i to one niosą całą zasadę:
+  // POZIOM decyduje, CO możesz zebrać, NARZĘDZIE decyduje, JAK SZYBKO.
+  skills: {
+    gornictwo:   { label: 'Górnictwo',    ic: '⛏', daje: 'ruda i kryształy', zasila: 'Kowalstwo',
+      ladder: [['Miedź', 1], ['Cyna', 15], ['Żelazo', 30], ['Węgiel', 41], ['Mithril', 55]] },
+    kowalstwo:   { label: 'Kowalstwo',    ic: '🔨', daje: 'przetapianie i sprzęt', zasila: 'Ekwipunek',
+      ladder: [['Sztaba miedzi', 1], ['Brąz', 15], ['Stal', 30], ['Stal hartowana', 45], ['Mithril', 60]] },
+    rybolowstwo: { label: 'Rybołówstwo',  ic: '🐟', daje: 'ryby', zasila: 'Gotowanie',
+      ladder: [['Płotka', 1], ['Pstrąg', 16], ['Szczupak', 32], ['Jesiotr', 48], ['Ryba głębin', 62]] },
+    rolnictwo:   { label: 'Rolnictwo',    ic: '🌾', daje: 'rośliny i zwierzęta', zasila: 'Gotowanie i Alchemia',
+      ladder: [['Len', 1], ['Zboże', 14], ['Zioła gorzkie', 28], ['Korzeń nocny', 44], ['Kwiat cierniowy', 58]] },
+    gotowanie:   { label: 'Gotowanie',    ic: '🍲', daje: 'buffy przed walką', zasila: 'Drużyna i pet',
+      ladder: [['Placek', 1], ['Zupa', 18], ['Pieczeń', 34], ['Uczta', 50], ['Uczta wieży', 65]] },
+    alchemia:    { label: 'Alchemia',     ic: '⚗', daje: 'mikstury do walki', zasila: 'Walka',
+      ladder: [['Słaba mikstura', 1], ['Mikstura', 20], ['Mocna mikstura', 36], ['Eliksir', 52], ['Eliksir wieży', 68]] },
+    runy:        { label: 'Runy',         ic: '✦', daje: 'runy dla magii', zasila: 'Magia',
+      ladder: [['Runa iskry', 1], ['Runa ognia', 22], ['Runa mrozu', 38], ['Runa burzy', 54], ['Runa otchłani', 70]] },
+  },
+
+  // ---------- PRZYWOŁANIE ----------
+  // Prototyp odczucia, nie ekonomia. Klucze to ta sama waluta, którą oddaje boss
+  // aktu — nie zakładamy drugiego portfela, dopóki nie wiadomo, czy system zostaje.
+  summon: {
+    keyCost: 1,
+    startingKeys: 3,
+    keysPerFloor: 1,
+    keysPerBoss: 3,
+    weights: { common: 620, uncommon: 250, unique: 90, heroic: 32, legendary: 8 },
+    companions: {
+      common:    ['Leśny Łucznik', 'Wieśniak z Widłami', 'Zbieracz Chrustu'],
+      uncommon:  ['Strażniczka Ścieżki', 'Najemnik z Rozstajów'],
+      unique:    ['Kapłanka Świtu', 'Łowca Nagród'],
+      heroic:    ['Siostra Klingi', 'Zaklinacz Popiołu'],
+      legendary: ['Rycerz Płomienia', 'Wiedźma Otchłani'],
+    },
+    pets: {
+      common:    ['Leśny Lis', 'Kruk', 'Jeż Kolczasty'],
+      uncommon:  ['Młody Wilk', 'Sokół'],
+      unique:    ['Rosomak', 'Puchacz Mgły'],
+      heroic:    ['Cierniowy Ryś', 'Wilk Wataszki'],
+      legendary: ['Młody Wiwerna', 'Duch Puszczy'],
+    },
   },
 
   // ---------- ŁUP ----------

@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize } from 'node:path';
 
 import CONFIG from './game/config.js';
-import { floorInfo, makeEnemy, rollDrops, actForFloor, ACTS } from './game/content.js';
+import { floorInfo, makeEnemy, rollDrops, actForFloor, ACTS,
+         rollTrophy, dropsOf, mulberry32 } from './game/content.js';
 import { createFight, step, beginTurn, runToEnd, summary, hitChance,
          STRENGTHS, ABILITIES, ULTIMATES } from './game/combat.js';
 import * as DB from './game/db.js';
@@ -57,6 +58,35 @@ function treeView(ch) {
   }));
 }
 
+// Lista pięter aktu, w którym gracz stoi. Odblokowanie jest sekwencyjne:
+// na piętro N wchodzisz dopiero, gdy N-1 padło.
+function floorList(ch) {
+  const act = actForFloor(ch.floor);
+  const first = (act.id - 1) * C.tower.floorsPerAct + 1;
+  const out = [];
+  for (let f = first; f < first + C.tower.floorsPerAct; f++) {
+    const i = floorInfo(f);
+    out.push({ floor: f, isBoss: i.isBoss, isPlus: i.isPlus, fights: i.fights,
+               bossName: i.bossName, unlocked: f <= ch.maxFloor, cleared: f < ch.maxFloor,
+               here: f === ch.floor });
+  }
+  return out;
+}
+
+// Kronika w postaci gotowej do wyświetlenia — klient nie musi znać tabel trofeów.
+function bestiaryView(ch) {
+  const znane = new Set();
+  for (const a of ACTS) for (const f of a.families) znane.add(f);
+  znane.add('Strażnik Puszczy');
+  return [...znane].map(family => {
+    const w = ch.bestiary?.[family];
+    return {
+      family, kills: w?.kills ?? 0, seen: !!w,
+      drops: dropsOf(family).map(d => (w?.drops ?? []).includes(d) ? d : null),
+    };
+  }).sort((a, b) => Number(b.seen) - Number(a.seen));
+}
+
 function view(ch) {
   const st = computeStats(ch);
   const info = floorInfo(ch.floor);
@@ -64,6 +94,13 @@ function view(ch) {
   const isShield = ch.equipped.offhand?.wtype === 'tarcza';
 
   return {
+    floors: floorList(ch),
+    bestiary: bestiaryView(ch),
+    collection: ch.collection ?? { companions: [], pets: [] },
+    skills: C.skills,
+    keys: ch.currency,
+    keyCost: C.summon.keyCost,
+    forcedTurn: info.isBoss,
     name: ch.name, klasa: ch.klasa, klasaLabel: classOf(ch.klasa).label, crest: ch.crest,
     floor: ch.floor, maxFloor: ch.maxFloor, fight: ch.fight,
     fightsOnFloor: info.fights, isBoss: info.isBoss, isPlus: info.isPlus,
@@ -90,6 +127,12 @@ function view(ch) {
 
 // ---------------------------------------------------------------- akcje
 
+// Boss aktu zawsze idzie turowo — to jest cały eksperyment: zwykłe fale grają się
+// same, ważna walka wraca w ręce gracza. Przełącznik trybu bossa nie dotyczy.
+function fightMode(ch) {
+  return floorInfo(ch.floor).isBoss ? 'turowa' : (ch.mode ?? 'auto');
+}
+
 // Rozpoczyna walkę. W trybie auto od razu ją rozgrywa,
 // w turowym zapisuje stan i oddaje sterowanie graczowi.
 function startFight(ch) {
@@ -101,11 +144,12 @@ function startFight(ch) {
   const st = computeStats(ch);
   const seed = (Date.now() ^ (ch.floor * 7919) ^ (ch.fight * 104729)) >>> 0;
 
-  // W wieży wchodzisz w każdą walkę z pełnym HP.
-  // Wyczerpanie między falami to mechanika wypraw — tam HP nie wraca.
+  // HP NIE wraca między falami. Wchodzisz w falę drugą z tym, co zostało po pierwszej —
+  // na tym wyczerpaniu stoi całe napięcie piętra. Pełne HP oddaje dopiero wejście
+  // na nowe piętro albo przegrana (bo inaczej nie dałoby się powtórzyć).
   const F = createFight({
     party: [{
-      name: ch.name, kind: 'gracz', hp: st.maxHp, maxHp: st.maxHp,
+      name: ch.name, kind: 'gracz', hp: Math.max(1, st.hp), maxHp: st.maxHp,
       damage: st.damage, speed: st.speed, armor: st.armor,
       crit: st.crit, critMult: st.critMult, accuracy: st.accuracy, evasion: st.evasion,
       block: st.block, blockCut: st.blockCut, potionPct: st.potionPct,
@@ -115,11 +159,12 @@ function startFight(ch) {
     potions: ch.potions,
     wtype: st.wtype,
     abilities: ch.abilities ?? Object.keys(ABILITIES),
-  }, seed, ch.mode ?? 'auto');
-  F.enemyMeta = { variant: enemy.variant, gold: enemy.gold, floor: ch.floor, fightIdx: ch.fight };
+  }, seed, fightMode(ch));
+  F.enemyMeta = { variant: enemy.variant, gold: enemy.gold, floor: ch.floor,
+                  fightIdx: ch.fight, family: enemy.family };
   ch.activeFight = F;
 
-  if ((ch.mode ?? 'auto') === 'auto') { runToEnd(F); return resolveFight(ch); }
+  if (fightMode(ch) === 'auto') { runToEnd(F); return resolveFight(ch); }
 
   beginTurn(F);           // przewiń wrogie ciosy do pierwszej decyzji gracza
   if (F.over) return resolveFight(ch);
@@ -143,15 +188,24 @@ function resolveFight(ch) {
   const info = floorInfo(ch.floor);
 
   ch.potions = res.potionsLeft;
-  ch.hpLost = 0;
   ch.activeFight = null;
 
   const out = { ...res, enemy: F.enemies[0], loot: [], gold: 0,
-                floorCleared: false, awaiting: false };
+                floorCleared: false, awaiting: false, trophy: null };
 
   if (res.win) {
+    // HP zostaje takie, jakie wyszło z walki — następna fala zaczyna się stąd.
+    const me = res.party[0];
+    ch.hpLost = Math.max(0, me.maxHp - me.hp);
+
     out.gold = meta.gold;
     ch.gold += meta.gold;
+
+    // Kronika: licznik zabić i odsłanianie trofeów.
+    const wpis = ch.bestiary[meta.family] ??= { kills: 0, drops: [] };
+    wpis.kills++;
+    const trofeum = rollTrophy((F.seed ^ 0x5EED) >>> 0, meta.family, wpis.drops, meta.variant);
+    if (trofeum) { wpis.drops.push(trofeum); out.trophy = trofeum; }
 
     const drops = rollDrops((F.seed ^ 31337) >>> 0, { floor: meta.floor, variant: meta.variant });
     for (const d of drops) {
@@ -161,9 +215,13 @@ function resolveFight(ch) {
 
     ch.fight++;
     if (ch.fight >= info.fights) out.floorCleared = true;
+  } else {
+    // Porażka cofa na początek piętra i oddaje pełne HP. Bez tego wyczerpanie
+    // zamyka gracza w pętli, z której nie da się wyjść — a nic nie tracisz
+    // poza czasem i wypitymi miksturami.
+    ch.fight = 0;
+    ch.hpLost = 0;
   }
-  // Przegrana nie karze niczym poza czasem i zużytymi miksturami.
-  // Kara za śmierć należy do wypraw.
 
   return out;
 }
@@ -174,7 +232,7 @@ function doAdvance(ch) {
 
   const gained = { tree: info.isBoss ? C.tower.treePointsPerBoss : C.tower.treePointsPerFloor,
                    attr: C.character.attrPointsPerFloor,
-                   currency: info.isBoss ? 1 : 0 };
+                   currency: info.isBoss ? C.summon.keysPerBoss : C.summon.keysPerFloor };
 
   ch.treePoints += gained.tree;
   ch.unspentAttr += gained.attr;
@@ -182,8 +240,42 @@ function doAdvance(ch) {
 
   ch.floor++;
   ch.fight = 0;
+  ch.hpLost = 0;              // nowe piętro to czysta karta — wyczerpanie liczy się w obrębie piętra
   ch.maxFloor = Math.max(ch.maxFloor, ch.floor);
   return { ok: true, gained, floor: ch.floor };
+}
+
+// Skok na zdobyte piętro. Wieża jest liniowa tylko w górę — w dół można wracać,
+// bo cofnięcie się po sprzęt to zaplanowana część pętli.
+function doGoto(ch, floor) {
+  const f = Math.floor(Number(floor));
+  if (!Number.isFinite(f) || f < 1) return { error: 'Nie ma takiego piętra' };
+  if (f > ch.maxFloor) return { error: `Piętro ${f} jeszcze zamknięte` };
+  if (ch.activeFight && !ch.activeFight.over) return { error: 'Najpierw dokończ walkę' };
+  ch.floor = f;
+  ch.fight = 0;
+  ch.hpLost = 0;
+  return { ok: true, floor: f };
+}
+
+// Przywołanie. Prototyp odczucia: jeden klucz, jedno losowanie, żadnej litości
+// ani pity. Wynik ląduje w kolekcji, którą czyta Drużyna i Kronika.
+function doSummon(ch, rodzaj) {
+  const kind = rodzaj === 'pets' ? 'pets' : 'companions';
+  if (ch.currency < C.summon.keyCost) return { error: 'Brak kluczy' };
+  ch.currency -= C.summon.keyCost;
+
+  const rng = mulberry32((Date.now() ^ (ch.currency * 7919) ^ Math.floor(Math.random() * 1e9)) >>> 0);
+  const wagi = Object.entries(C.summon.weights);
+  const suma = wagi.reduce((s, [, w]) => s + w, 0);
+  let r = rng() * suma, rarity = 'common';
+  for (const [k, w] of wagi) { if ((r -= w) <= 0) { rarity = k; break; } }
+
+  const pula = C.summon[kind][rarity];
+  const name = pula[Math.floor(rng() * pula.length)];
+  const wynik = { name, rarity, kind };
+  ch.collection[kind].push(wynik);
+  return { ok: true, summon: wynik };
 }
 
 // ---------------------------------------------------------------- HTTP
@@ -264,6 +356,8 @@ const server = http.createServer(async (req, res) => {
           break;
         }
         case '/api/advance': result = doAdvance(ch); break;
+        case '/api/goto':    result = doGoto(ch, body.floor); break;
+        case '/api/summon':  result = doSummon(ch, body.kind); break;
         case '/api/equip':   result = equip(ch, String(body.itemId)); break;
         case '/api/potion': {
           if (ch.potions <= 0) { result = { error: 'Brak mikstur' }; break; }

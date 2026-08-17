@@ -46,7 +46,15 @@ export function migrate(ch) {
   ch.backpack = ch.backpack.filter(it => C.gear.slots[it.slot]);
 
   // Skille bojowe skasowane — stare postacie zrzucają je bez śladu.
+  // UWAGA: skille zbierackie NIE lądują w ch.skills. Są w tej wersji samą makietą
+  // i renderują się z config — nie ma czego zapisywać, więc nie ma czego stracić.
   delete ch.skills;
+
+  // Pola dołożone pod vertical slice — postacie sprzed nich dostają puste.
+  ch.bestiary ??= {};
+  ch.collection ??= { companions: [], pets: [] };
+  ch.collection.companions ??= [];
+  ch.collection.pets ??= [];
 
   // Drzewko doszło później; postacie sprzed niego dostają puste.
   ch.tree ??= {};
@@ -79,7 +87,14 @@ export function newCharacter(name, klasa = 'wojownik', crest = null) {
     attrs, unspentAttr: C.character.startingAttrPoints,
     treePoints: 0,
     tree: {},              // id węzła -> ranga
-    gold: 0, currency: 0,
+    gold: 0,
+    // currency = Klucz Przywołania. Jedna waluta zamiast dwóch, dopóki nie wiadomo,
+    // czy Przywołanie zostaje w grze.
+    currency: C.summon.startingKeys,
+    // Kronika. family -> { kills, drops: [nazwy odkrytych trofeów] }
+    bestiary: {},
+    // Co wypadło z Przywołania. Drużyna czyta stąd pierwszego sojusznika.
+    collection: { companions: [], pets: [] },
     potions: C.healing.startingPotions,
     mode: 'auto',          // 'auto' | 'turowa'
     activeFight: null,

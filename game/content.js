@@ -31,7 +31,9 @@ function weightedPick(rng, weights) {
 // ---------------------------------------------------------------- akty
 
 export const ACTS = [
-  { id: 1, name: 'Rozstaje Cierni',          families: ['Goblin', 'Szczur'],        skladnik: 'Cierniowy Korzeń' },
+  // Akt 1 to biom Puszcza — pierwsze dziesięć pięter i jedyny akt, który ma
+  // dopracowaną obsadę pod bestiariusz. Reszta czeka na swoją kolej.
+  { id: 1, name: 'Puszcza',                  families: ['Leśny Szlam', 'Goblin', 'Leśny Wilk'], skladnik: 'Cierniowy Korzeń' },
   { id: 2, name: 'Mokradła Szeptu',          families: ['Topielec', 'Pijawka'],     skladnik: 'Szeptany Muł' },
   { id: 3, name: 'Kopalnia Zgniłego Kamienia', families: ['Konstrukt', 'Nietoperz'], skladnik: 'Rdzawy Odłamek' },
   { id: 4, name: 'Wąwóz Popiołu',            families: ['Ogr', 'Pomiot'],           skladnik: 'Popiół Wąwozu' },
@@ -46,7 +48,7 @@ export function actForFloor(floor) {
 }
 
 const BOSS_NAMES = [
-  'Gruk Rzeźnik', 'Matka Mgieł', 'Kamienny Wół', 'Pan Wąwozu', 'Strażnik Popiołu',
+  'Strażnik Puszczy', 'Matka Mgieł', 'Kamienny Wół', 'Pan Wąwozu', 'Strażnik Popiołu',
   'Przędąca Matka', 'Wij Otchłani', 'Bezimienny Herold', 'Żelazny Bastion', 'Skarbnik Głębi',
 ];
 
@@ -84,12 +86,15 @@ export function makeEnemy(floor, fightIdx) {
   let dmg   = (t.mobDmgBase + t.mobDmgPerFloor * floor) * Math.pow(t.mobDmgGrowth, floor);
   let speed = t.mobSpeedBase + t.mobSpeedPerFloor * floor;
 
-  let name = `${pick(rng, act.families)}`;
+  // family to klucz bestiariusza — nazwa bez dopisku wariantu, żeby Goblin
+  // i Goblin + liczyły się jako ten sam wpis.
+  let family = pick(rng, act.families);
+  let name = family;
   if (variant === 'plus') { hp *= t.plusStatMult; dmg *= t.plusStatMult; name += ' +'; }
-  if (variant === 'boss') { hp *= t.bossHpMult;   dmg *= t.bossStatMult; speed += 10; name = info.bossName; }
+  if (variant === 'boss') { hp *= t.bossHpMult;   dmg *= t.bossStatMult; speed += 10; family = info.bossName; name = family; }
 
   return {
-    name, variant, level: floor,
+    name, family, variant, level: floor,
     hp: Math.round(hp), maxHp: Math.round(hp),
     damage: Math.round(dmg), speed: Math.round(speed),
     armor: Math.round(floor * 3.2),
@@ -187,6 +192,30 @@ export function rollDrops(seed, { floor, variant }) {
     out.push(rollItem(rng, { ilvl: floor, weights }));
   }
   return out;
+}
+
+// ---------------------------------------------------------------- bestiariusz
+// Trofea. Nie mają statystyk i nie wchodzą do plecaka — istnieją tylko po to,
+// żeby wpis w Kronice miał co odsłaniać. Cztery na przeciwnika, bo tyle mieści
+// się w karcie i tyle wystarcza, żeby ostatnie było czuć.
+export const FAMILY_DROPS = {
+  'Leśny Szlam':      ['Kropla Szlamu', 'Zielony Rdzeń', 'Lepka Błona', 'Serce Kałuży'],
+  'Goblin':           ['Zardzewiały Nóż', 'Kieł Goblina', 'Podarta Sakwa', 'Znak Wodza'],
+  'Leśny Wilk':       ['Wilcze Futro', 'Złamany Pazur', 'Ślepie Wilka', 'Kieł Wataszki'],
+  'Strażnik Puszczy': ['Kora Strażnika', 'Żywiczna Łza', 'Korzeń Odwieczny', 'Serce Puszczy'],
+};
+const GENERIC_DROPS = ['Strzęp Skóry', 'Wyszczerbiony Ząb', 'Zimny Popiół', 'Nieznany Odłamek'];
+
+export const dropsOf = (family) => FAMILY_DROPS[family] ?? GENERIC_DROPS;
+
+// Szansa na trofeum z jednego zabicia. Boss zawsze coś oddaje — inaczej wpis
+// bossa stałby pusty do dziesiątego podejścia.
+export function rollTrophy(seed, family, znane = [], variant = 'normal') {
+  const rng = mulberry32(seed);
+  if (variant !== 'boss' && rng() > 0.35) return null;
+  const brak = dropsOf(family).filter(d => !znane.includes(d));
+  if (!brak.length) return null;
+  return pick(rng, brak);
 }
 
 // ---------------------------------------------------------------- statystyki przedmiotu

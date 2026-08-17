@@ -71,10 +71,13 @@ const hero = (F) => F.party[0];
 const livingEnemies = (F) => F.enemies.filter(e => e.alive);
 const livingParty = (F) => F.party.filter(u => u.alive);
 
+// Nazwa jedzie razem z HP. Klient odtwarza arenę wyłącznie z wpisów logu —
+// bez niej rysował „undefined" pod każdym paskiem.
 function snapshot(F) {
+  const u2 = (u) => ({ name: u.name, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive });
   return {
-    party: F.party.map(u => ({ hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
-    enemies: F.enemies.map(u => ({ hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
+    party: F.party.map(u2),
+    enemies: F.enemies.map(u2),
     charge: F.charge,
   };
 }
@@ -131,7 +134,8 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0, la
   if (blocked) dmg *= (1 - Math.min(0.9, target.blockCut));
 
   const armor = target.armor * effMult(target, 'armorMult') * (1 - pierce);
-  dmg = Math.max(1, Math.round(reduce(dmg, armor)));
+  // takenMult zbija to, co zostało po pancerzu — tak działa Obrona z menu tury.
+  dmg = Math.max(1, Math.round(reduce(dmg, armor) * effMult(target, 'takenMult')));
   target.hp -= dmg;
   if (target.hp <= 0) { target.hp = 0; target.alive = false; }
 
@@ -230,6 +234,15 @@ function autoPotion(F, u) {
 
 // ---------------------------------------------------------------- tury
 
+// Obrona: oddajesz turę, ale ciosy do następnej Twojej tury bolą o połowę mniej.
+// turns:1 znaczy „do mojej następnej tury" — tickEffects zdejmuje efekt dopiero
+// na początku kolejnej tury tej samej jednostki, więc wrogie ciosy w międzyczasie
+// jeszcze go łapią.
+function defend(F, u) {
+  u.effects.push({ id: 'obrona', turns: 1, takenMult: 1 - C.combat.defendCut });
+  push(F, 'buff', `${u.name} staje w obronie — obrażenia mniejsze o ${Math.round(C.combat.defendCut * 100)}%`);
+}
+
 function unitTurn(F, u, action) {
   F.turn++;
   tickEffects(u, F);
@@ -247,6 +260,7 @@ function unitTurn(F, u, action) {
       case 'potion':   drinkPotion(F, u); break;
       case 'ability':  useAbility(F, u, action.id); break;
       case 'ultimate': useUltimate(F, u); break;
+      case 'defend':   defend(F, u); break;
       default:         playerBasic(F, u, action.strength ?? 'srednio');
     }
   }
@@ -347,6 +361,19 @@ export function demo() {
   // pasek ultimate: lekki 1, sredni 2, mocny 3
   console.assert(STRENGTHS.lekki.charge === 1 && STRENGTHS.srednio.charge === 2
     && STRENGTHS.mocno.charge === 3, 'ladowanie paska wg sily ciosu');
+
+  // Obrona: ten sam wrogi cios boli mniej, gdy gracz stanal w obronie.
+  // Oba przebiegi maja to samo ziarno, wiec roznica bierze sie wylacznie z akcji.
+  const obr = (akcja) => {
+    const F = createFight({ party: [{ ...P, hp: 5000, maxHp: 5000, evasion: -5 }],
+      enemies: [{ ...E, hp: 99999, maxHp: 99999, damage: 300, accuracy: 5 }],
+      potions: 0, wtype: 'mele', abilities: [] }, 4242, 'turowa');
+    beginTurn(F); step(F, akcja);
+    return F.party[0].hp;
+  };
+  const hpZObrona = obr({ type: 'defend' });
+  const hpBezObrony = obr({ type: 'attack', strength: 'lekki' });
+  console.assert(hpZObrona > hpBezObrony, `obrona zbija obrazenia (${hpZObrona} vs ${hpBezObrony})`);
 
   // pasek: trafienie laduje, pudlo zeruje
   const P100 = { ...P, accuracy: 5 };      // zawsze trafia
