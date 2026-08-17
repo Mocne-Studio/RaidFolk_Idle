@@ -127,7 +127,7 @@ let FIGHT = null;   // { log, idx, timer, php, pmax, ehp, emax, enemy, result, m
 
 const LOG_CLASS = { crit: 'crit', heal: 'heal', enemy: 'enemy', win: 'win', lose: 'lose',
                     hit: 'hit', miss: 'miss', info: 'info', buff: 'buff', ult: 'ult',
-                    kill: 'win', down: 'lose' };
+                    kill: 'win', down: 'lose', lost: 'lost' };
 
 function waveDots() {
   let d = '';
@@ -212,14 +212,24 @@ function actionMenu() {
   const full = (F.charge ?? 0) >= (S.chargeMax || 10);
   const U = S.ultimate;
 
+  const atRisk = (F.charge ?? 0) > 0;
+
   let h = `<div class="sec">${esc(S.name)}</div><div class="strikes">`;
   for (const [k, v] of Object.entries(S.strengths)) {
+    const risk = atRisk ? Math.round((1 - v.chance) * 100) : 0;
     h += `<button class="btn strike" data-act="strike" data-s="${k}">
       <b>${esc(v.label)}</b>
       <span>×${v.dmg.toFixed(2)} · ładuje ${v.charge}</span>
-      <span class="ch">${Math.round(v.chance * 100)}% trafienia</span></button>`;
+      <span class="ch">${Math.round(v.chance * 100)}% trafienia</span>
+      ${atRisk ? `<span class="risk">${risk}% utraty paska</span>` : ''}</button>`;
   }
   h += `</div>`;
+
+  if (atRisk) {
+    h += `<div class="card"><div class="t2">
+      Pudło zeruje pasek. Masz na nim <b style="color:var(--brass)">${F.charge}</b> —
+      im mocniej bijesz, tym większa szansa, że stracisz wszystko.</div></div>`;
+  }
 
   h += `<button class="btn ult wide ${full ? 'ready' : ''}" data-act="ultimate" ${full ? '' : 'disabled'}>
     <b>${esc(U.label)}</b>

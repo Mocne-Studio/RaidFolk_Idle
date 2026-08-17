@@ -144,8 +144,16 @@ function addCharge(F, n) {
 function playerBasic(F, u, strength) {
   const target = livingEnemies(F)[0];
   if (!target) return;
-  strike(F, u, target, { mult: STRENGTHS[strength].dmg, strength });
-  addCharge(F, STRENGTHS[strength].charge);
+  const dmg = strike(F, u, target, { mult: STRENGTHS[strength].dmg, strength });
+
+  // Pudło zeruje pasek. Dlatego mocny cios to hazard: ładuje 3, ale trafia rzadko,
+  // a nieudany zabiera wszystko, co uzbierałeś.
+  if (dmg > 0) {
+    addCharge(F, STRENGTHS[strength].charge);
+  } else if (F.charge > 0) {
+    push(F, 'lost', `pasek spada z ${F.charge} do zera`);
+    F.charge = 0;
+  }
 }
 
 function useAbility(F, u, id) {
@@ -331,12 +339,34 @@ export function demo() {
   console.assert(STRENGTHS.lekki.charge === 1 && STRENGTHS.srednio.charge === 2
     && STRENGTHS.mocno.charge === 3, 'ladowanie paska wg sily ciosu');
 
-  const F = mk(7, 'turowa'); beginTurn(F);
+  // pasek: trafienie laduje, pudlo zeruje
+  const P100 = { ...P, accuracy: 5 };      // zawsze trafia
+  const P0   = { ...P, accuracy: -5 };     // zawsze pudluje
+  const one  = (p, seed) => createFight(
+    { party: [{ ...p }], enemies: [{ ...E, hp: 99999, maxHp: 99999 }], potions: 0,
+      wtype: 'mele', abilities: [] }, seed, 'turowa');
+
+  const F = one(P100, 7); beginTurn(F);
   console.assert(F.charge === 0, 'pasek startuje pusty');
   step(F, { type: 'attack', strength: 'mocno' });
   console.assert(F.charge === 3, 'mocny cios laduje 3');
   step(F, { type: 'attack', strength: 'lekki' });
   console.assert(F.charge === 4, 'lekki cios laduje 1');
+  step(F, { type: 'attack', strength: 'srednio' });
+  console.assert(F.charge === 6, 'sredni cios laduje 2');
+
+  const M = one(P0, 11); beginTurn(M);
+  M.charge = 8;
+  step(M, { type: 'attack', strength: 'mocno' });
+  console.assert(M.charge === 0, 'pudlo zeruje caly pasek');
+  console.assert(M.log.some(l => l.kind === 'lost'), 'utrata paska trafia do logu');
+
+  // umiejetnosci nie ruszaja paska przy pudle — maja wlasny koszt w cooldownie
+  const K = createFight({ party: [{ ...P0 }], enemies: [{ ...E, hp: 99999, maxHp: 99999 }],
+                          potions: 0, wtype: 'mele', abilities: ['wir'] }, 13, 'turowa');
+  beginTurn(K); K.charge = 5;
+  step(K, { type: 'ability', id: 'wir' });
+  console.assert(K.charge > 0, 'nieudana umiejetnosc nie kasuje paska');
 
   // ultimate wymaga pelnego paska
   const G = mk(8, 'turowa'); beginTurn(G);
