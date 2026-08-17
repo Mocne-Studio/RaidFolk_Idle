@@ -32,11 +32,14 @@ Pełne przejście, które zadziałało ręcznie od początku do końca:
 
 ```
 herb → imię → OD RAZU gra
-→ hub Wyprawy → Puszcza → piętra 1–9 na automacie
+→ hub: WIEŻA (postęp, złoto, exp — BEZ łupu) albo WYPRAWA (jedyny łup)
+→ Puszcza: piętra 1–9 na automacie, od piętra 3 dwóch przeciwników
 → piętro 10, boss turowy → wygrana → trofeum
-→ Ekwipunek: makieta postaci, statystyki, kategorie plecaka
-→ Skille: Górnictwo kopie naprawdę, exp, poziomy, odblokowania
-→ Drużyna / Przywołanie / Kronika
+→ Wyprawa: 8 walk, sakwa do plecaka dopiero na końcu
+→ Ekwipunek: makieta postaci, porównanie „nosisz kontra bierzesz"
+→ Skille: Zbierackie (Górnictwo/Rybołówstwo/Runy) · Bojowe · Atrybuty
+→ Drużyna: sojusznik i pet WALCZĄ, szyk trzech rzędów
+→ Przywołanie / Kronika
 ```
 
 - **Wejście do gry** — herb, imię i **od razu gra**. Nie ma wprowadzenia
@@ -48,18 +51,32 @@ herb → imię → OD RAZU gra
   Przewijają się wyłącznie pudełka z danymi: plecak, bestiariusz, log walki.
 - **Responsywność** — 520 px telefon, 900 px tablet, 1180 px desktop.
 - **Nawigacja** — sześć zakładek: Wyprawa, Drużyna, Ekwipunek, Skille,
-  Przywołanie, Kronika. Postać i Drzewko siedzą pod przyciskiem profilu
-  w nagłówku (herb + nick + poziom + moc + sakiewka).
-- **Ekwipunek** — makieta postaci 3×3 z portretem w środku, siatka statystyk
-  z podpowiedziami, panel szczegółu z **różnicą wobec noszonego**, kategorie
-  plecaka (Wszystko / Broń / Pancerz / Dodatki / Surowce).
-- **Górnictwo** — pełna pętla: kopiesz, dostajesz rudę i exp, wbijasz poziom,
-  odblokowujesz kolejny surowiec. Kolejne cykle lecą same do „Przerwij".
-  Surowce lądują w Ekwipunku → Surowce. Kopanie przeżywa odświeżenie strony.
+  Przywołanie, Kronika. Postać siedzi pod przyciskiem profilu w nagłówku.
+  **Ekran drzewka usunięty** — wszystko, co się rozwija, jest w Skillach.
+- **Skille = trzy sekcje**: Zbierackie · Bojowe · Atrybuty. Drużyna to wyłącznie
+  podgląd składu i ustawianie slotów.
+- **Ekwipunek** — makieta 3×3 z **napierśnikiem w środku**, butami pod nim
+  i kafelkiem Mocy w wolnej komórce. Siatka statystyk z podpowiedziami, panel
+  szczegółu z **porównaniem „nosisz kontra bierzesz"**, kategorie plecaka.
+- **Profesje grywalne** — Górnictwo, Rybołówstwo, Runy. Pełna pętla: zbierasz,
+  dostajesz surowiec i exp, wbijasz poziom, odblokowujesz kolejny. Cykle lecą
+  same do „Przerwij" i przeżywają odświeżenie strony.
+- **Drużyna** — bohater + sojusznik + pet **naprawdę walczą**. Sloty 2 i 3
+  zamknięte świadomie. Przywoływanie sojuszników od piętra 3, petów od 10.
 - **Stały pasek walki** — nad zakładkami, widoczny na każdym ekranie, dopóki coś
   się bije. Niesie biom, piętro, falę, oba paski HP, tempo ×1/×2, STOP i DO WALKI.
-- **Wyprawa (hub)** — Wieża otwarta; Wyprawa `WKRÓTCE`; World Boss, Kolos, Tytan
-  `ZAMKNIĘTE`. Nic za nimi nie stoi i tak ma zostać do osobnej decyzji.
+- **Hub** — Wieża i **Wyprawa otwarte**; World Boss, Kolos, Tytan `ZAMKNIĘTE`.
+- **WIEŻA NIE DAJE PRZEDMIOTÓW.** Złoto, exp skilli i Kronika — tak, łup nie.
+  Sprzęt zdobywa się wyłącznie na Wyprawie.
+- **Wyprawa** — 8 walk, trzy poziomy ryzyka, HP nie wraca. Łup ląduje w **sakwie**
+  i wpada do plecaka dopiero po ukończeniu; śmierć albo zawrócenie zabiera całą.
+- **Szyk trzech rzędów** — klasa daje rząd (przód: Wojownik/Paladyn/Tancerz/pet,
+  środek: Mag, tył: Łowca/Tropiciel), broń daje zasięg. Broń biała dosięga tylko
+  pierwszego rzędu i musi **podchodzić** do tylnego, tracąc turę na każde podejście.
+- **Dwóch przeciwników od piętra 3** (`tower.duoFromFloor`), drugi słabszy o 35%.
+- **Skille bojowe** — Broń biała, Łuk, Różdżka, Obrona, Witalność. Rosną z tego,
+  czym bijesz; podział expa zależy od rąk. Dają **bonusy, nie bramki**.
+- **Bronie mają liczbę rąk.** Dwuręczne biją mocniej (×1.35) i blokują drugą rękę.
 - **Wieża** — lista dziesięciu pięter biomu, odblokowanie sekwencyjne, powrót na
   zdobyte piętro (`/api/goto`). Piętro to 6–10 fal, co 5. wariant „+", co 10. boss.
 - **Walka** — symulacja serwerowa, tryb automatyczny i turowy, trzy siły ciosu,
@@ -83,21 +100,22 @@ herb → imię → OD RAZU gra
 
 ### Zrobione w połowie
 
-- **Drużyna** — struktura pięciu slotów stoi, silnik walki od początku przyjmuje
-  pięć jednostek po stronie gracza. Przywołani sojusznicy i pety **lądują
-  w kolekcji, ale jeszcze nie wchodzą do walki**. Kart z ekranu nie da się rozwinąć.
-- **Skille zbierackie** — **Górnictwo gra naprawdę.** Pozostałe sześć profesji
-  to nadal makiety z drabinkami: poziomy stoją na 1, nic się nie zbiera.
-  Surowce nie mają jeszcze zastosowania — Kowalstwo ich nie przetapia.
-- **Przywołanie** — brak prawdziwych szans, pity, duplikatów i gwiazdek.
+- **Drużyna** — bohater + jeden sojusznik + pet walczą. **Sloty 2 i 3 zamknięte**
+  świadomie (`config.allies.lockedSlots`), więc pełna piątka jeszcze nie istnieje.
+- **Skille zbierackie** — trzy z siedmiu grają (Górnictwo, Rybołówstwo, Runy).
+  Kowalstwo, Rolnictwo, Gotowanie i Alchemia to makiety z drabinkami.
+  **Surowce nie mają zastosowania** — nic ich nie przetapia ani nie gotuje.
+- **Przywołanie** — szanse są jawne, ale brak pity, duplikatów i gwiazdek.
 - **Kronika** — Przedmioty i Osiągnięcia to na razie karty wyjaśniające zamiar.
+- **Klasy Sojuszników** — nadają rząd w szyku, ale nie dają jeszcze umiejętności
+  ani pasywek. Sześć drzewek klasowych czeka nietkniętych w `config.tree.classes`.
 
 ### Nie zaczęte
 
-Wyprawy · World Boss · Kolos · Tytan · rajdy · multiplayer · gildia ·
-kowal i afiksy · Mystic/God crafting · przepalanie i energia · bank ·
-postęp offline · **Dusze** · **wiele postaci na koncie** ·
-etykiety klas na przedmiotach.
+World Boss · Kolos · Tytan · rajdy · multiplayer · gildia · kowal i przetapianie ·
+Mystic/God crafting · przepalanie i energia · bank · postęp offline ·
+umiejętności Sojuszników · **klasy gracza (skasowane na stałe)** ·
+**wiele postaci na koncie**.
 
 ---
 
@@ -144,11 +162,9 @@ Poprzednie punkty:
 
 ## ACTIVE WORK
 
-Druga sesja 17 sierpnia 2026 wykonała **corrections pass** po pierwszym werdykcie
-właściciela: skasowany pseudo-poradnik i wybór klasy, układ jednoekranowy,
-responsywność na tablet, przebudowany Ekwipunek, grywalne Górnictwo oraz naprawa
-zakleszczenia niedokończonej walki turowej. **Zatrzymana zgodnie z poleceniem** —
-czeka na kolejny werdykt UI/UX.
+Trzecia sesja 17 sierpnia 2026: **szyk trzech rzędów, Wyprawa jako jedyne źródło
+przedmiotów, sojusznicy w walce, skille bojowe z podziałem expa według rąk,
+dwóch przeciwników od piętra 3.** Wszystko zamknięte i zacommitowane.
 
 ---
 
@@ -156,16 +172,16 @@ czeka na kolejny werdykt UI/UX.
 
 **Poczekaj na werdykt właściciela.** Nie rozszerzaj scope’u bez niego.
 
-Kiedy werdykt przyjdzie, pierwsza rzecz do zrobienia to **posadzenie sojuszników
-i peta w walce**: silnik już przyjmuje pięć jednostek po stronie gracza
-(`createFight({ party: [...] })`, `PARTY_SLOTS` w `public/app.js`), a Przywołanie
-już produkuje obsadę do `ch.collection`. Brakuje wyłącznie sklejenia jednego
-z drugim i statystyk dla sojusznika. To także miejsce, w którym **klasy wracają
-do gry** — tym razem po stronie Sojuszników, a `config.classes` i `config.tree.classes`
-mają na to gotowe, przetestowane liczby.
+Kiedy werdykt przyjdzie, dwie rzeczy stoją pierwsze w kolejce:
 
-Druga rzecz w kolejce, jeśli werdykt pójdzie w stronę profesji: **Kowalstwo**,
-żeby wykopana ruda miała gdzie trafić. Dziś surowce nie mają żadnego zastosowania.
+1. **Kowalstwo** — wykopana ruda nie ma dziś gdzie trafić. To jest najbardziej
+   widoczna dziura: trzy profesje produkują surowce, których nic nie konsumuje.
+2. **Umiejętności Sojuszników** — mają już klasę i rząd w szyku, ale biją tylko
+   autoatakiem. `config.classes` i `config.tree.classes` mają gotowe, przetestowane
+   liczby dla sześciu klas.
+
+Sloty 2 i 3 drużyny są zamknięte świadomie — otwarcie ich wymaga najpierw decyzji,
+ile drużyna psuje balans wieży.
 
 ---
 
