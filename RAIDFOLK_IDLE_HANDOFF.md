@@ -124,11 +124,13 @@ umiejętności Sojuszników · **klasy gracza (skasowane na stałe)** ·
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `34f2dc0` — „Szyk, Wyprawa jako zrodlo lupu, dwa potwory od pietra 3" |
+| HEAD | `7872f37` — „Wybor wyprawy, tabela dropow, modyfikatory" |
 | Working tree | **czysty** |
 
 Poprzednie punkty:
 
+- `bb04200` / `f4b1ca1` — Wyprawa V1: rozdroża, postój, sakwa, boss turowy
+- `34f2dc0` — szyk trzech rzędów, Wyprawa jako źródło łupu, dwa potwory od piętra 3
 - `fc8e60b` — sojusznicy w walce, skille broni, typy obrazen, przebudowa EQ
 - `0b4ac30` — corrections pass: bez klasy gracza, bez tutorialu, jeden ekran,
   grywalne Górnictwo, naprawa zakleszczenia walki turowej
@@ -162,7 +164,13 @@ Poprzednie punkty:
 
 ## ACTIVE WORK
 
-Trzecia sesja 17 sierpnia 2026: **szyk trzech rzędów, Wyprawa jako jedyne źródło
+**Przerwane w połowie 17 sierpnia 2026 — autor zabrał laptopa.**
+Repo jest w stanie czystym i grywalnym, wszystkie testy przechodzą.
+
+Ostatnia sesja: Wyprawa V1 (rozdroża, postój, sakwa, boss turowy), potem
+wybór wyprawy z tabelą dropów i modyfikatorami.
+
+Wcześniej — trzecia sesja 17 sierpnia 2026: **szyk trzech rzędów, Wyprawa jako jedyne źródło
 przedmiotów, sojusznicy w walce, skille bojowe z podziałem expa według rąk,
 dwóch przeciwników od piętra 3.** Wszystko zamknięte i zacommitowane.
 
@@ -170,9 +178,25 @@ dwóch przeciwników od piętra 3.** Wszystko zamknięte i zacommitowane.
 
 ## NEXT STEP
 
-**Poczekaj na werdykt właściciela.** Nie rozszerzaj scope’u bez niego.
+**ALCHEMIA — wytwarzanie mikstur.** Ustalone z autorem tuż przed przerwą:
 
-Kiedy werdykt przyjdzie, dwie rzeczy stoją pierwsze w kolejce:
+- Kupowanie mikstur zostało **skasowane**. Jedynym źródłem ma być Alchemia.
+- To zamyka realną dziurę: porażka nie leczy, więc bez mikstur da się utknąć
+  (zmierzone: 9 HP z 245, 0 mikstur, 37 złota przy koszcie mikstury 52).
+- Zbieranie **nie wymaga walki**, więc gracz z zerowym HP może pójść zbierać,
+  zrobić miksturę i wstać. Ściana znika bez ruszania regeneracji.
+
+Wpięcia, które już istnieją: `ch.materials` (surowce), `ch.potions` (jedna liczba),
+`config.skills.alchemia` (makieta z drabinką), generyczna pętla
+`/api/mine` + `/api/minetick`.
+
+**Otwarta decyzja:** czy Alchemia ZBIERA (jak Górnictwo — klikasz, czekasz,
+dostajesz miksturę) czy PRZETWARZA (zjada zioła z Rolnictwa). Druga wersja
+wymaga wejść z Rolnictwa, które jest makietą.
+
+Autor zapowiedział też przejście do **umiejętności** zaraz po Alchemii.
+
+Dalej w kolejce:
 
 1. **Kowalstwo** — wykopana ruda nie ma dziś gdzie trafić. To jest najbardziej
    widoczna dziura: trzy profesje produkują surowce, których nic nie konsumuje.

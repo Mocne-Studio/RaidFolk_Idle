@@ -260,3 +260,40 @@ Jedyne wyjście to regeneracja 2%/min. Do rozstrzygnięcia z Alchemią.
 - Werdykt właściciela o Wyprawie: długość runu, rozdroża, napięcie sakwy,
   attrition, czytelność, chęć kliknięcia „Jeszcze raz".
 - Potem: Alchemia (mikstury) i modyfikatory trudności.
+
+---
+
+## 2026-08-17 (piąta sesja, przerwana) — wybór wyprawy i modyfikatory
+
+**START HEAD:** `bb04200`
+**END HEAD:** `7872f37`
+
+### DONE
+
+- **Wybór wyprawy przed ryzykiem.** Najpierw dokąd, potem jak trudno.
+  Puszcza Cierniowa otwarta od początku, Mokradła Szeptu zamknięte do piętra 11.
+- **Długość runu rośnie z poziomem** — 8 etapów, 10 od piętra 5, 12 od piętra 12.
+- **Tabela dropów z odkrywaniem.** Generator losuje nazwy wyłącznie z listy
+  w definicji wyprawy, więc tabela jest prawdą. Nieodkryte stoją jako `???`;
+  odkrycia trwałe w `ch.discovered`, migracja oznacza to, co gracz już ma.
+- **Modyfikatory** (odłożone sekcje 17–18 promptu): Zahartowani, Wścieklizna,
+  Sucha ziemia, Łowy na elity, Bez postoju. Każdy podbija mnożnik nagrody,
+  kolejne otwierają się z piętrami.
+- **Poprawka:** nagłówek walki na wyprawie pokazywał „Piętro 2" — teraz etap runu.
+- **Usunięte kupowanie mikstur** — mają być z Alchemii.
+- **Przerwa 700 ms między cyklami zbierania**, żeby było widać, że coś padło.
+
+### TESTS
+
+`node game/combat.js`, `node game/character.js`, `node game/expedition.test.js`
+(z `PORT=8099 node server.js`) — wszystkie przechodzą.
+Ręcznie na 375×812: lista wypraw, ekran szczegółów z tabelą dropów
+i modyfikatorami — nic się nie przewija.
+
+### PRZERWANE
+
+Autor zabrał laptopa. Repo czyste, nic nie wisi.
+
+### NEXT
+
+**Alchemia** — patrz NEXT STEP w HANDOFF. Potem umiejętności.
