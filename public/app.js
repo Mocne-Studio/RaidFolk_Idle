@@ -133,7 +133,7 @@ function enterGame() {
   if (S.activity) {
     const s = S.skills[S.activity.skill];
     const r = s?.resources?.find(x => x.id === S.activity.res);
-    if (r) startMineLoop(r.id, r.ms);
+    if (r) startMineLoop(S.activity.skill, r.id, r.ms);
   }
 }
 
@@ -407,11 +407,19 @@ function paintArena() {
   if (el) el.innerHTML = arenaHtml();
 }
 
+// Klasa wpisu logu. Rodzaj obrażeń nadpisuje kolor: fizyczne bordowe,
+// magiczne niebieskie. Wrogie ciosy zostają czerwone niezależnie od typu.
+function logClass(entry) {
+  const base = LOG_CLASS[entry.kind] ?? '';
+  if (!entry.dtype || entry.kind === 'enemy') return base;
+  return `${base} d-${entry.dtype}`;
+}
+
 function appendLog(entry) {
   const el = $('#fightlog');
   if (!el) return;
   const d = document.createElement('div');
-  d.className = LOG_CLASS[entry.kind] ?? '';
+  d.className = logClass(entry);
   d.textContent = entry.text;
   el.append(d);
   el.scrollTop = el.scrollHeight;      // przewija się TYLKO log, nie cała strona
@@ -445,7 +453,7 @@ function drawFightView() {
       for (let i = 0; i < FIGHT.idx; i++) {
         const e = FIGHT.log[i];
         const d = document.createElement('div');
-        d.className = LOG_CLASS[e.kind] ?? '';
+        d.className = logClass(e);
         d.textContent = e.text;
         el.append(d);
       }
@@ -533,6 +541,12 @@ function renderWieza() {
       </div>
       ${waveDots()}
     </div>
+
+    ${S.lastDefeat ? `<div class="card bad compact" style="margin-top:6px"
+      title="Ostatnie miejsce, w którym Cię rozłożyło">
+      <div class="t1">Ostatnia porażka: piętro ${S.lastDefeat.floor}, fala ${S.lastDefeat.wave} z ${S.lastDefeat.waves}</div>
+      <div class="t2">Rozłożył Cię ${esc(S.lastDefeat.enemy)}. Tyle brakowało.</div>
+    </div>` : ''}
 
     <div class="card ${hpPct < 40 ? 'bad' : ''}" style="margin-top:6px">
       <div class="row" style="margin-bottom:6px">
@@ -692,12 +706,11 @@ function renderPostac() {
       <div class="stat"><span class="k">Moc</span><span class="v" style="color:var(--brass)">${nf(st.power)}</span></div>
     </div>
 
-    <div class="card ${S.treePoints ? 'hi' : ''} row">
-      <div class="grow"><div class="t1">Drzewko</div>
-        <div class="t2">${S.treePoints ? 'Masz co wydać' : 'Punkt za piętro, pięć za bossa'}</div></div>
-      <span class="num big-n">${S.treePoints}</span>
+    <div class="card row">
+      <div class="grow"><div class="t1">Skille bojowe</div>
+        <div class="t2">Rosną z tego, czym bijesz</div></div>
+      <button class="btn" data-act="tab" data-tab="drzewko">Otwórz</button>
     </div>
-    <button class="btn wide" data-act="tab" data-tab="drzewko">Otwórz drzewko</button>
 
     <div class="sec">Kod postaci</div>
     <div class="code-box" id="mycode">${esc(TOKEN ?? '')}</div>
@@ -712,87 +725,65 @@ function renderPostac() {
   return h;
 }
 
-// ---------------------------------------------------------------- drzewko klasy
+// Drzewko punktowe zeszło z UI. Liczby, reguły odblokowania i respec siedzą
+// nietknięte w game/config.js i game/character.js — jeśli wróci, kod czeka gotowy.
 
-// Opisy węzłów rodzą się z liczb w config — nie ma drugiego miejsca do poprawiania,
-// gdy zmieni się balans.
-const EFF_LABEL = {
-  dmgPct:     { t: 'Obrażenia',            pct: true },
-  hpPct:      { t: 'Zdrowie',              pct: true },
-  armorPct:   { t: 'Pancerz',              pct: true },
-  armorFlat:  { t: 'Pancerz',              pct: false },
-  critChance: { t: 'Szansa na kryt',       pct: true },
-  critPower:  { t: 'Siła kryta',           pct: true },
-  speed:      { t: 'Prędkość ataku',       pct: false },
-  accuracy:   { t: 'Celność',              pct: true },
-  evasion:    { t: 'Unik',                 pct: true },
-  block:      { t: 'Szansa na blok',       pct: true },
-  blockCut:   { t: 'Siła bloku',           pct: true },
-  potionPct:  { t: 'Leczenie z mikstur',   pct: true },
+// ---------------------------------------------------------------- SKILLE BOJOWE
+// Drzewko punktowe zeszło ze sceny (liczby zostały w config.tree — może wróci).
+// Na jego miejscu stoi to, co było w pierwszej wersji: skille rosnące z tego,
+// CZYM bijesz. Podział expa zależy od rąk i widać go tutaj na żywo.
+
+const UDZIAL_OPIS = {
+  1: '100% expa', 0.5: '50% expa', 0: 'nic nie dostaje',
 };
 
-// dopełniacz — "obrażenia z Intelektu", nie "z Intelekt"
-const ATTR_GEN = { sila: 'Siły', intelekt: 'Intelektu', zrecznosc: 'Zręczności', wytrzymalosc: 'Wytrzymałości' };
-
-function effText(eff, mult = 1) {
-  const parts = [];
-  for (const [k, v] of Object.entries(eff)) {
-    if (k === 'attrWeight') {
-      for (const [a, w] of Object.entries(v)) {
-        parts.push(`Obrażenia z ${ATTR_GEN[a] ?? a} +${(w * mult * 100).toFixed(0)}%`);
-      }
-      continue;
-    }
-    const d = EFF_LABEL[k];
-    if (!d) continue;
-    parts.push(d.pct
-      ? `${d.t} +${(v * mult * 100).toFixed(1).replace(/\.0$/, '')}%`
-      : `${d.t} +${Math.round(v * mult)}`);
-  }
-  return parts.join(' · ');
-}
-
 function renderDrzewko() {
-  const total = (S.tree ?? []).reduce((s, b) => s + b.spent, 0);
-  let h = `<div class="scr-head">
-    <button class="lnk" data-act="tab" data-tab="postac">‹ Postać</button>
-    <span>DRZEWKO BOHATERA</span></div>`;
+  const lista = S.cskills ?? [];
+  const dwureczna = S.hands?.offBlocked;
+  const bron = S.equipped?.bron;
+  const off = S.equipped?.offhand;
 
-  h += `<div class="card ${S.treePoints ? 'hi' : ''}">
-    <div class="row"><div class="grow"><div class="t1">Punkty do wydania</div>
-      <div class="t2">1 za piętro, 5 za bossa aktu · wydane: ${total}</div></div>
-      <span class="num" style="font-size:22px;color:var(--brass)">${S.treePoints}</span></div>
+  let h = `<div class="scr-head">
+    <button class="lnk" data-act="tab" data-tab="druzyna">‹ Drużyna</button>
+    <span>SKILLE BOJOWE</span></div>`;
+
+  // Skąd bierze się podział — najważniejsza informacja na tym ekranie.
+  const rece = !bron ? 'Gołe pięści — cały exp idzie w Broń białą.'
+    : dwureczna ? `${bron.name} jest dwuręczna — cały exp idzie w jeden skill, a druga ręka jest zajęta.`
+    : off?.wtype === 'tarcza' ? `${bron.name} i tarcza — exp dzieli się po połowie między broń i Obronę.`
+    : off ? `${bron.name} i ${off.name} — exp dzieli się po połowie między oba skille.`
+    : `${bron.name} w jednej ręce — cały exp idzie w jej skill. Druga ręka wolna.`;
+
+  h += `<div class="card hi">
+    <div class="t1">Skąd bierze się exp</div>
+    <div class="t2">${esc(rece)}</div>
+    <div class="t2" style="margin-top:6px"><b>Witalność rośnie zawsze</b>, z samego udziału w walce.
+      Dwuręczne bronie biją mocniej — to ich cała przewaga nad tarczą.</div>
   </div>`;
 
-  h += `<div class="scrollbox"><div class="branches">`;
-  for (const branch of S.tree ?? []) {
-    h += `<div class="branch"><div class="sec">${esc(branch.label)} · ${branch.spent} pkt</div>`;
-    for (const n of branch.nodes) {
-      const pelny = n.rank >= n.max;
-      const tip = n.unlocked
-        ? `${effText(n.eff)} za rangę${n.rank ? ` · teraz ${effText(n.eff, n.rank)}` : ''}`
-        : `Wymaga ${n.need} pkt w gałęzi ${branch.label}`;
-      h += `<div class="card compact ${n.unlocked ? '' : 'locked'}" title="${esc(tip)}">
-        <div class="row">
-          <div class="grow">
-            <div class="t1">${esc(n.label)}
-              <span class="num" style="color:${n.rank ? 'var(--brass)' : 'var(--ink-mute)'}">${n.rank}/${n.max}</span></div>
-            <div class="t2">${n.unlocked ? esc(effText(n.eff)) : `zamknięte — ${n.need} pkt w gałęzi`}</div>
-          </div>
-          <button class="btn" data-act="tree" data-node="${n.id}" ${n.canRaise ? '' : 'disabled'}>${pelny ? 'MAX' : '+'}</button>
+  h += `<div class="scrollbox">`;
+  for (const s of lista) {
+    const pct = Math.round(s.xp / s.need * 100);
+    const czynny = s.udzial > 0;
+    h += `<div class="card ${czynny ? '' : 'off'} cskill" title="${esc(s.opis)}">
+      <div class="row" style="margin-bottom:6px">
+        <div class="icon">${s.ic}</div>
+        <div class="grow">
+          <div class="t1">${esc(s.label)}
+            <span class="num" style="color:var(--brass)">Lv. ${s.lvl}</span></div>
+          <div class="t2">${esc(s.opis)}</div>
         </div>
-      </div>`;
-    }
-    h += `</div>`;
+        <span class="badge ${czynny ? 'on' : ''}">${UDZIAL_OPIS[s.udzial] ?? Math.round(s.udzial * 100) + '%'}</span>
+      </div>
+      <div class="bar xp"><i style="width:${pct}%"></i></div>
+      <div class="t2 num" style="margin-top:4px">${s.xp} / ${s.need} exp</div>
+    </div>`;
   }
-  h += `</div>`;
 
-  h += `<div class="card" style="margin-top:8px">
-    <div class="row"><div class="grow"><div class="t1">Reset drzewka</div>
-      <div class="t2">Zwraca wszystkie ${total} wydanych punktów. Koszt rośnie z poziomem.</div></div>
-      <button class="btn" data-act="treereset" ${total && S.gold >= S.treeRespec ? '' : 'disabled'}>
-        ${nf(S.treeRespec)} zł</button></div>
-  </div></div>`;
+  h += `<div class="card" style="margin-top:8px"><div class="t2">
+    Skille <b>nie bramkują sprzętu</b> — jedyną bramką zostaje poziom postaci.
+    Dają wyłącznie bonusy, więc noszenie czegoś nowego nigdy nie jest zablokowane.</div></div>`;
+  h += `</div>`;
 
   return h;
 }
@@ -804,10 +795,12 @@ function renderDrzewko() {
 
 // Makieta 3×3 z portretem w środku. Głowa u góry, bronie po bokach,
 // pancerz pod spodem, dodatki w rogach — czyta się bez legendy.
+// Napierśnik stoi w środku — tam, gdzie w każdym RPG stoi tors. Portret zniknął,
+// bo zjadał najlepsze miejsce na ekranie i niczego nie mówił.
 const DOLL_GRID = [
   ['rekawice', 'helm',       'amulet'],
-  ['bron',     null,         'offhand'],
-  ['buty',     'napiersnik', 'pierscien'],
+  ['bron',     'napiersnik', 'offhand'],
+  ['pierscien','buty',       null],
 ];
 
 let invCat = 'all';        // kategoria plecaka
@@ -823,16 +816,24 @@ const KATEGORIE = [
 
 function dollHtml() {
   const cell = (slot) => {
+    // Wolna komórka niesie Moc — jedną liczbę na porównanie buildów.
     if (!slot) {
-      return `<div class="doll-hero">${heroCrest(52)}<span>${esc(S.name)}</span></div>`;
+      return `<div class="doll-power" title="Atak, zdrowie i pancerz w jednej liczbie">
+        <span class="k">MOC</span><span class="v">${nf(S.stats.power)}</span></div>`;
     }
     const it = S.equipped[slot];
     const wybrany = detail?.where === 'worn' && detail.slot === slot;
-    return `<button class="doll-cell${it ? '' : ' empty'}${wybrany ? ' on' : ''}"
-      data-act="slot" data-slot="${slot}" title="${esc(S.slots[slot].label)}"
+    // Dwuręczna blokuje drugą rękę — trzeba to widać, zanim gracz kliknie.
+    const zablokowany = slot === 'offhand' && S.hands?.offBlocked;
+    const tip = zablokowany
+      ? 'Zajęte przez broń dwuręczną'
+      : (it ? `${it.name} — ${S.rarities[it.rarity]?.label}` : S.slots[slot].label);
+    return `<button class="doll-cell${it ? '' : ' empty'}${wybrany ? ' on' : ''}${zablokowany ? ' blocked' : ''}"
+      data-act="slot" data-slot="${slot}" title="${esc(tip)}"
       style="${it ? `border-color:${rarityColor(it.rarity)}` : ''}">
-      <span class="ic">${SLOT_ICON[slot] ?? '▪'}</span>
-      <span class="lb">${it ? esc(it.name.split(' ')[0]) : esc(S.slots[slot].label)}</span>
+      <span class="ic">${zablokowany ? '⛓' : (SLOT_ICON[slot] ?? '▪')}</span>
+      <span class="lb">${zablokowany ? 'zajęte' : (it ? esc(it.name.split(' ')[0]) : esc(S.slots[slot].label))}</span>
+      ${it && it.hands === 2 ? '<span class="tag2h">2H</span>' : ''}
     </button>`;
   };
   return `<div class="doll">${DOLL_GRID.flat().map(cell).join('')}</div>`;
@@ -894,7 +895,7 @@ function detailHtml() {
   }
 
   const rar = S.rarities[it.rarity];
-  const noszony = detail.where === 'bag' ? S.equipped[it.slot] : null;
+  const noszony = detail.where === 'bag' ? (S.equipped[it.slot] ?? null) : null;
   const mine = itemStats(it);
   const stare = itemStats(noszony);
   const klucze = [...new Set([...Object.keys(mine), ...Object.keys(stare)])];
@@ -920,14 +921,26 @@ function detailHtml() {
 
     <div class="stat" title="Poziom przedmiotu. Tyle pięter trzeba zdobyć, żeby go założyć — i tyle waży jego baza obrażeń albo pancerza.">
       <span class="k">Poziom przedmiotu</span><span class="v">${it.ilvl}</span></div>
+    ${it.slot === 'bron' ? `<div class="stat" title="${it.hands === 2
+      ? 'Zajmuje obie ręce: bez tarczy i bez drugiego ostrza, ale bije mocniej i cały exp idzie w jeden skill.'
+      : 'Zostawia drugą rękę wolną na tarczę albo drugą broń — exp dzieli się wtedy po połowie.'}">
+      <span class="k">Chwyt</span><span class="v">${it.hands === 2 ? 'dwuręczna' : 'jednoręczna'}</span></div>` : ''}
     ${it.damage ? `<div class="stat"><span class="k">Atak</span><span class="v">${nf(it.damage)}</span></div>` : ''}
     ${it.armor ? `<div class="stat"><span class="k">Obrona</span><span class="v">${nf(it.armor)}</span></div>` : ''}
     ${(it.affixes ?? []).map(a => `<div class="stat"><span class="k">${esc(a.label)}</span>
       <span class="v up">+${a.value}${a.pct ? '%' : ''}</span></div>`).join('')}
 
-    ${detail.where === 'bag' && diff ? `<div class="sec">Zmiana wobec noszonego</div>${diff}` : ''}
-    ${detail.where === 'bag' && !diff ? `<div class="sec">Zmiana</div>
-      <div class="t2">Dokładnie to samo, co masz na sobie.</div>` : ''}
+    ${detail.where === 'bag' && noszony ? porownanie(noszony, it) : ''}
+    ${detail.where === 'bag' && diff ? `<div class="sec">Bilans</div>${diff}` : ''}
+    ${detail.where === 'bag' && !noszony ? `<div class="sec">Zmiana</div>
+      <div class="t2">Slot jest pusty — wszystko powyżej to czysty zysk.</div>` : ''}
+
+    ${detail.where === 'bag' && it.slot === 'bron' && it.hands === 2 && S.equipped.offhand
+      ? `<div class="t2" style="color:var(--brass);margin-top:8px">Założenie zdejmie
+         <b>${esc(S.equipped.offhand.name)}</b> z drugiej ręki.</div>` : ''}
+    ${detail.where === 'bag' && it.slot === 'offhand' && S.hands?.offBlocked
+      ? `<div class="t2" style="color:#D9736B;margin-top:8px">Trzymasz broń dwuręczną —
+         druga ręka jest zajęta.</div>` : ''}
 
     ${!eqCheck.ok ? `<div class="t2" style="color:#D9736B;margin-top:8px">${esc(eqCheck.reason)}</div>` : ''}
 
@@ -936,6 +949,26 @@ function detailHtml() {
       <button class="btn ghost" data-act="sell" data-id="${it.id}">Sprzedaj</button>
     </div>` : ''}
   </div>`;
+}
+
+// Porównanie obok siebie: co nosisz kontra co trzymasz. Bez tego gracz musiał
+// pamiętać liczby z drugiego ekranu.
+function porownanie(stary, nowy) {
+  const kol = (it, tytul) => {
+    const s = itemStats(it);
+    const wiersze = Object.entries(s).filter(([, v]) => v)
+      .map(([k, v]) => `<div class="pk"><span>${STAT_NAZWA[k] ?? k}</span>
+        <b>${v}${STAT_PCT.has(k) ? '%' : ''}</b></div>`).join('');
+    return `<div class="pcol">
+      <div class="ph" style="color:${rarityColor(it.rarity)}">${esc(tytul)}</div>
+      <div class="pn" style="color:${rarityColor(it.rarity)}">${esc(it.name)}</div>
+      <div class="t2">${esc(S.rarities[it.rarity]?.label ?? '')}${it.slot === 'bron'
+        ? ` · ${it.hands === 2 ? '2H' : '1H'}` : ''}</div>
+      ${wiersze || '<div class="t2">bez statystyk</div>'}
+    </div>`;
+  };
+  return `<div class="sec">Nosisz kontra bierzesz</div>
+    <div class="porownanie">${kol(stary, 'NOSISZ')}${kol(nowy, 'BIERZESZ')}</div>`;
 }
 
 function bagList() {
@@ -1005,60 +1038,153 @@ function renderEq() {
 // Na razie sama struktura. Silnik walki już przyjmuje pięć jednostek po stronie
 // gracza (patrz PARTY_SLOTS i createFight) — brakuje wyłącznie tego, czym je obsadzić.
 
+// ---------------------------------------------------------------- DRUŻYNA
+// Lewa kolumna to skład, prawa to panel wybranego członka. Klikasz siebie —
+// dostajesz swój panel, klikasz sojusznika — jego. Nagłówek u góry nie jest
+// już jedyną drogą do własnych ulepszeń.
+
+let teamSel = 'ja';        // 'ja' | 'a0' | 'a1' | 'a2' | 'pet'
+
 function renderDruzyna() {
-  const comp = S.collection?.companions ?? [];
-  const pety = S.collection?.pets ?? [];
   const st = S.stats;
+  const T = S.teamStats ?? { allies: [], pet: null };
+  const obsadzeni = T.allies.filter(Boolean).length + (T.pet ? 1 : 0);
 
-  let h = `<div class="scr-head">Drużyna <span>1 / 5 SLOTÓW</span></div>`;
+  let h = `<div class="scr-head">Drużyna <span>${1 + obsadzeni} / ${(S.allySlots ?? 3) + 2} W WALCE</span></div>`;
+  h += `<div class="two-col">`;
 
-  h += `<div class="card hi row">
-    <div class="icon lg">${heroCrest(30)}</div>
-    <div class="grow">
-      <div class="t1">${esc(S.name)}</div>
-      <div class="t2">poziom ${S.poziom} · moc ${nf(st.power)} · jedyny, który nosi ekwipunek</div>
-    </div>
-    <span class="badge on">AKTYWNY</span>
-  </div>`;
+  // ---- lewa: skład ----
+  h += `<div class="col">`;
+  h += `<button class="card row team-row ${teamSel === 'ja' ? 'hi' : ''}" data-act="teamsel" data-s="ja">
+    <div class="icon lg">${heroCrest(28)}</div>
+    <div class="grow"><div class="t1">${esc(S.name)}</div>
+      <div class="t2">poziom ${S.poziom} · moc ${nf(st.power)}</div></div>
+    <span class="badge on">TY</span>
+  </button>`;
 
-  h += `<div class="scrollbox">`;
-  h += `<div class="sec">Sojusznicy</div>`;
-  for (let i = 0; i < 3; i++) {
-    const c = comp[i];
-    h += slotRow(c ? '👤' : '＋', c?.name ?? `Sojusznik ${i + 1}`, c
-      ? `${esc(S.rarities[c.rarity]?.label ?? c.rarity)} · przywołany, jeszcze nie wchodzi do walki`
-      : 'Pusty slot. Sojusznicy przychodzą z Przywołania.', c);
+  for (let i = 0; i < (S.allySlots ?? 3); i++) {
+    const a = T.allies[i];
+    h += `<button class="card row team-row ${teamSel === 'a' + i ? 'hi' : ''} ${a ? '' : 'off'}"
+      data-act="teamsel" data-s="a${i}">
+      <div class="icon lg" ${a ? `style="border-color:${rarityColor(a.rarity)}"` : ''}>${a ? '👤' : '＋'}</div>
+      <div class="grow">
+        <div class="t1" ${a ? `style="color:${rarityColor(a.rarity)}"` : ''}>${esc(a?.name ?? `Slot ${i + 1}`)}</div>
+        <div class="t2">${a ? `${nf(a.damage)} atak · ${nf(a.maxHp)} HP` : 'pusty'}</div>
+      </div>
+      <span class="badge ${a ? 'on' : ''}">${a ? 'WALCZY' : 'WOLNY'}</span>
+    </button>`;
   }
 
-  h += `<div class="sec">Pet</div>`;
-  const p = pety[0];
-  h += slotRow(p ? '🐺' : '＋', p?.name ?? 'Pet', p
-    ? `${esc(S.rarities[p.rarity]?.label ?? p.rarity)} · przywołany, jeszcze nie wchodzi do walki`
-    : 'Pusty slot. Pety przychodzą z Przywołania.', p);
-
-  h += `<div class="sec">Zasady drużyny</div>
-    <div class="card">
-      <div class="t1" style="margin-bottom:6px">Ekwipunek należy tylko do Ciebie</div>
-      <div class="t2"><b>Sojusznicy i pety nie noszą zwykłego sprzętu</b> — żadnych hełmów,
-        napierśników ani mieczy. Rosną rzadkością, duplikatami i gwiazdkami.
-        Legendary dostanie kiedyś własny relikt, a Legendary pet własną broń — i tyle.</div>
-      <div class="t2" style="margin-top:7px">To także <b>oni mają klasy</b>, nie Ty.
-        Twoja postać jest jedna i buduje się atrybutami, sprzętem i drzewkiem.</div>
-    </div>`;
+  const p = T.pet;
+  h += `<button class="card row team-row ${teamSel === 'pet' ? 'hi' : ''} ${p ? '' : 'off'}"
+    data-act="teamsel" data-s="pet">
+    <div class="icon lg" ${p ? `style="border-color:${rarityColor(p.rarity)}"` : ''}>${p ? '🐺' : '＋'}</div>
+    <div class="grow">
+      <div class="t1" ${p ? `style="color:${rarityColor(p.rarity)}"` : ''}>${esc(p?.name ?? 'Slot peta')}</div>
+      <div class="t2">${p ? `${nf(p.damage)} atak · ${nf(p.maxHp)} HP` : 'pusty'}</div>
+    </div>
+    <span class="badge ${p ? 'on' : ''}">${p ? 'WALCZY' : 'WOLNY'}</span>
+  </button>`;
   h += `</div>`;
 
+  // ---- prawa: panel wybranego ----
+  h += `<div class="col">${teamSel === 'ja' ? panelGracza() : panelTowarzysza()}</div>`;
+
+  h += `</div>`;
   return h;
 }
 
-function slotRow(ic, nazwa, opis, wypelniony) {
-  return `<div class="card row ${wypelniony ? '' : 'off'}">
-    <div class="icon lg" ${wypelniony ? `style="border-color:${rarityColor(wypelniony.rarity)}"` : ''}>${ic}</div>
-    <div class="grow">
-      <div class="t1" ${wypelniony ? `style="color:${rarityColor(wypelniony.rarity)}"` : ''}>${esc(nazwa)}</div>
-      <div class="t2">${opis}</div>
+function panelGracza() {
+  const st = S.stats;
+  return `<div class="card hi">
+      <div class="row"><div class="icon lg">${heroCrest(30)}</div>
+        <div class="grow"><div class="t1">${esc(S.name)}</div>
+          <div class="t2">poziom ${S.poziom} · jedyny, który nosi ekwipunek</div></div></div>
     </div>
-    <span class="badge ${wypelniony ? 'on' : ''}">${wypelniony ? 'W KOLEKCJI' : 'ZAMKNIĘTY'}</span>
-  </div>`;
+    <div class="statgrid" style="margin-bottom:8px">
+      <div class="stat-box"><span class="k">Zdrowie</span><span class="v">${nf(st.hp)}/${nf(st.maxHp)}</span></div>
+      <div class="stat-box"><span class="k">Atak</span><span class="v">${nf(st.damage)}</span></div>
+      <div class="stat-box"><span class="k">Obrona</span><span class="v">${nf(st.armor)}</span></div>
+      <div class="stat-box"><span class="k">Prędkość</span><span class="v">${st.speed}</span></div>
+      <div class="stat-box"><span class="k">Kryt</span><span class="v">${(st.crit * 100).toFixed(1)}%</span></div>
+      <div class="stat-box"><span class="k">Moc</span><span class="v">${nf(st.power)}</span></div>
+    </div>
+    <div class="sec">Ulepszenia</div>
+    <button class="card row team-go" data-act="tab" data-tab="postac">
+      <div class="icon">⬆</div>
+      <div class="grow"><div class="t1">Atrybuty</div>
+        <div class="t2">${S.unspentAttr ? `${S.unspentAttr} punktów czeka` : 'wszystko rozdane'}</div></div>
+    </button>
+    <button class="card row team-go" data-act="tab" data-tab="drzewko">
+      <div class="icon">⚔</div>
+      <div class="grow"><div class="t1">Skille bojowe</div>
+        <div class="t2">Rosną z tego, czym bijesz</div></div>
+    </button>
+    <button class="card row team-go" data-act="tab" data-tab="eq">
+      <div class="icon">🎒</div>
+      <div class="grow"><div class="t1">Ekwipunek</div>
+        <div class="t2">Osiem slotów, makieta postaci</div></div>
+    </button>`;
+}
+
+function panelTowarzysza() {
+  const pet = teamSel === 'pet';
+  const idx = pet ? null : Number(teamSel.slice(1));
+  const wpis = pet ? S.teamStats.pet : S.teamStats.allies[idx];
+  const pula = pet ? (S.collection?.pets ?? []) : (S.collection?.companions ?? []);
+  const zajete = pet ? [] : (S.team?.allies ?? []).filter(x => x !== null && x !== idx);
+
+  let h = '';
+
+  if (wpis) {
+    h += `<div class="card hi" style="border-color:${rarityColor(wpis.rarity)}">
+      <div class="row">
+        <div class="icon lg" style="border-color:${rarityColor(wpis.rarity)}">${pet ? '🐺' : '👤'}</div>
+        <div class="grow">
+          <div class="t1" style="color:${rarityColor(wpis.rarity)}">${esc(wpis.name)}</div>
+          <div class="t2">${esc(S.rarities[wpis.rarity]?.label ?? wpis.rarity)} · ${pet ? 'pet' : 'sojusznik'}</div>
+        </div>
+      </div>
+    </div>
+    <div class="statgrid" style="margin-bottom:8px">
+      <div class="stat-box"><span class="k">Zdrowie</span><span class="v">${nf(wpis.maxHp)}</span></div>
+      <div class="stat-box"><span class="k">Atak</span><span class="v">${nf(wpis.damage)}</span></div>
+      <div class="stat-box"><span class="k">Obrona</span><span class="v">${nf(wpis.armor)}</span></div>
+      <div class="stat-box"><span class="k">Prędkość</span><span class="v">${wpis.speed}</span></div>
+      <div class="stat-box"><span class="k">Kryt</span><span class="v">${(wpis.crit * 100).toFixed(1)}%</span></div>
+      <div class="stat-box"><span class="k">Rzadkość</span><span class="v">${esc(S.rarities[wpis.rarity]?.label ?? '')}</span></div>
+    </div>
+    <button class="btn ghost wide" data-act="teamset" data-slot="${pet ? 'pet' : idx}" data-idx="">
+      Zdejmij ze slotu</button>`;
+  } else {
+    h += `<div class="card"><div class="t1">Pusty slot</div>
+      <div class="t2">Wybierz z kolekcji poniżej. ${pet ? 'Pety' : 'Sojusznicy'} przychodzą z Przywołania.</div></div>`;
+  }
+
+  h += `<div class="sec">Kolekcja · ${pula.length}</div>`;
+  h += `<div class="scrollbox">`;
+  if (!pula.length) {
+    h += `<div class="card"><div class="t2">Pusto. Idź do Przywołania.</div></div>`;
+  } else {
+    h += pula.map((c, i) => {
+      const gdzieindziej = zajete.includes(i);
+      const tu = wpis && wpis.idx === i;
+      return `<button class="card row compact" data-act="teamset"
+        data-slot="${pet ? 'pet' : idx}" data-idx="${i}" ${gdzieindziej || tu ? 'disabled' : ''}>
+        <div class="icon" style="border-color:${rarityColor(c.rarity)}">${pet ? '🐺' : '👤'}</div>
+        <div class="grow"><div class="t1" style="color:${rarityColor(c.rarity)}">${esc(c.name)}</div>
+          <div class="t2">${esc(S.rarities[c.rarity]?.label ?? c.rarity)}</div></div>
+        <span class="badge ${tu ? 'on' : ''}">${tu ? 'TUTAJ' : gdzieindziej ? 'W INNYM' : 'WSTAW'}</span>
+      </button>`;
+    }).join('');
+  }
+  h += `</div>`;
+
+  h += `<div class="card" style="margin-top:8px"><div class="t2">
+    <b>Towarzysze nie noszą ekwipunku.</b> Rosną wyłącznie rzadkością, a ich
+    statystyki liczą się z Twoich — nigdy nie zostaną w tyle i nigdy Cię nie przerosną.</div></div>`;
+
+  return h;
 }
 
 // ---------------------------------------------------------------- SKILLE
@@ -1071,9 +1197,11 @@ function slotRow(ic, nazwa, opis, wypelniony) {
 let skillOpen = 'gornictwo';
 let MINE = null;         // { res, ms, t0, timer, raf }
 
-function startMineLoop(res, ms) {
+// skill jest parametrem, nie stałą — inaczej drugi cykl Rybołówstwa szukał
+// swojego surowca w tabeli Górnictwa i wywalał się na undefined.
+function startMineLoop(skill, res, ms) {
   stopMineLoop();
-  MINE = { res, ms, t0: Date.now() };
+  MINE = { skill, res, ms, t0: Date.now() };
   // setInterval, nie requestAnimationFrame: rAF zamiera, gdy strona nie jest
   // rysowana (zminimalizowane okno, tło), i pasek zastyga w miejscu.
   const rysuj = () => {
@@ -1088,11 +1216,12 @@ function startMineLoop(res, ms) {
   MINE.timer = setTimeout(async () => {
     const d = await api('minetick', {});
     if (d.error) { stopMineLoop(); render(); return; }
-    if (d.awans) toast(`Górnictwo ${S.skills.gornictwo.lvl}!`);
+    const sk = S.skills[skill];
+    if (d.awans) toast(`${sk.label} ${sk.lvl}!`);
     // Kolejny cykl rusza sam. STOP albo zmiana surowca to jedyne wyjście.
-    const r = S.skills.gornictwo.resources.find(x => x.id === res);
+    const r = sk.resources.find(x => x.id === res);
     render();
-    if (S.activity) startMineLoop(res, r.ms);
+    if (S.activity && r) startMineLoop(skill, res, r.ms);
   }, ms + 60);
 }
 
@@ -1244,10 +1373,27 @@ function renderSummon() {
   h += `<button class="btn solid big wide" data-act="summon" ${stac ? '' : 'disabled'}>
     ${stac ? `Przywołaj ×1 — 1 klucz` : 'Brak kluczy'}</button>`;
 
-  h += `<div class="sec">Dokąd to idzie</div>
-    <div class="card"><div class="t2">Sojusznicy i pety losują się z <b>osobnych pul</b> — jedno losowanie
-      nie może dać drugiego. Docelowo duplikaty podbijają gwiazdki, maksymalny duplikat zamienia się
-      w esencję, a system ma <b>jawny pity</b>. Tego jeszcze nie ma — teraz to czysta próba odczucia.</div></div>`;
+  // Szanse jawne od pierwszego dnia. System, który ukrywa liczby, uczy gracza
+  // nieufności — a i tak je policzy.
+  const wagi = S.summonOdds ?? {};
+  const suma = Object.values(wagi).reduce((a, b) => a + b, 0) || 1;
+  h += `<div class="sec">Szanse — ${summonKind === 'pets' ? 'pety' : 'sojusznicy'}</div>
+    <div class="odds">
+      ${Object.entries(wagi).map(([r, w]) => {
+        const pct = w / suma * 100;
+        return `<div class="oddrow" title="${w} na ${suma} losów">
+          <span class="on" style="color:${rarityColor(r)}">${esc(S.rarities[r]?.label ?? r)}</span>
+          <span class="ob"><i style="width:${Math.max(1.5, pct)}%;background:${rarityColor(r)}"></i></span>
+          <span class="ov">${pct < 1 ? pct.toFixed(1) : Math.round(pct)}%</span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="t2" style="margin-top:6px">Te same wagi dla obu pul. Jedno losowanie nie może dać
+      sojusznika zamiast peta — pule są rozdzielone.</div>`;
+
+  h += `<div class="card" style="margin-top:8px"><div class="t2">Docelowo duplikaty podbijają gwiazdki,
+    maksymalny duplikat zamienia się w esencję, a system dostaje <b>jawny pity</b>.
+    Tego jeszcze nie ma.</div></div>`;
 
   return h;
 }
@@ -1459,6 +1605,13 @@ document.addEventListener('click', async (ev) => {
     } else if (act === 'logview') {
       logView = btn.dataset.v; logOpen = null; render();
 
+    } else if (act === 'teamsel') {
+      teamSel = btn.dataset.s; render();
+
+    } else if (act === 'teamset') {
+      const d = await api('team', { slot: btn.dataset.slot, idx: btn.dataset.idx === '' ? null : Number(btn.dataset.idx) });
+      if (!d.error) render();
+
     } else if (act === 'logopen') {
       logOpen = logOpen === btn.dataset.f ? null : btn.dataset.f;
       render();
@@ -1515,12 +1668,6 @@ document.addEventListener('click', async (ev) => {
       advView = 'wieza';
       const d = await api('advance', {});
       if (!d.error) { toast(`Piętro ${d.floor}`); render(); }
-    } else if (act === 'tree') {
-      const d = await api('tree', { node: btn.dataset.node });
-      if (d.error) toast(d.error, true); else render();
-    } else if (act === 'treereset') {
-      const d = await api('treereset', {});
-      if (d.error) toast(d.error, true); else { toast(`Zwrócono ${d.punkty} pkt`); render(); }
     } else if (act === 'slot') {
       // drugie kliknięcie w ten sam slot zwija podgląd
       detail = (detail?.where === 'worn' && detail.slot === btn.dataset.slot)
@@ -1538,7 +1685,7 @@ document.addEventListener('click', async (ev) => {
       if (d.error) return;
       const r = S.skills[skillOpen].resources.find(x => x.id === res);
       render();
-      startMineLoop(res, r.ms);
+      startMineLoop(skillOpen, res, r.ms);
     } else if (act === 'minestop') {
       stopMineLoop();
       await api('minestop', {});

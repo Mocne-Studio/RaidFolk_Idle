@@ -1,7 +1,7 @@
 // Stan postaci: atrybuty, skille, ekwipunek, statystyki wynikowe.
 
 import CONFIG from './config.js';
-import { itemStatSummary } from './content.js';
+import { itemStatSummary, WEAPON_TYPES, handsOf } from './content.js';
 
 const C = CONFIG;
 
@@ -53,9 +53,17 @@ export function migrate(ch) {
   ch.collection.companions ??= [];
   ch.collection.pets ??= [];
   ch.prof ??= {};
-  ch.prof.gornictwo ??= { lvl: 1, xp: 0 };
+  for (const id of Object.keys(C.skills)) if (C.skills[id].grywalne) ch.prof[id] ??= { lvl: 1, xp: 0 };
   ch.materials ??= {};
   ch.activity ??= null;
+  ch.cskills ??= freshCombatSkills();
+  for (const id of Object.keys(C.combatSkills.list)) ch.cskills[id] ??= { lvl: 1, xp: 0 };
+
+  ch.team ??= { allies: [null, null, null], pet: null };
+  ch.team.allies ??= [null, null, null];
+  // Sojusznik usunięty z kolekcji nie może zostać w slocie jako duch.
+  ch.team.allies = ch.team.allies.map(i => (ch.collection.companions[i] ? i : null));
+  if (!ch.collection.pets[ch.team.pet]) ch.team.pet = null;
 
   // Drzewko doszło później; postacie sprzed niego dostają puste.
   ch.tree ??= {};
@@ -94,11 +102,15 @@ export function newCharacter(name, crest = null) {
     // Kronika. family -> { kills, drops: [nazwy odkrytych trofeów] }
     bestiary: {},
     // Profesje zbierackie. id skilla -> { lvl, xp }
-    prof: { gornictwo: { lvl: 1, xp: 0 } },
+    prof: freshProf(),
     // Surowce. id surowca -> sztuki
     materials: {},
     // Co gracz teraz kopie: { skill, res, since } albo null
     activity: null,
+    // Kto stoi w drużynie. Liczby to indeksy w collection.companions / .pets.
+    team: { allies: [null, null, null], pet: null },
+    // Skille bojowe. Rosną z tego, czym bijesz. Dają bonusy, NIE bramkują sprzętu.
+    cskills: freshCombatSkills(),
     // Co wypadło z Przywołania. Drużyna czyta stąd pierwszego sojusznika.
     collection: { companions: [], pets: [] },
     potions: C.healing.startingPotions,
@@ -188,6 +200,9 @@ export function resetTree(ch) {
 
 // Ile expa na kolejny poziom. Liniowo i nisko — to są liczby pod obejrzenie
 // pętli, nie pod finalny balans.
+export const freshProf = () => Object.fromEntries(
+  Object.entries(C.skills).filter(([, s]) => s.grywalne).map(([id]) => [id, { lvl: 1, xp: 0 }]));
+
 export const xpNeed = (skill, lvl) => (C.skills[skill].xpBase ?? 20) * lvl;
 
 export const profOf = (ch, skill) => (ch.prof?.[skill] ?? { lvl: 1, xp: 0 });
@@ -235,10 +250,13 @@ export function computeStats(ch) {
   // to on niesie darmowy przyrost HP, żeby wieża nie robiła się coraz ostrzejsza
   // dla kogoś, kto nie wpakował wszystkiego w Wytrzymałość.
   const T = treeEffects(ch);
+  // Skille bojowe dokładają się do drzewka, nie zastępują go. Drzewko jest
+  // schowane z UI, ale liczby zostają — wróci albo nie, kod jest gotowy na oba.
+  const K = combatSkillBonus(ch);
 
   const maxHp = Math.round(
     (cc.startHp + a.wytrzymalosc * cc.hpPerStamina + poziom(ch) * cc.hpPerLevel + hpFlat)
-    * (1 + T.hpPct)
+    * (1 + T.hpPct + K.hpPct)
   );
 
   // Obrażenia skalują się z atrybutami KLASY, nie z typu trzymanej broni — inaczej
@@ -251,9 +269,9 @@ export function computeStats(ch) {
   const mainAttr = (cls.dmgAttrs ?? ['sila'])
     .reduce((sum, attr) => sum + (a[attr] ?? 0) * (1 + (T.attrWeight[attr] ?? 0)), 0);
 
-  const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor) * (1 + T.dmgPct));
+  const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor) * (1 + T.dmgPct + K.dmgPct));
   const speed = Math.round(C.combat.baseSpeed + speedFlat + T.speed + a.zrecznosc / (cc.agiSpeedDivisor / 100));
-  const armor = Math.round((armorFlat + T.armorFlat + a.wytrzymalosc * cc.staArmorPerPoint) * (1 + T.armorPct));
+  const armor = Math.round((armorFlat + T.armorFlat + a.wytrzymalosc * cc.staArmorPerPoint) * (1 + T.armorPct + K.armorPct));
 
   const accuracy = cc.accuracyBase + a.zrecznosc * cc.accuracyPerAgi + accFlat / 100 + T.accuracy;
   const evasion = Math.min(cc.evasionMax, a.zrecznosc * cc.evasionPerAgi + evaFlat / 100 + T.evasion);
@@ -261,7 +279,7 @@ export function computeStats(ch) {
   // Blok wymaga tarczy. Drzewko bez tarczy w ręce nie daje z niego nic.
   const maTarcze = ch.equipped.offhand?.wtype === 'tarcza';
   const block = maTarcze
-    ? Math.min(C.combat.blockChanceMax, C.combat.blockChanceShield + T.block)
+    ? Math.min(C.combat.blockChanceMax, C.combat.blockChanceShield + T.block + K.block)
     : 0;
 
   return {
@@ -283,6 +301,104 @@ export function computeStats(ch) {
   };
 }
 
+// ---------------------------------------------------------------- skille bojowe
+
+export const freshCombatSkills = () =>
+  Object.fromEntries(Object.keys(C.combatSkills.list).map(id => [id, { lvl: 1, xp: 0 }]));
+
+export const cskillNeed = (lvl) => C.combatSkills.xpBase * lvl;
+
+// Jak rozkłada się exp z walki. To jest CAŁA reguła i siedzi w jednym miejscu:
+//   dwuręczna            → 100% do jej skilla
+//   jednoręczna + tarcza → 50% broń / 50% Obrona
+//   dwie jednoręczne     → po 50% do skilla każdej
+//   jednoręczna sama     → 100% do jej skilla
+//   gołe pięście         → 100% do Broni białej
+// Witalność stoi obok — rośnie z samego udziału w walce, niezależnie od rąk.
+export function skillSplit(ch) {
+  const bron = ch.equipped?.bron ?? null;
+  const off = ch.equipped?.offhand ?? null;
+  const sk = (it) => (it ? (WEAPON_TYPES[it.wtype]?.skill ?? null) : null);
+
+  const out = {};
+  const add = (k, v) => { if (k) out[k] = (out[k] ?? 0) + v; };
+
+  if (!bron) { add('melee', 1); return out; }
+  if (handsOf(bron) === 2) { add(sk(bron), 1); return out; }
+  if (off?.wtype === 'tarcza') { add(sk(bron), 0.5); add('obrona', 0.5); return out; }
+  if (off && WEAPON_TYPES[off.wtype]) { add(sk(bron), 0.5); add(sk(off), 0.5); return out; }
+  add(sk(bron), 1);
+  return out;
+}
+
+// Dopisuje exp i przelewa nadmiar w poziomy. Zwraca listę tych, które awansowały.
+export function addCombatXp(ch, pula) {
+  ch.cskills ??= freshCombatSkills();
+  const awanse = [];
+  const daj = (id, xp) => {
+    const s = ch.cskills[id] ??= { lvl: 1, xp: 0 };
+    s.xp += xp;
+    while (s.xp >= cskillNeed(s.lvl)) { s.xp -= cskillNeed(s.lvl); s.lvl++; awanse.push(id); }
+  };
+  for (const [id, udzial] of Object.entries(skillSplit(ch))) daj(id, Math.round(pula * udzial));
+  daj('witalnosc', Math.round(pula));   // za samo bycie w walce
+  return awanse;
+}
+
+// Bonusy ze skilli. Skille broni liczą się TYLKO dla broni, którą trzymasz —
+// exp z łuku nie ma podbijać obrażeń różdżki.
+export function combatSkillBonus(ch) {
+  const out = { dmgPct: 0, armorPct: 0, hpPct: 0, block: 0 };
+  const s = ch.cskills ?? {};
+  const wtype = ch.equipped?.bron?.wtype ?? 'mele';
+  const aktywny = WEAPON_TYPES[wtype]?.skill ?? 'melee';
+
+  for (const [id, eff] of Object.entries(C.combatSkills.perLevel)) {
+    const lvl = (s[id]?.lvl ?? 1) - 1;          // poziom 1 nie daje jeszcze nic
+    if (!lvl) continue;
+    if (['melee', 'dystans', 'magia'].includes(id) && id !== aktywny) continue;
+    for (const [k, v] of Object.entries(eff)) out[k] = (out[k] ?? 0) + v * lvl;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- drużyna
+
+// Statystyki sojusznika albo peta. Liczą się z BOHATERA — nie ma osobnej krzywej
+// do strojenia, a towarzysz nigdy nie zostaje w tyle ani nie przerasta gracza.
+// Rzadkość jest jedyną osią rozwoju, bo ekwipunku nie noszą.
+export function allyStats(hero, wpis, rodzaj = 'ally') {
+  const base = C.allies[rodzaj];
+  const mult = C.allies.rarityMult[wpis.rarity] ?? 1;
+  return {
+    name: wpis.name,
+    rarity: wpis.rarity,
+    kind: rodzaj,
+    maxHp: Math.max(1, Math.round(hero.maxHp * base.hpPct * mult)),
+    hp: Math.max(1, Math.round(hero.maxHp * base.hpPct * mult)),
+    damage: Math.max(1, Math.round(hero.damage * base.dmgPct * mult)),
+    armor: Math.round(hero.armor * base.armorPct * mult),
+    speed: base.speed,
+    crit: C.combat.critBase,
+    critMult: C.combat.critMultBase,
+    accuracy: hero.accuracy,
+    evasion: 0,
+    dtype: 'fiz',
+  };
+}
+
+// Kto faktycznie wchodzi do walki, w kolejności slotów. Zwraca [{...staty}].
+export function teamUnits(ch, heroStats) {
+  const out = [];
+  for (const i of ch.team?.allies ?? []) {
+    const w = ch.collection?.companions?.[i];
+    if (w) out.push(allyStats(heroStats, w, 'ally'));
+  }
+  const p = ch.collection?.pets?.[ch.team?.pet];
+  if (p) out.push(allyStats(heroStats, p, 'pet'));
+  return out;
+}
+
 // ---------------------------------------------------------------- ekwipunek
 
 // Jedyna bramka na sprzęt: poziom postaci. Skille bojowe były drugą bramką
@@ -301,11 +417,25 @@ export function equip(ch, itemId) {
   const check = canEquip(ch, item);
   if (!check.ok) return check;
 
+  // Dwuręczna zajmuje obie ręce. Do drugiej ręki nic już nie wejdzie,
+  // a to, co tam było, wraca do plecaka.
+  if (item.slot === 'offhand' && handsOf(ch.equipped.bron) === 2) {
+    return { ok: false, reason: 'Trzymasz broń dwuręczną — druga ręka jest zajęta' };
+  }
+
   const old = ch.equipped[item.slot] ?? null;
   ch.equipped[item.slot] = item;
   ch.backpack.splice(idx, 1);
   if (old) ch.backpack.push(old);
-  return { ok: true, equipped: item, unequipped: old };
+
+  let zdjete = null;
+  if (item.slot === 'bron' && handsOf(item) === 2 && ch.equipped.offhand) {
+    zdjete = ch.equipped.offhand;
+    ch.backpack.push(zdjete);
+    delete ch.equipped.offhand;
+  }
+
+  return { ok: true, equipped: item, unequipped: old, offhandZdjety: zdjete };
 }
 
 // --------------------------------------------------------------- self-check
@@ -398,6 +528,53 @@ export function demo() {
 
   // klasy Sojusznikow zostaja w config, ale gracz ich nie dostaje
   console.assert(C.classes.wojownik && C.classes.mag, 'klasy Sojusznikow czekaja w config');
+
+  // ---- skille bojowe: podzial expa wedlug rak ----
+  const w2h = { slot: 'bron', wtype: 'mele', hands: 2, affixes: [], damage: 10, armor: 0 };
+  const w1h = { slot: 'bron', wtype: 'mele', hands: 1, affixes: [], damage: 6, armor: 0 };
+  const rozdzka = { slot: 'bron', wtype: 'magia', hands: 1, affixes: [], damage: 6, armor: 0 };
+  const tarcza = { slot: 'offhand', wtype: 'tarcza', affixes: [], damage: 0, armor: 5 };
+  const kordelas = { slot: 'offhand', wtype: 'mele', hands: 1, affixes: [], damage: 4, armor: 0 };
+
+  const podzial = (bron, off) => {
+    const t = newCharacter('T');
+    t.equipped = {}; if (bron) t.equipped.bron = bron; if (off) t.equipped.offhand = off;
+    return skillSplit(t);
+  };
+  console.assert(podzial(w2h).melee === 1, 'dwureczna: caly exp w jeden skill');
+  console.assert(podzial(w1h, tarcza).melee === 0.5 && podzial(w1h, tarcza).obrona === 0.5,
+    'jednoreczna + tarcza: 50/50 bron i Obrona');
+  console.assert(podzial(rozdzka, tarcza).magia === 0.5 && podzial(rozdzka, tarcza).obrona === 0.5,
+    'rozdzka + tarcza: 50/50 magia i Obrona');
+  console.assert(podzial(rozdzka, kordelas).magia === 0.5 && podzial(rozdzka, kordelas).melee === 0.5,
+    'rozdzka + mieczyk: po polowie do obu skilli');
+  console.assert(podzial(w1h).melee === 1, 'jednoreczna sama: caly exp w jej skill');
+  console.assert(podzial(null).melee === 1, 'gole piesci ida w Bron biala');
+
+  // Witalnosc rosnie zawsze, niezaleznie od rak
+  const wojak = newCharacter('T'); wojak.equipped = { bron: rozdzka };
+  addCombatXp(wojak, 500);
+  console.assert(wojak.cskills.witalnosc.lvl > 1, 'Witalnosc rosnie z samego udzialu w walce');
+  console.assert(wojak.cskills.magia.lvl > 1, 'rozdzka podbija magie');
+  console.assert(wojak.cskills.melee.lvl === 1, 'bron biala stoi, gdy sie nia nie bije');
+
+  // Bonus liczy sie TYLKO dla trzymanej broni
+  const magik = newCharacter('T');
+  magik.equipped = { bron: rozdzka }; magik.attrs.intelekt = 50;
+  magik.cskills.magia.lvl = 20;
+  const zMagia = computeStats(magik).damage;
+  magik.cskills.magia.lvl = 1; magik.cskills.dystans.lvl = 20;
+  console.assert(computeStats(magik).damage < zMagia, 'exp z luku nie podbija rozdzki');
+
+  // Dwureczna zdejmuje tarcze i nie wpuszcza nowej
+  const rycerz = newCharacter('T');
+  rycerz.maxFloor = 50;
+  rycerz.equipped = { offhand: { ...tarcza, id: 'T1' } };
+  rycerz.backpack = [{ ...w2h, id: 'D1', reqLevel: 1 }, { ...tarcza, id: 'T2', reqLevel: 1 }];
+  const r1 = equip(rycerz, 'D1');
+  console.assert(r1.ok && !rycerz.equipped.offhand, 'dwureczna zdejmuje tarcze');
+  console.assert(rycerz.backpack.some(i => i.id === 'T1'), 'zdjeta tarcza wraca do plecaka');
+  console.assert(!equip(rycerz, 'T2').ok, 'przy dwurecznej tarcza nie wchodzi');
 
   console.log('character.js — wszystkie testy przeszly');
 }

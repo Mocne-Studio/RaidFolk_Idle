@@ -416,16 +416,82 @@ export const CONFIG = {
     },
     kowalstwo:   { label: 'Kowalstwo',    ic: '🔨', daje: 'przetapianie i sprzęt', zasila: 'Ekwipunek',
       ladder: [['Sztaba miedzi', 1], ['Brąz', 15], ['Stal', 30], ['Stal hartowana', 45], ['Mithril', 60]] },
-    rybolowstwo: { label: 'Rybołówstwo',  ic: '🐟', daje: 'ryby', zasila: 'Gotowanie',
-      ladder: [['Płotka', 1], ['Pstrąg', 16], ['Szczupak', 32], ['Jesiotr', 48], ['Ryba głębin', 62]] },
+    rybolowstwo: {
+      label: 'Rybołówstwo', ic: '🐟', daje: 'ryby', zasila: 'Gotowanie',
+      grywalne: true,
+      xpBase: 22,
+      resources: [
+        { id: 'plotka',   label: 'Płotka',      lvl: 1,  xp: 7,  ms: 3400 },
+        { id: 'pstrag',   label: 'Pstrąg',      lvl: 3,  xp: 13, ms: 4200 },
+        { id: 'szczupak', label: 'Szczupak',    lvl: 5,  xp: 22, ms: 5000 },
+        { id: 'jesiotr',  label: 'Jesiotr',     lvl: 8,  xp: 36, ms: 5800 },
+        { id: 'glebinowa',label: 'Ryba głębin', lvl: 12, xp: 58, ms: 6800 },
+      ],
+    },
     rolnictwo:   { label: 'Rolnictwo',    ic: '🌾', daje: 'rośliny i zwierzęta', zasila: 'Gotowanie i Alchemia',
       ladder: [['Len', 1], ['Zboże', 14], ['Zioła gorzkie', 28], ['Korzeń nocny', 44], ['Kwiat cierniowy', 58]] },
     gotowanie:   { label: 'Gotowanie',    ic: '🍲', daje: 'buffy przed walką', zasila: 'Drużyna i pet',
       ladder: [['Placek', 1], ['Zupa', 18], ['Pieczeń', 34], ['Uczta', 50], ['Uczta wieży', 65]] },
     alchemia:    { label: 'Alchemia',     ic: '⚗', daje: 'mikstury do walki', zasila: 'Walka',
       ladder: [['Słaba mikstura', 1], ['Mikstura', 20], ['Mocna mikstura', 36], ['Eliksir', 52], ['Eliksir wieży', 68]] },
-    runy:        { label: 'Runy',         ic: '✦', daje: 'runy dla magii', zasila: 'Magia',
-      ladder: [['Runa iskry', 1], ['Runa ognia', 22], ['Runa mrozu', 38], ['Runa burzy', 54], ['Runa otchłani', 70]] },
+    runy: {
+      label: 'Runy', ic: '✦', daje: 'runy dla magii', zasila: 'Magia',
+      grywalne: true,
+      xpBase: 26,
+      resources: [
+        { id: 'runaiskry',  label: 'Runa iskry',   lvl: 1,  xp: 9,  ms: 3600 },
+        { id: 'runaognia',  label: 'Runa ognia',   lvl: 3,  xp: 16, ms: 4400 },
+        { id: 'runamrozu',  label: 'Runa mrozu',   lvl: 6,  xp: 27, ms: 5200 },
+        { id: 'runaburzy',  label: 'Runa burzy',   lvl: 9,  xp: 43, ms: 6000 },
+        { id: 'runaotchlani',label:'Runa otchłani',lvl: 13, xp: 68, ms: 7000 },
+      ],
+    },
+  },
+
+  // ---------- SKILLE BOJOWE ----------
+  // WRÓCIŁY, ale w innej roli. Poprzednio bramkowały sprzęt — i to był problem,
+  // bo sprzęt z piętra 40 i tak wymagał piętra 40, żeby go zdobyć. Teraz dają
+  // WYŁĄCZNIE bonusy. Jedyną bramką na sprzęt zostaje poziom postaci.
+  //
+  // Exp idzie z tego, CZYM bijesz, i dzieli się według rąk:
+  //   dwuręczna broń          → 100% do jej skilla
+  //   jednoręczna + tarcza    → 50% broń / 50% Obrona
+  //   dwie jednoręczne        → po 50% do skilla każdej z nich
+  //   jednoręczna sama        → 100% do jej skilla
+  // Witalność rośnie zawsze, z samego udziału w walce.
+  combatSkills: {
+    xpBase: 45,               // exp na kolejny poziom = xpBase * poziom
+    xpPerFloor: 6,            // exp za wygraną walkę = xpPerFloor * piętro
+    twoHandDmg: 1.35,         // dwuręczna bije mocniej — to jej cała przewaga
+    list: {
+      melee:     { label: 'Broń biała', ic: '⚔', opis: 'Obrażenia bronią do walki wręcz' },
+      dystans:   { label: 'Łuk',        ic: '🏹', opis: 'Obrażenia bronią dystansową' },
+      magia:     { label: 'Różdżka',    ic: '✦', opis: 'Obrażenia bronią magiczną' },
+      obrona:    { label: 'Obrona',     ic: '🛡', opis: 'Pancerz i szansa na blok' },
+      witalnosc: { label: 'Witalność',  ic: '❤', opis: 'Maksymalne zdrowie' },
+    },
+    // Bonus ZA POZIOM. Skille broni liczą się tylko wtedy, gdy trzymasz tę broń.
+    perLevel: {
+      melee:     { dmgPct: 0.012 },
+      dystans:   { dmgPct: 0.012 },
+      magia:     { dmgPct: 0.012 },
+      obrona:    { armorPct: 0.015, block: 0.004 },
+      witalnosc: { hpPct: 0.010 },
+    },
+  },
+
+  // ---------- SOJUSZNICY I PET ----------
+  // Sojusznik jest UŁAMKIEM bohatera, nie drugim bohaterem. Statystyki liczą się
+  // z jego statystyk, więc nie ma osobnej krzywej do strojenia i sojusznik nigdy
+  // nie zostaje w tyle ani nie przerasta gracza.
+  //
+  // Nie noszą ekwipunku — to decyzja trwała. Rosną wyłącznie rzadkością.
+  allies: {
+    slots: 3,
+    ally: { hpPct: 0.35, dmgPct: 0.30, armorPct: 0.30, speed: 95 },
+    pet:  { hpPct: 0.20, dmgPct: 0.18, armorPct: 0.15, speed: 112 },
+    rarityMult: { common: 1.00, uncommon: 1.18, unique: 1.42, heroic: 1.75, legendary: 2.20 },
+    // Pet bije szybciej, ale słabiej — ma dokładać stały strumyk, nie ciosy.
   },
 
   // ---------- PRZYWOŁANIE ----------

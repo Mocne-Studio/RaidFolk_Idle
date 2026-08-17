@@ -49,6 +49,10 @@ const mkUnit = (u, side, idx) => ({
   // więc tarcza ma wreszcie własną roblotę, a nie tylko kawałek pancerza.
   block: u.block ?? 0, blockCut: u.blockCut ?? C.combat.blockCut,
   potionPct: u.potionPct ?? 0,
+  // Rodzaj obrażeń: 'fiz' albo 'mag'. Silnik nie liczy z nich niczego — służą
+  // wyłącznie do tego, żeby log walki miał kolor i żeby było widać, czym bijesz.
+  // Wynikają z typu broni: różdżka i kostur to magia, reszta to fizyczne.
+  dtype: u.dtype ?? 'fiz',
   next: interval(u.speed),
   effects: [],           // [{ id, turns, dmgMult, armorMult, stun, critTakenMult }]
   alive: true,
@@ -140,9 +144,10 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0, la
   if (target.hp <= 0) { target.hp = 0; target.alive = false; }
 
   const who = label ? `${attacker.name} · ${label}` : attacker.name;
+  const znak = attacker.dtype === 'mag' ? '✦' : '⚔';
   push(F, isCrit ? 'crit' : (attacker.side === 'wrog' ? 'enemy' : 'hit'),
-       `${who} → ${target.name}: ${dmg}${isCrit ? ' KRYT' : ''}${blocked ? ' BLOK' : ''}`,
-       { dmg, blocked });
+       `${znak} ${who} → ${target.name}: ${dmg}${isCrit ? ' KRYT' : ''}${blocked ? ' BLOK' : ''}`,
+       { dmg, blocked, dtype: attacker.dtype });
 
   if (!target.alive) push(F, target.side === 'wrog' ? 'kill' : 'down', `${target.name} pada`);
   return dmg;
@@ -226,7 +231,10 @@ function drinkPotion(F, u) {
   push(F, 'heal', `${u.name}: mikstura +${heal} (×${eff.toFixed(2)})`, { heal });
 }
 
+// Mikstury należą do bohatera. Sojusznik ich nie tyka — inaczej pet wypijałby
+// zapas, którego gracz potrzebuje na bossa.
 function autoPotion(F, u) {
+  if (u.idx !== 0) return false;
   if (F.potions <= 0 || u.hp / u.maxHp >= C.healing.autoThreshold) return false;
   drinkPotion(F, u);
   return true;
@@ -361,6 +369,33 @@ export function demo() {
   // pasek ultimate: lekki 1, sredni 2, mocny 3
   console.assert(STRENGTHS.lekki.charge === 1 && STRENGTHS.srednio.charge === 2
     && STRENGTHS.mocno.charge === 3, 'ladowanie paska wg sily ciosu');
+
+  // Sojusznicy naprawde bija: ta sama walka z druzyna konczy sie szybciej.
+  const solo = summary(runToEnd(createFight(
+    { party: [{ ...P }], enemies: [{ ...E, hp: 4000, maxHp: 4000 }], potions: 0,
+      wtype: 'mele', abilities: [] }, 999)));
+  const zDruzyna = summary(runToEnd(createFight(
+    { party: [{ ...P }, { ...P, name: 'Sojusznik', damage: 20 }, { ...P, name: 'Pet', damage: 10 }],
+      enemies: [{ ...E, hp: 4000, maxHp: 4000 }], potions: 0, wtype: 'mele', abilities: [] }, 999)));
+  console.assert(zDruzyna.turns > 0 && solo.turns > 0, 'obie walki sie odbyly');
+  console.assert(zDruzyna.enemies[0].hp < solo.enemies[0].hp,
+    `druzyna zadaje wiecej obrazen (${zDruzyna.enemies[0].hp} vs ${solo.enemies[0].hp})`);
+  console.assert(zDruzyna.log.some(l => l.party.length === 3), 'log niesie stan calej druzyny');
+
+  // Mikstury naleza do bohatera — sojusznik ich nie tyka.
+  const zRanionym = createFight(
+    { party: [{ ...P }, { ...P, name: 'Sojusznik', hp: 1, maxHp: 400 }],
+      enemies: [{ ...E, damage: 1 }], potions: 5, wtype: 'mele', abilities: [] }, 31337);
+  runToEnd(zRanionym);
+  console.assert(!zRanionym.log.some(l => /Sojusznik: mikstura/.test(l.text)),
+    'sojusznik nie pije mikstur bohatera');
+
+  // Rodzaj obrazen jedzie w logu — na tym stoi kolor w kliencie.
+  const magiczny = summary(runToEnd(createFight(
+    { party: [{ ...P, dtype: 'mag' }], enemies: [{ ...E }], potions: 0,
+      wtype: 'magia', abilities: [] }, 55)));
+  console.assert(magiczny.log.some(l => l.dtype === 'mag'), 'log niesie obrazenia magiczne');
+  console.assert(magiczny.log.some(l => l.dtype === 'fiz'), 'wrog bije fizycznie');
 
   // Obrona: ten sam wrogi cios boli mniej, gdy gracz stanal w obronie.
   // Oba przebiegi maja to samo ziarno, wiec roznica bierze sie wylacznie z akcji.

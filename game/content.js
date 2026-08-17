@@ -106,11 +106,24 @@ export function makeEnemy(floor, fightIdx) {
 
 // Bronie mają typ — od niego zależy, który skill je bramkuje i który rośnie.
 // Bez tego mag nigdy nie znajdzie różdżki, a łucznik łuku.
+// Bronie mają typ i LICZBĘ RĄK. Dwuręczna bije mocniej, ale blokuje drugą rękę:
+// nie ma tarczy, nie ma drugiego ostrza. Za to cały exp idzie w jeden skill.
+// [nazwa, ręce]
 export const WEAPON_TYPES = {
-  mele:    { skill: 'atak',        names: ['Ostrze', 'Topór', 'Młot', 'Kieł', 'Pazur', 'Rozłupywacz', 'Sierp'] },
-  dystans: { skill: 'dystansowy',  names: ['Łuk', 'Kusza', 'Proca', 'Oszczep', 'Krótki Łuk'] },
-  magia:   { skill: 'magia',       names: ['Różdżka', 'Kostur', 'Berło', 'Zwój', 'Kryształ'] },
+  mele:    { skill: 'melee',   names: [
+    ['Ostrze', 1], ['Kieł', 1], ['Pazur', 1], ['Sierp', 1], ['Puginał', 1],
+    ['Topór', 2], ['Młot', 2], ['Rozłupywacz', 2], ['Glewia', 2]] },
+  dystans: { skill: 'dystans', names: [
+    ['Krótki Łuk', 1], ['Proca', 1], ['Oszczep', 1], ['Kusza Lekka', 1],
+    ['Łuk Długi', 2], ['Kusza Ciężka', 2]] },
+  magia:   { skill: 'magia',   names: [
+    ['Różdżka', 1], ['Berło', 1], ['Zwój', 1], ['Kryształ', 1],
+    ['Kostur', 2], ['Laska', 2]] },
 };
+
+// Ile rąk zajmuje przedmiot. Stare zapisy nie mają pola hands — traktujemy je
+// jako jednoręczne, żeby nikomu nie wypadła tarcza po aktualizacji.
+export const handsOf = (it) => (it?.hands === 2 ? 2 : 1);
 
 const NAMES = {
   bron:       null,   // z WEAPON_TYPES
@@ -136,10 +149,11 @@ export function rollItem(rng, { ilvl, weights, slot = null }) {
   const spread = C.loot.ilvlSpread;
   const itemIlvl = Math.max(1, ilvl + rint(rng, spread[0], spread[1]));
 
-  let baseName, wtype = null;
+  let baseName, wtype = null, hands = 1;
   if (s === 'bron') {
     wtype = pick(rng, Object.keys(WEAPON_TYPES));
-    baseName = pick(rng, WEAPON_TYPES[wtype].names);
+    const wpis = pick(rng, WEAPON_TYPES[wtype].names);
+    baseName = wpis[0]; hands = wpis[1];
   } else {
     baseName = pick(rng, NAMES[s]);
     if (s === 'offhand') wtype = /puklerz|tarcza/i.test(baseName) ? 'tarcza' : 'inne';
@@ -147,7 +161,7 @@ export function rollItem(rng, { ilvl, weights, slot = null }) {
 
   const item = {
     id: null,
-    slot: s, wtype,
+    slot: s, wtype, hands,
     name: `${baseName} ${pick(rng, EPITHETS)}`,
     rarity, ilvl: itemIlvl, plus: 0, energy: 0,
     reqLevel: itemIlvl,
@@ -156,7 +170,8 @@ export function rollItem(rng, { ilvl, weights, slot = null }) {
   };
 
   if (def.base === 'damage' || def.base === 'mixed') {
-    item.damage = Math.round((C.gear.weaponDamageBase + C.gear.weaponDamagePerIlvl * itemIlvl) * def.mult * rar.mult);
+    item.damage = Math.round((C.gear.weaponDamageBase + C.gear.weaponDamagePerIlvl * itemIlvl)
+      * def.mult * rar.mult * (hands === 2 ? C.combatSkills.twoHandDmg : 1));
   }
   if (def.base === 'armor' || def.base === 'mixed') {
     item.armor = Math.round((C.gear.armorBase + C.gear.armorPerIlvl * itemIlvl) * def.mult * rar.mult);

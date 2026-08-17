@@ -17,7 +17,8 @@ import {
   newCharacter, computeStats, equip, canEquip,
   classOf, migrate, poziom,
   treeOf, nodeState, spendTreePoint, resetTree, respecCost,
-  xpNeed, profOf, addSkillXp, canGather,
+  xpNeed, profOf, addSkillXp, canGather, teamUnits, allyStats,
+  addCombatXp, skillSplit, cskillNeed,
 } from './game/character.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -121,6 +122,31 @@ function view(ch) {
     floors: floorList(ch),
     bestiary: bestiaryView(ch),
     collection: ch.collection ?? { companions: [], pets: [] },
+    team: ch.team,
+    // Statystyki towarzyszy policzone tak, jak wejdą do walki — ekran Drużyny
+    // nie musi znać wzoru.
+    teamStats: {
+      allies: (ch.team?.allies ?? []).map(i => {
+        const w = ch.collection?.companions?.[i];
+        return w ? { idx: i, ...allyStats(st, w, 'ally') } : null;
+      }),
+      pet: ch.collection?.pets?.[ch.team?.pet]
+        ? { idx: ch.team.pet, ...allyStats(st, ch.collection.pets[ch.team.pet], 'pet') } : null,
+    },
+    allySlots: C.allies.slots,
+    summonOdds: C.summon.weights,
+    lastDefeat: ch.lastDefeat ?? null,
+    // Skille bojowe policzone dla klienta: poziom, exp, próg i aktualny udział
+    // w podziale expa. Udział bierze się z tego, co masz w rękach.
+    cskills: Object.entries(C.combatSkills.list).map(([id, def]) => {
+      const s = ch.cskills[id] ?? { lvl: 1, xp: 0 };
+      return { id, ...def, lvl: s.lvl, xp: s.xp, need: cskillNeed(s.lvl),
+               udzial: id === 'witalnosc' ? 1 : (skillSplit(ch)[id] ?? 0) };
+    }),
+    hands: {
+      bron: ch.equipped.bron?.hands ?? 1,
+      offBlocked: (ch.equipped.bron?.hands ?? 1) === 2,
+    },
     skills: skillsView(ch),
     materials: materialsView(ch),
     activity: ch.activity ?? null,
@@ -185,8 +211,12 @@ function startFight(ch) {
       damage: st.damage, speed: st.speed, armor: st.armor,
       crit: st.crit, critMult: st.critMult, accuracy: st.accuracy, evasion: st.evasion,
       block: st.block, blockCut: st.blockCut, potionPct: st.potionPct,
-    }],
-    // TODO: tu wejdą sojusznicy i pet — układ jest już na to gotowy
+      // Rodzaj obrażeń bierze się z broni w ręce. Log walki koloruje po tym.
+      dtype: st.wtype === 'magia' ? 'mag' : 'fiz',
+    },
+    // Sojusznicy i pet wchodzą do walki na tych samych prawach co bohater.
+    // Ich HP nie przenosi się między falami — wyczerpanie dotyczy gracza.
+    ...teamUnits(ch, st)],
     enemies: [enemy],
     potions: ch.potions,
     wtype: st.wtype,
@@ -233,6 +263,12 @@ function resolveFight(ch) {
     out.gold = meta.gold;
     ch.gold += meta.gold;
 
+    // Skille bojowe rosną z tego, CZYM bijesz. Podział rąk siedzi w skillSplit().
+    const pula = C.combatSkills.xpPerFloor * meta.floor
+      * (meta.variant === 'boss' ? 6 : meta.variant === 'plus' ? 2 : 1);
+    out.skillXp = pula;
+    out.skillAwans = addCombatXp(ch, pula);
+
     // Kronika: licznik zabić i odsłanianie trofeów.
     const wpis = ch.bestiary[meta.family] ??= { kills: 0, drops: [] };
     wpis.kills++;
@@ -251,6 +287,17 @@ function resolveFight(ch) {
     // Porażka cofa na początek piętra i oddaje pełne HP. Bez tego wyczerpanie
     // zamyka gracza w pętli, z której nie da się wyjść — a nic nie tracisz
     // poza czasem i wypitymi miksturami.
+    //
+    // Zapamiętujemy, GDZIE się wywaliło. Bez tego gracz wraca po godzinie
+    // i nie wie, na czym utknął — a to jest jedyna informacja, która mówi mu,
+    // ile jeszcze brakuje.
+    ch.lastDefeat = {
+      floor: meta.floor,
+      wave: meta.fightIdx + 1,
+      waves: info.fights,
+      enemy: F.enemies[0].name,
+      at: Date.now(),
+    };
     ch.fight = 0;
     ch.hpLost = 0;
   }
@@ -303,6 +350,26 @@ function doMine(ch, skill, resId) {
   if (!check.ok) return { error: check.reason };
   ch.activity = { skill, res: resId, since: Date.now() };
   return { ok: true, activity: ch.activity };
+}
+
+// Obsada slotu drużyny. idx === null zdejmuje towarzysza ze slotu.
+function doTeam(ch, slot, idx) {
+  const i = idx === null || idx === undefined || idx === '' ? null : Number(idx);
+  if (ch.activeFight && !ch.activeFight.over) return { error: 'Najpierw dokończ albo porzuć walkę' };
+
+  if (slot === 'pet') {
+    if (i !== null && !ch.collection.pets[i]) return { error: 'Nie ma takiego peta' };
+    ch.team.pet = i;
+    return { ok: true };
+  }
+
+  const n = Number(slot);
+  if (!Number.isInteger(n) || n < 0 || n >= C.allies.slots) return { error: 'Nie ma takiego slotu' };
+  if (i !== null && !ch.collection.companions[i]) return { error: 'Nie ma takiego sojusznika' };
+  // Ten sam sojusznik nie może stać w dwóch slotach naraz.
+  if (i !== null) ch.team.allies = ch.team.allies.map(x => (x === i ? null : x));
+  ch.team.allies[n] = i;
+  return { ok: true };
 }
 
 function doMineStop(ch) {
@@ -430,6 +497,7 @@ const server = http.createServer(async (req, res) => {
         case '/api/mine':    result = doMine(ch, String(body.skill ?? 'gornictwo'), String(body.res)); break;
         case '/api/minestop':result = doMineStop(ch); break;
         case '/api/minetick':result = doMineTick(ch); break;
+        case '/api/team':    result = doTeam(ch, body.slot, body.idx); break;
         case '/api/equip':   result = equip(ch, String(body.itemId)); break;
         case '/api/potion': {
           if (ch.potions <= 0) { result = { error: 'Brak mikstur' }; break; }

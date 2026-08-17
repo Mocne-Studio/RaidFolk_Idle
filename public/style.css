@@ -146,6 +146,11 @@ button.card:active{background:#26211B}
 .log .buff{color:var(--skill)}
 .log .ult{color:var(--r-god,#E8C35A);font-weight:600}
 .log .lost{color:var(--blood);font-weight:600}
+/* rodzaj obrażeń — fizyczne bordowe, magiczne niebieskie */
+.log .d-fiz{color:#C4685E}
+.log .d-mag{color:#5FA8D3}
+.log .crit.d-fiz{color:#E8836F;font-weight:600}
+.log .crit.d-mag{color:#8FD0F5;font-weight:600}
 #fightlog{min-height:110px;max-height:170px}
 
 /* arena na pięć jednostek */
@@ -264,12 +269,43 @@ button.card:active{background:#26211B}
 .doll-cell.empty{background:var(--stone);border-style:dashed;border-color:var(--edge-soft)}
 .doll-cell.empty .ic{opacity:.25}
 .doll-cell.on{box-shadow:inset 0 0 0 1px var(--brass)}
-.doll-hero{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+.doll-cell{position:relative}
+.doll-cell.blocked{opacity:.4;border-style:dashed;cursor:default}
+.tag2h{position:absolute;top:2px;right:3px;font-family:var(--mono);font-size:7px;
+  letter-spacing:.04em;color:var(--brass);border:1px solid var(--brass);
+  border-radius:2px;padding:0 2px;line-height:1.3}
+.doll-power{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   aspect-ratio:1;background:radial-gradient(circle at 50% 40%,#241E18,var(--stone));
-  border:1px solid var(--brass);border-radius:4px;padding:4px}
-.doll-hero span{font-family:var(--display);font-size:11px;color:var(--ink-dim);
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.doll-hero svg{display:block}
+  border:1px solid var(--edge);border-radius:4px;padding:4px;cursor:help}
+.doll-power .k{font-family:var(--mono);font-size:7.5px;letter-spacing:.14em;color:var(--ink-mute)}
+.doll-power .v{font-family:var(--mono);font-size:15px;color:var(--brass);
+  font-variant-numeric:tabular-nums}
+
+/* porównanie: nosisz kontra bierzesz */
+.porownanie{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.pcol{background:var(--stone);border:1px solid var(--edge-soft);border-radius:4px;padding:7px 8px;min-width:0}
+.ph{font-family:var(--mono);font-size:7.5px;letter-spacing:.14em;opacity:.75}
+.pn{font-size:11.5px;margin:2px 0 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pk{display:flex;justify-content:space-between;gap:6px;font-size:10.5px;
+  color:var(--ink-mute);padding:2px 0;border-top:1px solid var(--edge-soft)}
+.pk b{font-family:var(--mono);color:var(--ink);font-weight:400}
+
+/* drużyna */
+.team-row{width:100%;text-align:left;cursor:pointer;align-items:center}
+.team-go{cursor:pointer;width:100%;text-align:left}
+
+/* skille bojowe */
+.cskill .bar{height:6px}
+.card.off{opacity:.45}
+
+/* szanse przywołania */
+.odds{background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;padding:7px 9px}
+.oddrow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.oddrow .on{font-size:10.5px;width:76px;flex:none}
+.oddrow .ob{flex:1;height:5px;border-radius:2px;background:#0C0A09;overflow:hidden}
+.oddrow .ob>i{display:block;height:100%}
+.oddrow .ov{font-family:var(--mono);font-size:10px;color:var(--ink-mute);width:36px;
+  text-align:right;flex:none}
 
 /* statystyki — siatka kafelków zamiast listy */
 .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
