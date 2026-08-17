@@ -45,11 +45,31 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 Drzewko (punkty się naliczają, nie ma ich gdzie wydać) · sojusznicy i pet (sloty
 w arenie stoją puste, silnik gotowy) · Przywołanie i klucze · przepalanie i energia ·
 kowal i afiksy · wyprawy · world boss · rajdy · bank · skille zbierackie · offline ·
-wybór klasy w grze.
+**ekran wprowadzenia** · **nowy model klas**.
 
-**Klasy istnieją w kodzie** (4 klasy, +50% expa do swojego skilla, wyprawka), ale nowa
-postać dostaje neutralnego **Wędrowca**. Brakuje momentu, w którym gracz wybiera klasę —
-projekt zakłada, że dopiero po jakimś czasie gry, nie na starcie.
+---
+
+## UWAGA: model klas w kodzie jest NIEAKTUALNY
+
+Kod ma stary model: 4 klasy dające +50% expa do swojego skilla bojowego, nowa postać
+dostaje neutralnego **Wędrowca**.
+
+**Projekt ustalił coś zupełnie innego** (`RAIDFOLK_IDLE_DESIGN.md`, sekcja o klasach):
+
+- **Sześć klas** — Wojownik, Paladyn, Łowca, Tropiciel, Mag, Tancerz Ostrzy
+- **Każda to osobna postać na koncie** — własny poziom, atrybuty, drzewko, ekwipunek
+- **Wieża jest jedna i wspólna** — nowa klasa nie dostaje kopii świata, po prostu
+  zaczyna nisko
+- **Skille bojowe znikają** (Atak, Dystansowy, Magia, Obrona, Zdrowie) — bramkowanie
+  sprzętu przejmuje klasa i poziom
+- **Atrybuty mają dwie warstwy**: efekty uniwersalne dostaje każdy, obrażenia skalują
+  się tylko z atrybutem swojej klasy
+- **Przedmioty mają etykietę klas** — likwiduje martwy drop
+- **Klasy odblokowują bossowie aktów** — start z jedną, każdy boss daje kolejną
+- Wspólne dla konta: skille zbierackie, bank, złoto, materiały, wiedza o wieży
+
+To jest **duża przebudowa** i nie została zaczęta. Nie „naprawiaj" kodu do zgodności
+z dokumentem bez wyraźnego polecenia — autor wie o różnicy.
 
 ---
 
@@ -106,8 +126,16 @@ jako **UTF-8 z BOM**.
 w grze lecą z serwera i **nie wymagają przebudowy APK**. Przebudowa jest potrzebna tylko
 przy zmianie adresu, ikony lub nazwy aplikacji.
 
-**Serwer chodzi na laptopie autora**, wystawiany losowym tunelem Cloudflare.
-Adres zmienia się po każdym restarcie — stąd kod postaci.
+**Serwer chodzi na laptopie autora**, wystawiany losowym tunelem Cloudflare
+(`.\start.ps1`). Adres zmienia się po każdym restarcie — stąd kod postaci.
+
+**ngrok jest odradzany.** Próbowaliśmy go dla stałego adresu; Windows Defender oznaczył
+zaktualizowany plik jako trojana (niemal na pewno fałszywy alarm, ale nie obchodzimy
+antywirusa). Stały adres wymaga domeny autora podpiętej pod Cloudflare — jeszcze tego
+nie zrobił.
+
+**Autor pracuje na Windows PowerShell 5.1.** Komunikaty commitów z polskimi znakami
+przez `-m` się wysypują — pisz treść do pliku i używaj `git commit -F plik`.
 
 ---
 
@@ -121,6 +149,33 @@ npm run apk <adres>             budowa APK
 ```
 
 Baza to plik `raidfolk.db`. Skasowanie go czyści świat.
+
+---
+
+## NASTĘPNE ZADANIE — ekran wprowadzenia
+
+Po wyborze herbu, przed wejściem do gry, ma się pojawić **krótkie wprowadzenie**.
+
+**Ustalona zasada: wprowadzenie opisuje TYLKO to, co faktycznie działa w buildzie.**
+Nie opisuj klas, wypraw ani drzewka, dopóki ich nie ma — gracz zobaczyłby obietnice,
+których gra nie spełnia. Sekcje dopisuj w miarę, jak systemy wchodzą.
+
+Do opisania w obecnej wersji:
+
+- **Wieża nie ma końca**, idziesz piętro po piętrze
+- **Piętro ma 6–10 fal**; utykasz na siódmej — wracasz na piątą, poprawiasz sprzęt
+  i próbujesz znowu. Ściana jest wewnątrz piętra, nie między piętrami
+- **Co dziesiąte piętro to boss aktu**
+- **Nie wiesz, co jest wyżej** — piętra są zakryte, dopóki tam nie wejdziesz
+- **Cztery atrybuty**: Siła (obrażenia wręcz, trochę HP), Intelekt (obrażenia magiczne,
+  mana), Zręczność (prędkość, celność, unik, obrażenia z dystansu), Wytrzymałość
+  (HP, regeneracja, pancerz)
+- **Dwa tryby walki**: automatyczny i turowy
+- **Trzy siły ciosu** — mocniej znaczy rzadziej
+- **Pasek ultimate** ładuje się z trafień (1/2/3 wg siły ciosu), a **pudło go zeruje**
+
+Szkic treści powstał w rozmowie — napisz własną wersję, krótką, kilka ekranów
+z przyciskiem dalej i możliwością pominięcia.
 
 ---
 
