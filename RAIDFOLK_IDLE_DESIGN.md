@@ -116,23 +116,94 @@ Dlatego wracanie na wyższą trudność ma sens **bez inflacji poziomu**: rośni
 
 Przedział to **widełki**, więc sprzęt nie może nimi ruszać. **Moc** to **podłoga** (próg wejścia na Kolosa i Tytana), więc sprzęt ma ją podnosić bez końca — przekroczenie progu nigdy z niczego nie wyrzuca.
 
-### Klasa
+### Klasy — sześć osobnych postaci na jednym koncie
 
-Wybierana przy tworzeniu postaci. **Nic nie zamyka.**
+`ZASTĘPUJE` wcześniejszy model klasy jako bonusu do expa oraz model czterech dowolnych postaci.
 
-| Klasa | Bonus | Start na drzewku |
+**Konto ma dostęp do wszystkich klas. Każda ma własny poziom, atrybuty, drzewko i ekwipunek.**
+Wbicie Wojownika na 20 nie daje nic Magowi — Mag zaczyna od pierwszego poziomu i musi
+przejść wieżę po swojemu.
+
+**Wieża jest jedna i wspólna.** Piętro 20 to piętro 20 dla każdego. Nowa klasa nie dostaje
+własnej kopii świata — po prostu jest za słaba, żeby wejść wysoko, więc zaczyna nisko.
+
+| Wspólne dla konta | Osobne dla każdej klasy |
+|---|---|
+| skille zbierackie | poziom i postęp w wieży |
+| **bank** | atrybuty i punkty |
+| wiedza o wieży (mgła) | drzewko |
+| złoto i materiały `OTWARTE` | ekwipunek |
+
+Mgła jest kontowa świadomie: **dotyczy tego, czego nie wiesz, nie tego, czym nie zagrałeś.**
+Skoro Wojownikiem byłeś na piętrze 50, Mag nie ma powodu tego nie wiedzieć.
+
+### Klasy i skalowanie obrażeń
+
+| Klasa | Skaluje obrażenia | Bronie |
 |---|---|---|
-| **Wojownik** | +50% exp do Ataku | gałąź Siły |
-| **Łucznik** | +50% exp do Ataku dystansowego | gałąź Zręczności |
-| **Mag** | +50% exp do Magii | gałąź Intelektu |
-| **Obrońca** | +50% exp do Obrony i Zdrowia | gałąź Wytrzymałości |
+| **Wojownik** | Siła 100% | miecz, młot, topór — dwuręczne |
+| **Paladyn** | Siła + Intelekt | jednoręczna + **tarcza** |
+| **Łowca** | Zręczność 100% | łuk, kusza, oszczep |
+| **Tropiciel** | Zręczność + Intelekt | broń dwuczłonowa: nośnik + żywioł |
+| **Mag** | Intelekt 100% | różdżka, orb, księga |
+| **Tancerz Ostrzy** | Zręczność 50% + Siła 50% | dwie bronie |
 
-- **Bonus, nigdy kara.** Wojownik nie bije gorzej różdżką — po prostu wolniej podnosi Magię. Podatek za tarczę już dzieli exp na pół; drugi system kar zablokowałby wszystkie buildy mieszane.
-- **Punkt startu na drzewku, nie klatka.** Jak w PoE: zaczynasz w gałęzi Siły, ale dojdziesz wszędzie.
-- **Zmienialna za walutę specjalną.** Przy czterech postaciach zła decyzja w pierwszej godzinie nie może kosztować tygodni.
-- **Bonus dotyczy expa skilli, nie postaci** — więc działa nawet wtedy, gdy postać stoi zaparkowana na kotwicy przez trzy miesiące.
+Trzy czyste i trzy mieszane — wierzchołki i boki trójkąta atrybutów. Pełne pokrycie,
+nic się nie dubluje.
 
-Klasa daje też graczowi **pierwszą decyzję w grze**, której po usunięciu klas nie było wcale.
+### Atrybuty mają dwie warstwy
+
+To jest sedno systemu:
+
+| Atrybut | Dostaje **każdy** | Obrażenia |
+|---|---|---|
+| **Siła** | trochę HP | tylko klasy siłowe |
+| **Zręczność** | prędkość ataku, kryt, unik, celność | tylko klasy zręcznościowe |
+| **Intelekt** | mana | tylko klasy intelektualne |
+| **Wytrzymałość** | HP, regeneracja, pancerz | **nikt — to nie jest oś obrażeń** |
+
+Wojownik pakujący Zręczność dostanie kryty, prędkość i uniki — ale **ani jednego punktu
+obrażeń**. Łowca za te same punkty dostanie to samo plus obrażenia.
+
+Poboczny atrybut **nie jest bezużyteczny, tylko słabszy**. Zostaje wybór „więcej biję"
+kontra „dłużej żyję i częściej krytuję", zamiast jednej oczywistej ścieżki.
+
+### Drzewka
+
+Każda klasa ma **własne drzewko z trzema gałęziami stylu**. Przykładowo Wojownik:
+*Rzeźnia* (krwawienie), *Wał* (pancerz i kontratak), *Furia* (obrażenia rosnące z czasem walki).
+
+`PROPOZYCJA` Punkty są osobne dla każdej klasy, bo poziom też jest osobny.
+
+### Przedmioty mają etykietę klas
+
+```
+Kieł Krwi        miecz dwuręczny    Wojownik
+Puklerz Straży   tarcza             Paladyn
+Pierścień Wichru pierścień          Łowca · Tropiciel · Tancerz
+Amulet Wytrwałości                  wszystkie klasy
+```
+
+**To likwiduje martwy drop.** Wojownik znajdujący różdżkę nie wyrzuca jej — odkłada
+do banku dla swojego Maga. Każdy przedmiot trafia w którąś z Twoich postaci.
+
+Przedmiot wymaga **poziomu tej klasy**, która ma go nosić. Wspólny bank nie pozwala
+ubrać świeżego Maga w sprzęt z piętra 50.
+
+### Skutek, który wychodzi sam
+
+Pierwsza wspinaczka jest głodna sprzętu — nikt jeszcze nic nie nafarmił. **Każda kolejna
+klasa ma w banku komplet na każdy poziom**, więc idzie znacznie szybciej, mimo że przechodzi
+te same piętra. To jest naturalne przyspieszenie, którego nie trzeba nigdzie kodować.
+
+`OTWARTE` Czy wszystkie klasy są dostępne od startu, czy odblokowują się za postęp.
+Sześć pustych postaci na dzień dobry to paraliż wyboru.
+
+### Czego już nie ma
+
+`ODRZUCONE` **Skille bojowe** (Atak, Dystansowy, Magia, Obrona, Zdrowie). Bramkowanie
+sprzętu przejmuje klasa i poziom. Razem z nimi znika **podatek za tarczę** — decyzja
+o tarczy przenosi się poziom wyżej, do wyboru klasy. **Zdrowie** wchłania Wytrzymałość.
 
 ### Cztery atrybuty
 
