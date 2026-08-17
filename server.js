@@ -18,7 +18,7 @@ import {
   classOf, migrate, poziom,
   treeOf, nodeState, spendTreePoint, resetTree, respecCost,
   xpNeed, profOf, addSkillXp, canGather, teamUnits, allyStats,
-  addCombatXp, skillSplit, cskillNeed, canSummon, slotOpen, petSlotOpen,
+  addCombatXp, skillSplit, cskillNeed, canSummon, slotOpen, petSlotOpen, baseOf,
 } from './game/character.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -142,6 +142,30 @@ function expView(ch) {
   };
 }
 
+// Lista wypraw z tabelą dropów. Przedmiot jest ZNANY, jeśli gracz kiedykolwiek
+// go miał albo ma go teraz przy sobie — reszta stoi pod znakiem zapytania.
+function expLista(ch) {
+  const maByc = new Set(Object.keys(ch.discovered ?? {}));
+  for (const it of [...ch.backpack, ...Object.values(ch.equipped)]) {
+    const b = baseOf(it); if (b) maByc.add(b);
+  }
+  return Object.entries(C.expedition.lista).map(([id, def]) => ({
+    id, label: def.label, ic: def.ic, opis: def.opis,
+    unlockFloor: def.unlockFloor,
+    otwarta: poziom(ch) >= def.unlockFloor,
+    dlugosc: expDlugosc(def, poziom(ch)),
+    dlugoscMax: def.dlugosc[def.dlugosc.length - 1].nodes,
+    // Ile w ogóle jest do odkrycia i co z tego już znasz.
+    dropsTotal: def.drops.length,
+    dropsZnane: def.drops.filter(d => maByc.has(d.base)).length,
+    drops: def.drops.map(d => ({
+      base: maByc.has(d.base) ? d.base : null,
+      slot: d.slot,
+      hands: d.hands ?? null,
+    })),
+  }));
+}
+
 function view(ch) {
   const st = computeStats(ch);
   const info = floorInfo(ch.floor);
@@ -171,7 +195,10 @@ function view(ch) {
     // Wyprawa — jedyne źródło przedmiotów.
     expedition: ch.expedition ? expView(ch) : null,
     expRisks: Object.entries(C.expedition.risks).map(([id, r]) => ({ id, ...r })),
-    expFights: C.expedition.szkielet.length,
+    expLista: expLista(ch),
+    expMods: Object.entries(C.expedition.modyfikatory).map(([id, m]) => ({
+      id, ...m, otwarty: poziom(ch) >= m.unlockFloor,
+    })),
     potionCarry: { wieza: C.healing.carryTower, wyprawa: C.expedition.potionCap },
     alwaysAuto: !!ch.alwaysAuto,
     summonOdds: C.summon.weights,
@@ -237,14 +264,15 @@ function expEnemy(ch) {
   const pietro = Math.max(1, ch.maxFloor + r.floorOffset);
   const e = makeEnemy(pietro, X.at);
 
+  const M = modSuma(X.mods ?? []);
   let m = r.mob;
   if (wezel?.typ === 'elita') m *= E.elitaMult;
   if (wezel?.typ === 'boss') m *= E.bossMult;
   // Klątwy z eventów podbijają obrażenia wroga na resztę runu.
   const klatwaDmg = (X.efekty ?? []).reduce((a, e2) => a * (e2.mobDmg ?? 1), 1);
 
-  e.hp = Math.max(1, Math.round(e.hp * m)); e.maxHp = e.hp;
-  e.damage = Math.max(1, Math.round(e.damage * m * klatwaDmg));
+  e.hp = Math.max(1, Math.round(e.hp * m * M.hp)); e.maxHp = e.hp;
+  e.damage = Math.max(1, Math.round(e.damage * m * klatwaDmg * M.dmg));
   e.gold = Math.round(e.gold * E.goldMult);
   e.expFloor = pietro;
   if (wezel?.typ === 'elita') e.name = `${e.name} — Elita`;
@@ -253,10 +281,33 @@ function expEnemy(ch) {
 }
 
 // Buduje węzły runu z szkieletu i ziarna. Ten sam seed = ten sam run.
-function expNodes(seed) {
+function expNodes(seed, dlugosc = null, M = null) {
   const rng = mulberry32(seed);
   const E = C.expedition;
-  return E.szkielet.map((typ, i) => {
+
+  // Szkielet rozciąga się albo skraca do zadanej długości: boss zawsze na końcu,
+  // brakujące miejsca dosypują się zwykłymi walkami przed elitą.
+  let szk = [...E.szkielet];
+  if (dlugosc && dlugosc !== szk.length) {
+    const ogon = szk.slice(-2);                 // elita, boss
+    let srodek = szk.slice(0, -2);
+    while (srodek.length + 2 < dlugosc) srodek.splice(srodek.length - 1, 0, 'walka');
+    while (srodek.length + 2 > dlugosc && srodek.length > 3) {
+      const i = srodek.lastIndexOf('walka');
+      if (i < 0) break;
+      srodek.splice(i, 1);
+    }
+    szk = [...srodek, ...ogon];
+  }
+  if (M?.bezPostoju) szk = szk.filter(t => t !== 'safepoint');
+  // Łowy na elity zamieniają zwykłe walki w elity.
+  for (let n = M?.elity ?? 0; n > 0; n--) {
+    const i = szk.indexOf('walka', 2);
+    if (i < 0) break;
+    szk[i] = 'elita';
+  }
+
+  return szk.map((typ, i) => {
     if (typ === 'rozdroze') {
       const r = E.rozdroza[Math.floor(rng() * E.rozdroza.length)];
       return { typ, i, ref: r.id };
@@ -269,17 +320,53 @@ function expNodes(seed) {
   });
 }
 
-function doExpStart(ch, risk) {
+// Ile etapów ma run tej wyprawy przy obecnym poziomie. Dalej w wieży —
+// dłuższa droga, więcej łupu i więcej okazji, żeby zginąć z pełną sakwą.
+function expDlugosc(def, poziomGracza) {
+  let n = def.dlugosc[0].nodes;
+  for (const prog of def.dlugosc) if (poziomGracza >= prog.floor) n = prog.nodes;
+  return n;
+}
+
+// Suma efektów wybranych modyfikatorów.
+function modSuma(mods = []) {
+  const out = { hp: 1, dmg: 1, heal: 1, elity: 0, bezPostoju: false, reward: 1 };
+  for (const id of mods) {
+    const m = C.expedition.modyfikatory[id];
+    if (!m) continue;
+    out.hp *= m.hp ?? 1;
+    out.dmg *= m.dmg ?? 1;
+    out.heal *= m.heal ?? 1;
+    out.elity += m.elity ?? 0;
+    out.bezPostoju = out.bezPostoju || !!m.bezPostoju;
+    out.reward += m.reward ?? 0;
+  }
+  return out;
+}
+
+function doExpStart(ch, id, risk, mods) {
   if (ch.activeFight && !ch.activeFight.over) return { error: 'Najpierw dokończ albo porzuć walkę' };
   if (ch.expedition) return { error: 'Wyprawa już trwa' };
+  const def = C.expedition.lista[id];
+  if (!def) return { error: 'Nie ma takiej wyprawy' };
+  if (poziom(ch) < def.unlockFloor) return { error: `Otwiera się na piętrze ${def.unlockFloor}` };
   if (!C.expedition.risks[risk]) return { error: 'Nieznane ryzyko' };
 
+  // Modyfikatory ponad poziom gracza odpadają po cichu — nie da się ich wybrać w UI.
+  const wybrane = (Array.isArray(mods) ? mods : []).filter(m => {
+    const d = C.expedition.modyfikatory[m];
+    return d && poziom(ch) >= d.unlockFloor;
+  });
+
   const seed = (Date.now() ^ (ch.maxFloor * 7919) ^ Math.floor(Math.random() * 1e9)) >>> 0;
+  const M = modSuma(wybrane);
   ch.expedition = {
-    risk, seed, nodes: expNodes(seed), at: 0,
+    id, risk, mods: wybrane, seed,
+    nodes: expNodes(seed, expDlugosc(def, poziom(ch)), M),
+    at: 0,
     sakwa: [], mats: {}, gold: 0,
     efekty: [],            // klątwy i błogosławieństwa na ten run
-    lootMult: 1,           // narastający mnożnik z rozdroży i eventów
+    lootMult: M.reward,    // modyfikatory od razu podbijają nagrodę
     potionsUsed: 0,
     safepointDone: false,
     // ZDROWIE NIE WRACA. Wchodzisz z tym, co masz — lecz się przed wyjściem.
@@ -315,7 +402,7 @@ function doExpChoose(ch, opcjaId) {
 
   if (s.heal) {
     const st = computeStats(ch);
-    const ile = Math.round(st.maxHp * s.heal);
+    const ile = Math.round(st.maxHp * s.heal * modSuma(X.mods ?? []).heal);
     ch.hpLost = Math.max(0, (ch.hpLost ?? 0) - ile);
     out.efekty.push(`+${ile} zdrowia`);
   }
@@ -359,6 +446,7 @@ function doExpSafepoint(ch, itemId, matId) {
     if (ch.backpack.length >= C.gear.backpackSize) return { error: 'Plecak pełny' };
     const it = X.sakwa.splice(i, 1)[0];
     ch.backpack.push(it);
+    const b = baseOf(it); if (b) ch.discovered[b] = true;
     out.wyniesione.push(it.name);
   }
   if (matId) {
@@ -383,6 +471,7 @@ function expFinish(ch, out) {
   for (const d of X.sakwa) {
     if (ch.backpack.length >= C.gear.backpackSize) { out.backpackFull = true; break; }
     ch.backpack.push(d); out.expLoot.push(d);
+    const b = baseOf(d); if (b) ch.discovered[b] = true;   // odkryte na zawsze
   }
   for (const [k, v] of Object.entries(X.mats)) ch.materials[k] = (ch.materials[k] ?? 0) + v;
   ch.gold += X.gold;
@@ -528,9 +617,11 @@ function resolveFight(ch) {
       const mnoznik = r.lootMult * X.lootMult
         * (meta.wezel === 'elita' ? 1.6 : meta.wezel === 'boss' ? 3 : 1);
       const szansa = Math.min(0.95, C.loot.dropChance * mnoznik);
+      const def = C.expedition.lista[X.id] ?? C.expedition.lista.puszcza;
       const drops = Math.random() < szansa
         ? rollDrops((F.seed ^ 31337) >>> 0,
-            { floor: meta.floor, variant: meta.wezel === 'boss' ? 'boss' : 'plus' })
+            { floor: meta.floor, variant: meta.wezel === 'boss' ? 'boss' : 'plus',
+              pool: def.drops })
         : [];
       for (const d of drops) { giveId(d); X.sakwa.push(d); out.loot.push(d); }
 
@@ -788,7 +879,7 @@ const server = http.createServer(async (req, res) => {
         case '/api/minestop':result = doMineStop(ch); break;
         case '/api/minetick':result = doMineTick(ch); break;
         case '/api/team':    result = doTeam(ch, body.slot, body.idx); break;
-        case '/api/expstart':  result = doExpStart(ch, String(body.risk)); break;
+        case '/api/expstart':  result = doExpStart(ch, String(body.id ?? 'puszcza'), String(body.risk), body.mods); break;
         case '/api/expleave':  result = doExpLeave(ch); break;
         case '/api/expchoose': result = doExpChoose(ch, String(body.opcja)); break;
         case '/api/expsafe':   result = doExpSafepoint(ch, body.itemId ?? null, body.matId ?? null); break;
@@ -806,13 +897,8 @@ const server = http.createServer(async (req, res) => {
           result = { ok: true };
           break;
         }
-        case '/api/buypotion': {
-          const cost = 40 + ch.maxFloor * 6;
-          if (ch.gold < cost) { result = { error: `Brakuje złota (${cost})` }; break; }
-          ch.gold -= cost; ch.potions++;
-          result = { ok: true, cost };
-          break;
-        }
+        // Kupowanie mikstur SKASOWANE. Mikstury robi się Alchemią — złoto
+        // nie może być skrótem omijającym profesję.
         case '/api/attr': {
           const a = String(body.attr);
           if (!(a in ch.attrs)) { result = { error: 'Nieznany atrybut' }; break; }

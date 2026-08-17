@@ -224,9 +224,15 @@ function arenaHtml() {
 
 function renderFightView() {
   const F = FIGHT;
-  let h = `<div class="scr-head">Piętro ${S.floor}
-    <span>FALA ${Math.min(S.fight + 1, S.fightsOnFloor)} / ${S.fightsOnFloor}</span></div>`;
-  h += waveDots();
+  const E = S.expedition;
+  // Na wyprawie nie ma pięter ani fal — jest etap runu. Nagłówek musi mówić
+  // prawdę o tym, gdzie gracz stoi.
+  let h = E
+    ? `<div class="scr-head">${esc(E.riskLabel ?? 'Wyprawa')}
+        <span>ETAP ${Math.min(E.at + 1, E.total)} / ${E.total}</span></div>`
+    : `<div class="scr-head">Piętro ${S.floor}
+        <span>FALA ${Math.min(S.fight + 1, S.fightsOnFloor)} / ${S.fightsOnFloor}</span></div>`;
+  h += E ? trasaHtml(E) : waveDots();
   h += `<div id="arena">${arenaHtml()}</div>`;
   h += `<div class="log" id="fightlog"></div>`;
 
@@ -539,6 +545,11 @@ function renderHub() {
 // Jedyne źródło przedmiotów. Osiem walk, HP nie wraca, sakwa wpada do plecaka
 // dopiero po ukończeniu — śmierć zabiera wszystko.
 
+// Wybór przed wyruszeniem: dokąd, jakie ryzyko, jakie utrudnienia.
+let expSel = null;                 // id wybranej wyprawy albo null = lista
+let expRisk = 'rowne';
+let expMods = new Set();
+
 const NODE_IC = { walka: '●', rozdroze: '◆', event: '?', safepoint: '⛺', elita: '★', boss: '☠' };
 const NODE_NAZWA = { walka: 'Walka', rozdroze: 'Rozdroże', event: 'Zdarzenie',
                      safepoint: 'Postój', elita: 'Elita', boss: 'Boss wyprawy' };
@@ -571,50 +582,103 @@ function renderWyprawaTryb() {
   const hpPct = Math.round(st.hp / st.maxHp * 100);
   const E = S.expedition;
 
-  // ---------------- ekran startowy ----------------
-  if (!E) {
+  // ---------------- wybór wyprawy ----------------
+  if (!E && !expSel) {
     let h = `<div class="scr-head">
       <button class="lnk" data-act="hub">‹ Przygody</button>
-      <span>PUSZCZA · WYPRAWA</span></div>`;
+      <span>DOKĄD IDZIESZ</span></div>`;
+    h += `<div class="card"><div class="t2">Wyprawa to <b>jedyne źródło sprzętu</b>.
+      Wybierz cel — potem zobaczysz, co z niego wypada i jak bardzo chcesz sobie utrudnić.</div></div>`;
+    h += `<div class="scrollbox">`;
+    for (const w of S.expLista ?? []) {
+      h += `<button class="card row res-row ${w.otwarta ? '' : 'locked'}"
+        ${w.otwarta ? `data-act="expsel" data-id="${w.id}"` : 'disabled'}>
+        <div class="icon lg">${w.ic}</div>
+        <div class="grow">
+          <div class="t1">${esc(w.label)}</div>
+          <div class="t2">${w.otwarta ? esc(w.opis) : `Otwiera się na piętrze ${w.unlockFloor}`}</div>
+          ${w.otwarta ? `<div class="t2" style="color:var(--brass)">${w.dlugosc} etapów ·
+            odkryte ${w.dropsZnane} z ${w.dropsTotal} przedmiotów</div>` : ''}
+        </div>
+        <span class="badge ${w.otwarta ? 'on' : ''}">${w.otwarta ? 'RUSZAJ' : '🔒'}</span>
+      </button>`;
+    }
+    h += `</div>`;
+    return h;
+  }
+
+  // ---------------- szczegóły wybranej wyprawy ----------------
+  if (!E) {
+    const w = (S.expLista ?? []).find(x => x.id === expSel);
+    if (!w) { expSel = null; return renderWyprawaTryb(); }
+
+    const mnR = (S.expRisks ?? []).find(r => r.id === expRisk)?.lootMult ?? 1;
+    const mnM = (S.expMods ?? []).filter(m => expMods.has(m.id)).reduce((a, m) => a + m.reward, 0);
+    const razem = (mnR + mnM).toFixed(2);
+
+    let h = `<div class="scr-head">
+      <button class="lnk" data-act="expsel" data-id="">‹ Wyprawy</button>
+      <span>${esc(w.label.toUpperCase())}</span></div>`;
 
     h += `<div class="two-col"><div class="col">
-      <div class="card hi">
-        <div class="t1">Jedyne źródło sprzętu</div>
-        <div class="t2">Dziesięć etapów: walki, rozdroża, zdarzenia, postój i boss.
-          <b>Zdrowie nie wraca</b> — wchodzisz z tym, co masz. Łup ląduje w sakwie
-          i wpada do plecaka <b>dopiero po pokonaniu bossa</b>.</div>
-      </div>
       <div class="card ${hpPct < 50 ? 'bad' : ''}">
         <div class="row" style="margin-bottom:6px">
           <div class="grow"><div class="t1">Zdrowie ${nf(st.hp)} / ${nf(st.maxHp)}</div>
-            <div class="t2">Lecz się TERAZ — w drodze nie ma odwrotu</div></div>
+            <div class="t2">Wchodzisz z tym, co masz — lecz się TERAZ</div></div>
           <span class="num" style="font-size:17px;color:${hpPct < 50 ? 'var(--blood)' : 'var(--brass)'}">${hpPct}%</span>
         </div>
         <div class="bar hp big"><i style="width:${hpPct}%"></i></div>
         <div class="actions">
-          <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij</button>
-          <button class="btn ghost" data-act="buypotion">Kup za ${nf(40 + S.maxFloor * 6)}</button>
+          <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij miksturę</button>
         </div>
       </div>
+
       <div class="card">
+        <div class="stat"><span class="k">Etapów</span><span class="v">${w.dlugosc}${
+          w.dlugosc < w.dlugoscMax ? ` (do ${w.dlugoscMax} wyżej)` : ''}</span></div>
         <div class="stat"><span class="k">Twoja moc</span><span class="v" style="color:var(--brass)">${nf(st.power)}</span></div>
-        <div class="stat"><span class="k">Mikstury przy sobie</span>
+        <div class="stat"><span class="k">Mikstury</span>
           <span class="v">${Math.min(S.potions, S.potionCarry?.wyprawa ?? 10)} z ${S.potionCarry?.wyprawa ?? 10}</span></div>
         <div class="stat"><span class="k">Drużyna</span><span class="v">${1
           + (S.teamStats?.allies.filter(Boolean).length ?? 0)
           + (S.teamStats?.pet ? 1 : 0)} jednostek</span></div>
       </div>
+
+      <div class="sec">Co stąd wypada · ${w.dropsZnane} z ${w.dropsTotal}</div>
+      <div class="droptab">
+        ${w.drops.map(d => `<div class="dr ${d.base ? 'znany' : ''}">
+          <span class="di">${d.base ? (SLOT_ICON[d.slot] ?? '▪') : '?'}</span>
+          <span class="dn">${d.base ? esc(d.base) : '???'}${d.base && d.hands === 2 ? ' 2H' : ''}</span>
+        </div>`).join('')}
+      </div>
+      <div class="t2" style="margin-top:5px">Znak zapytania znika, gdy przedmiot raz
+        przejdzie Ci przez ręce. Odkrycia zostają na zawsze.</div>
     </div><div class="col">
-      <div class="sec">Wybierz ryzyko</div>`;
-    for (const r of S.expRisks ?? []) {
-      h += `<button class="card row res-row" data-act="expstart" data-r="${r.id}">
-        <div class="icon">${r.id === 'wysokie' ? '🔥' : r.id === 'niskie' ? '🌿' : '⚖'}</div>
-        <div class="grow"><div class="t1">${esc(r.label)}</div>
-          <div class="t2">${esc(r.desc)}</div></div>
-        <span class="badge on">×${r.lootMult.toFixed(1)}</span>
-      </button>`;
-    }
-    h += `</div></div>`;
+      <div class="sec">Ryzyko</div>
+      <div class="segs">
+        ${(S.expRisks ?? []).map(r => `<button data-act="exprisk" data-r="${r.id}"
+          aria-selected="${expRisk === r.id}" title="${esc(r.desc)}">${esc(r.label.split(' ')[0])}</button>`).join('')}
+      </div>
+
+      <div class="sec">Utrudnienia — każde podbija nagrodę</div>
+      <div class="scrollbox">
+      ${(S.expMods ?? []).map(m => `<button class="card row compact ${m.otwarty ? '' : 'locked'} ${expMods.has(m.id) ? 'hi' : ''}"
+        ${m.otwarty ? `data-act="expmod" data-m="${m.id}"` : 'disabled'}>
+        <div class="icon">${expMods.has(m.id) ? '✓' : m.otwarty ? '·' : '🔒'}</div>
+        <div class="grow"><div class="t1">${esc(m.label)}</div>
+          <div class="t2">${m.otwarty ? esc(m.desc) : `Otwiera się na piętrze ${m.unlockFloor}`}</div></div>
+        <span class="badge ${expMods.has(m.id) ? 'on' : ''}">+${Math.round(m.reward * 100)}%</span>
+      </button>`).join('')}
+      </div>
+
+      <div class="card hi" style="margin-top:8px">
+        <div class="row"><div class="grow"><div class="t1">Mnożnik nagrody</div>
+          <div class="t2">ryzyko ×${mnR.toFixed(1)}${mnM ? ` + utrudnienia +${Math.round(mnM * 100)}%` : ''}</div></div>
+          <span class="num big-n">×${razem}</span></div>
+      </div>
+      <button class="btn solid big wide" style="margin-top:8px" data-act="expstart"
+        data-id="${w.id}" data-r="${expRisk}">Ruszaj na wyprawę</button>
+    </div></div>`;
     return h;
   }
 
@@ -775,7 +839,6 @@ function renderWieza() {
       <div class="bar hp big"><i style="width:${hpPct}%"></i></div>
       <div class="actions">
         <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij</button>
-        <button class="btn ghost" data-act="buypotion">Kup za ${nf(40 + S.maxFloor * 6)}</button>
       </div>
     </div>
   </div>`;
@@ -1400,7 +1463,8 @@ function panelTowarzysza() {
 // niczego nie gubi — timer chodzi dalej, bo to ta sama strona.
 
 let skillOpen = 'gornictwo';
-let MINE = null;         // { res, ms, t0, timer, raf }
+let MINE = null;         // { skill, res, ms, t0, timer, tick, pauza }
+const PAUZA_MS = 700;    // oddech między cyklami — żeby było widać, że coś padło
 
 // skill jest parametrem, nie stałą — inaczej drugi cykl Rybołówstwa szukał
 // swojego surowca w tabeli Górnictwa i wywalał się na undefined.
@@ -1423,10 +1487,16 @@ function startMineLoop(skill, res, ms) {
     if (d.error) { stopMineLoop(); render(); return; }
     const sk = S.skills[skill];
     if (d.awans) toast(`${sk.label} ${sk.lvl}!`);
-    // Kolejny cykl rusza sam. STOP albo zmiana surowca to jedyne wyjście.
     const r = sk.resources.find(x => x.id === res);
     render();
-    if (S.activity && r) startMineLoop(skill, res, r.ms);
+    // Przerwa między cyklami. Bez niej pasek skacze do zera w tej samej klatce,
+    // w której się wypełnił, i nie widać, że coś się w ogóle wydarzyło.
+    if (S.activity && r) {
+      MINE = { skill, res, ms: r.ms, t0: Date.now(), pauza: true };
+      const bar = $('#mineprog'); if (bar) bar.style.width = '100%';
+      const zeg = $('#minetime'); if (zeg) zeg.textContent = 'chwila…';
+      MINE.timer = setTimeout(() => startMineLoop(skill, res, r.ms), PAUZA_MS);
+    }
   }, ms + 60);
 }
 
@@ -1762,10 +1832,13 @@ function paintCombatBar() {
 
   bar.innerHTML = `
     <div class="cb-head">
-      <span>${esc(S.actName.toUpperCase())} — PIĘTRO ${S.floor}</span>
-      <span>FALA ${Math.min(S.fight + 1, S.fightsOnFloor)} / ${S.fightsOnFloor}</span>
+      <span>${S.expedition ? 'WYPRAWA' : `${esc(S.actName.toUpperCase())} — PIĘTRO ${S.floor}`}</span>
+      <span>${S.expedition
+        ? `ETAP ${Math.min(S.expedition.at + 1, S.expedition.total)} / ${S.expedition.total}`
+        : `FALA ${Math.min(S.fight + 1, S.fightsOnFloor)} / ${S.fightsOnFloor}`}</span>
     </div>
     <div class="cb-row"><span class="cb-n">${esc(S.name)}</span>
+
       <span class="bar hp"><i style="width:${pct(me)}%"></i></span><span class="cb-p">${pct(me)}%</span></div>
     <div class="cb-row"><span class="cb-n">${esc(foe?.name ?? FIGHT.foeName ?? '—')}</span>
       <span class="bar foe"><i style="width:${pct(foe)}%"></i></span><span class="cb-p">${pct(foe)}%</span></div>
@@ -1853,8 +1926,21 @@ document.addEventListener('click', async (ev) => {
     } else if (act === 'hub') {
       advView = 'hub'; render();
 
+    } else if (act === 'expsel') {
+      expSel = btn.dataset.id || null; render();
+
+    } else if (act === 'exprisk') {
+      expRisk = btn.dataset.r; render();
+
+    } else if (act === 'expmod') {
+      const m = btn.dataset.m;
+      if (expMods.has(m)) expMods.delete(m); else expMods.add(m);
+      render();
+
     } else if (act === 'expstart') {
-      const d = await api('expstart', { risk: btn.dataset.r });
+      const d = await api('expstart', {
+        id: btn.dataset.id, risk: btn.dataset.r ?? expRisk, mods: [...expMods],
+      });
       if (!d.error) { advView = 'exp'; render(); }
 
     } else if (act === 'expleave') {
@@ -2018,10 +2104,6 @@ document.addEventListener('click', async (ev) => {
     } else if (act === 'copycode') {
       try { await navigator.clipboard.writeText(TOKEN); toast('Kod skopiowany'); }
       catch { toast('Zaznacz i skopiuj ręcznie', true); }
-    } else if (act === 'buypotion') {
-      const d = await api('buypotion', {});
-      if (!d.error) toast('Kupiono miksturę');
-      render();
     }
   } finally {
     if (btn.isConnected) btn.disabled = false;

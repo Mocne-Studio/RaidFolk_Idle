@@ -158,7 +158,14 @@ const EPITHETS = [
   'Furii', 'Milczenia', 'Otchłani', 'Świtu', 'Rdzy', 'Pustki', 'Grzmotu', 'Szeptu',
 ];
 
-export function rollItem(rng, { ilvl, weights, slot = null }) {
+// pool: lista {base, slot, wtype, hands} z definicji wyprawy. Gdy jest podana,
+// przedmiot losuje się WYŁĄCZNIE z niej — dzięki temu tabela dropów pokazywana
+// graczowi jest prawdą, a nie ozdobą.
+export function rollItem(rng, { ilvl, weights, slot = null, pool = null }) {
+  if (pool?.length) {
+    const wpis = pick(rng, pool);
+    return rollItemZBazy(rng, { ilvl, weights, wpis });
+  }
   const s = slot ?? weightedPick(rng, C.loot.slotWeights);
   const def = C.gear.slots[s];
   const rarity = weightedPick(rng, weights);
@@ -179,6 +186,7 @@ export function rollItem(rng, { ilvl, weights, slot = null }) {
   const item = {
     id: null,
     slot: s, wtype, hands,
+    base: baseName,
     name: `${baseName} ${pick(rng, EPITHETS)}`,
     rarity, ilvl: itemIlvl, plus: 0, energy: 0,
     reqLevel: itemIlvl,
@@ -207,7 +215,48 @@ export function rollItem(rng, { ilvl, weights, slot = null }) {
   return item;
 }
 
-export function rollDrops(seed, { floor, variant }) {
+// Wariant z narzuconą bazą — używany, gdy przedmiot ma pochodzić z tabeli wyprawy.
+function rollItemZBazy(rng, { ilvl, weights, wpis }) {
+  const s = wpis.slot;
+  const def = C.gear.slots[s];
+  const rarity = weightedPick(rng, weights);
+  const rar = C.rarities[rarity];
+  const spread = C.loot.ilvlSpread;
+  const itemIlvl = Math.max(1, ilvl + rint(rng, spread[0], spread[1]));
+  const hands = wpis.hands ?? 1;
+
+  const item = {
+    id: null,
+    slot: s, wtype: wpis.wtype ?? null, hands,
+    base: wpis.base,
+    name: `${wpis.base} ${pick(rng, EPITHETS)}`,
+    rarity, ilvl: itemIlvl, plus: 0, energy: 0,
+    reqLevel: itemIlvl,
+    damage: 0, armor: 0,
+    affixes: [],
+  };
+
+  if (def.base === 'damage' || def.base === 'mixed') {
+    item.damage = Math.round((C.gear.weaponDamageBase + C.gear.weaponDamagePerIlvl * itemIlvl)
+      * def.mult * rar.mult * (hands === 2 ? C.combatSkills.twoHandDmg : 1));
+  }
+  if (def.base === 'armor' || def.base === 'mixed') {
+    item.armor = Math.round((C.gear.armorBase + C.gear.armorPerIlvl * itemIlvl) * def.mult * rar.mult);
+  }
+
+  const used = new Set();
+  for (let i = 0; i < rar.affixes; i++) {
+    let a, guard = 0;
+    do { a = pick(rng, C.affixes.pool); } while (used.has(a.id) && guard++ < 20);
+    used.add(a.id);
+    const base = rint(rng, a.min, a.max);
+    item.affixes.push({ id: a.id, label: a.label, value: Math.max(1, Math.round(base + a.perIlvl * itemIlvl)),
+                        pct: !!a.pct });
+  }
+  return item;
+}
+
+export function rollDrops(seed, { floor, variant, pool = null }) {
   const rng = mulberry32(seed);
   const weights =
     variant === 'boss' ? C.loot.weightsBoss :
@@ -216,12 +265,12 @@ export function rollDrops(seed, { floor, variant }) {
   const out = [];
   if (variant === 'boss') {
     const n = rint(rng, C.loot.bossDropCount[0], C.loot.bossDropCount[1]);
-    for (let i = 0; i < n; i++) out.push(rollItem(rng, { ilvl: floor, weights }));
+    for (let i = 0; i < n; i++) out.push(rollItem(rng, { ilvl: floor, weights, pool }));
     // skrzynia: od najgorszego do najlepszego
     const order = Object.keys(C.rarities);
     out.sort((a, b) => order.indexOf(a.rarity) - order.indexOf(b.rarity));
   } else if (rng() < C.loot.dropChance) {
-    out.push(rollItem(rng, { ilvl: floor, weights }));
+    out.push(rollItem(rng, { ilvl: floor, weights, pool }));
   }
   return out;
 }

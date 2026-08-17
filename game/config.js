@@ -582,6 +582,58 @@ export const CONFIG = {
                  desc: 'Mocniejsi, niż powinieneś unieść. Sakwa puchnie, śmierć boli.' },
     },
 
+    // ---- LISTA WYPRAW ----
+    // Najpierw wybierasz, DOKĄD idziesz, dopiero potem ryzyko i utrudnienia.
+    // Wyprawa jest otwarta od pierwszej minuty gry — z poziomami rośnie tylko
+    // to, jak długa może być droga i ile utrudnień wolno dołożyć.
+    //
+    // drops to PRAWDA, nie ozdoba: generator losuje nazwy dokładnie z tej listy,
+    // więc tabela w UI pokazuje realnie osiągalny zbiór.
+    lista: {
+      puszcza: {
+        label: 'Puszcza Cierniowa', ic: '🌲', unlockFloor: 1,
+        opis: 'Pierwszy las pod wieżą. Wilki, gobliny i coś, co mieszka w sztolni.',
+        // Długość rośnie z poziomem — dalej w wieży, dłuższa droga i większy łup.
+        dlugosc: [{ floor: 1, nodes: 8 }, { floor: 5, nodes: 10 }, { floor: 12, nodes: 12 }],
+        drops: [
+          { base: 'Ostrze',      slot: 'bron',       wtype: 'mele',    hands: 1 },
+          { base: 'Topór',       slot: 'bron',       wtype: 'mele',    hands: 2 },
+          { base: 'Krótki Łuk',  slot: 'bron',       wtype: 'dystans', hands: 1 },
+          { base: 'Różdżka',     slot: 'bron',       wtype: 'magia',   hands: 1 },
+          { base: 'Tarcza',      slot: 'offhand',    wtype: 'tarcza' },
+          { base: 'Kaptur',      slot: 'helm' },
+          { base: 'Kolczuga',    slot: 'napiersnik' },
+          { base: 'Trzewiki',    slot: 'buty' },
+          { base: 'Karwasze',    slot: 'rekawice' },
+          { base: 'Sygnet',      slot: 'pierscien' },
+          { base: 'Talizman',    slot: 'amulet' },
+          { base: 'Kostur',      slot: 'bron',       wtype: 'magia',   hands: 2 },
+        ],
+      },
+      mokradla: {
+        label: 'Mokradła Szeptu', ic: '🌫', unlockFloor: 11,
+        opis: 'Topielce i pijawki. Otwiera się, gdy przejdziesz pierwszy akt.',
+        dlugosc: [{ floor: 11, nodes: 10 }],
+        drops: [],
+      },
+    },
+
+    // ---- MODYFIKATORY ----
+    // Gracz sam podkręca trudność, a każde utrudnienie podnosi mnożnik nagrody.
+    // Kolejne otwierają się wraz z postępem w wieży.
+    modyfikatory: {
+      zahartowani: { label: 'Zahartowani', desc: 'Wrogowie mają +25% zdrowia',
+                     hp: 1.25, reward: 0.25, unlockFloor: 1 },
+      wscieklizna: { label: 'Wścieklizna', desc: 'Wrogowie zadają +20% obrażeń',
+                     dmg: 1.20, reward: 0.20, unlockFloor: 1 },
+      suchaziemia: { label: 'Sucha ziemia', desc: 'Leczenie słabsze o 20%',
+                     heal: 0.80, reward: 0.20, unlockFloor: 4 },
+      lowynaelity: { label: 'Łowy na elity', desc: 'Dwie zwykłe walki zamieniają się w elity',
+                     elity: 2, reward: 0.30, unlockFloor: 7 },
+      bezpostoju:  { label: 'Bez postoju', desc: 'Znika postój — nic nie odeślesz przed bossem',
+                     bezPostoju: true, reward: 0.35, unlockFloor: 10 },
+    },
+
     // Szkielet runu. Generowany z ziarna, więc ten sam seed daje ten sam run —
     // da się go powtórzyć przy szukaniu błędu.
     //

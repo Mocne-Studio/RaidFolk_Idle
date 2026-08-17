@@ -310,6 +310,18 @@ button.card:active{background:#26211B}
 .trasa .t-elita{color:var(--copper)}
 .trasa .t-safepoint{color:var(--heal)}
 
+/* tabela dropów — co stąd wypada, z odkrywaniem */
+.droptab{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+@media (min-width:760px){ .droptab{grid-template-columns:1fr 1fr 1fr} }
+.dr{display:flex;align-items:center;gap:6px;background:var(--stone-hi);
+  border:1px solid var(--edge-soft);border-radius:3px;padding:5px 7px;min-width:0}
+.dr .di{font-size:12px;opacity:.4;flex:none}
+.dr .dn{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dr.znany{border-color:var(--edge)}
+.dr.znany .di{opacity:1}
+.dr.znany .dn{color:var(--ink-dim)}
+
 .decyzja .res-row{margin-bottom:5px}
 .sakwa-lista{margin-top:7px;max-height:96px;overflow-y:auto;
   border-top:1px solid var(--edge-soft);padding-top:5px}

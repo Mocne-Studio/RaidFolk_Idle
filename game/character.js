@@ -56,6 +56,13 @@ export function migrate(ch) {
   for (const id of Object.keys(C.skills)) if (C.skills[id].grywalne) ch.prof[id] ??= { lvl: 1, xp: 0 };
   ch.materials ??= {};
   ch.activity ??= null;
+  ch.discovered ??= {};
+  // Co gracz już ma, jest z definicji odkryte — inaczej po aktualizacji
+  // tabela dropów kłamałaby, że nigdy tego nie widział.
+  for (const it of [...ch.backpack, ...Object.values(ch.equipped)]) {
+    const b = baseOf(it);
+    if (b) ch.discovered[b] = true;
+  }
   ch.unlocked ??= {};
   ch.expedition ??= null;
   ch.cskills ??= freshCombatSkills();
@@ -113,6 +120,9 @@ export function newCharacter(name, crest = null) {
     materials: {},
     // Co gracz teraz kopie: { skill, res, since } albo null
     activity: null,
+    // Bazy przedmiotów, które kiedykolwiek przeszły graczowi przez ręce.
+    // Na tym stoi tabela dropów wyprawy i katalog w Kronice.
+    discovered: {},
     // Kto stoi w drużynie. Liczby to indeksy w collection.companions / .pets.
     team: { allies: [null, null, null], pet: null },
     unlocked: {},          // co już zostało odblokowane (sojusznik, pet)
@@ -202,6 +212,15 @@ export function resetTree(ch) {
   ch.treePoints += wrocilo;
   ch.tree = {};
   return { ok: true, cost, punkty: wrocilo };
+}
+
+// Baza przedmiotu bez przydomka. Nowe przedmioty niosą ją w polu `base`;
+// stare zapisy rozbieramy po nazwie, bo przydomek to zawsze ostatnie słowo.
+export function baseOf(it) {
+  if (!it) return null;
+  if (it.base) return it.base;
+  const cz = String(it.name ?? '').split(' ');
+  return cz.length > 1 ? cz.slice(0, -1).join(' ') : (cz[0] || null);
 }
 
 // ---------------------------------------------------------------- profesje
