@@ -1,0 +1,10 @@
+node_modules/
+android/
+raidfolk.db
+raidfolk.db-*
+tunnel.log
+RaidFolk.apk
+public/RaidFolk.apk
+*.keystore
+.DS_Store
+Thumbs.db

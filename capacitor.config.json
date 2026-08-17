@@ -1,0 +1,13 @@
+{
+  "appId": "pl.raidfolk.idle",
+  "appName": "RaidFolk Idle",
+  "webDir": "public",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "url": "https://epinions-regions-superior-introduced.trycloudflare.com",
+    "cleartext": false,
+    "androidScheme": "https"
+  }
+}

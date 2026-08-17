@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#100E0C">
+<title>RaidFolk Idle</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div id="start" class="start">
+  <h1>RaidFolk Idle</h1>
+  <p class="sub">Wieża · wersja testowa 0.1</p>
+
+  <div class="sec">Imię postaci</div>
+  <input type="text" id="name" maxlength="20" placeholder="Halgar" autocomplete="off">
+
+  <div class="sec">Klasa</div>
+  <div id="classes"></div>
+
+  <button class="btn solid big wide" id="create" style="margin-top:14px">Wejdź do wieży</button>
+
+  <div class="sec" style="margin-top:26px">Kto już gra</div>
+  <div id="roster"></div>
+</div>
+
+<div id="app" hidden>
+  <div class="topbar">
+    <div class="who">
+      <div class="n" id="hdrName">—</div>
+      <div class="m" id="hdrMeta">—</div>
+    </div>
+    <div class="purse">
+      <div id="hdrGold">0 zł</div>
+      <div id="hdrPot">0 mikstur</div>
+    </div>
+  </div>
+
+  <div class="screens">
+    <section class="screen on" id="s-wieza"></section>
+    <section class="screen"    id="s-postac"></section>
+    <section class="screen"    id="s-eq"></section>
+  </div>
+
+  <nav class="tabs">
+    <button data-tab="wieza"  aria-selected="true"><span class="ic">🗼</span><span class="tx">WIEŻA</span></button>
+    <button data-tab="postac" aria-selected="false"><span class="ic">👤</span><span class="tx">POSTAĆ</span></button>
+    <button data-tab="eq"     aria-selected="false"><span class="ic">🎒</span><span class="tx">EKWIPUNEK</span></button>
+  </nav>
+</div>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

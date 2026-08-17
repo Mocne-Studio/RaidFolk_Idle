@@ -1,0 +1,20 @@
+{
+  "name": "raidfolk-idle",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node game/combat.js",
+    "icons": "node tools/make-icons.mjs",
+    "apk": "node tools/build-apk.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^6.2.1",
+    "@capacitor/cli": "^6.2.1",
+    "@capacitor/core": "^6.2.1"
+  }
+}

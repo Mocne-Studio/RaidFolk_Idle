@@ -1,0 +1,2424 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RaidFolk Idle</title>
+
+<style>
+  :root {
+    --ground:      #100E0C;
+    --stone:       #1A1613;
+    --stone-hi:    #221D18;
+    --edge:        #342B22;
+    --edge-soft:   #26201A;
+    --ink:         #E9E0D2;
+    --ink-dim:     #A29686;
+    --ink-mute:    #7D7266;
+    --brass:       #C89A4A;
+    --copper:      #9A5B34;
+    --blood:       #B03A32;
+    --heal:        #4E9E6A;
+    --skill:       #4C86A8;
+
+    --r-common:    #8C8377;
+    --r-uncommon:  #5E9E4A;
+    --r-unique:    #3E86C4;
+    --r-heroic:    #8A5CC4;
+    --r-legendary: #D9822B;
+    --r-mystic:    #C4453E;
+    --r-god:       #E8C35A;
+
+    --display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    --ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'SF Mono', 'Cascadia Mono', Consolas, 'Roboto Mono', monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--ui);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .stage {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    display: grid;
+    grid-template-columns: 1fr 390px 1fr;
+    gap: 40px;
+    align-items: start;
+  }
+
+  /* ---------- rails ---------- */
+
+  .rail h1 {
+    font-family: var(--display);
+    font-size: 30px; font-weight: 400; line-height: 1.15;
+    margin: 0 0 4px; text-wrap: balance;
+  }
+  .rail .sub {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--brass); margin: 0 0 22px;
+  }
+  .rail p { font-size: 14px; line-height: 1.6; color: var(--ink-mute); margin: 0 0 14px; max-width: 34em; }
+  .rail strong { color: var(--ink-dim); font-weight: 500; }
+
+  .block { margin-bottom: 30px; }
+  .block-label {
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: .16em; text-transform: uppercase; color: var(--ink-mute);
+    padding-bottom: 8px; border-bottom: 1px solid var(--edge-soft); margin-bottom: 12px;
+  }
+
+  .rarity-row { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 3px 0; color: var(--ink-dim); }
+  .swatch { width: 26px; height: 12px; border-radius: 2px; flex: none; }
+  .rarity-row .src { margin-left: auto; font-size: 11px; color: var(--ink-mute); }
+
+  .note-item { font-size: 13px; line-height: 1.55; color: var(--ink-mute); padding: 7px 0; border-bottom: 1px solid var(--edge-soft); }
+  .note-item:last-child { border-bottom: 0; }
+  .note-item b { color: var(--ink-dim); font-weight: 500; }
+  .tag {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
+    padding: 2px 6px; border-radius: 2px; margin-right: 7px;
+    text-transform: uppercase; vertical-align: 1px;
+  }
+  .tag.ok   { background: rgba(78,158,106,.15); color: var(--heal); }
+  .tag.wip  { background: rgba(200,154,74,.15); color: var(--brass); }
+  .tag.cut  { background: rgba(176,58,50,.15); color: #D9736B; }
+
+  /* ---------- phone ---------- */
+
+  .phone {
+    width: 390px; height: 800px;
+    background: var(--stone);
+    border: 1px solid var(--edge); border-radius: 22px;
+    overflow: hidden; display: flex; flex-direction: column;
+    position: sticky; top: 40px;
+    box-shadow: 0 30px 70px rgba(0,0,0,.6);
+  }
+
+  .topbar {
+    flex: none; display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    background: var(--stone-hi); border-bottom: 1px solid var(--edge);
+  }
+  .crest {
+    width: 30px; height: 30px; flex: none;
+    border: 1px solid var(--brass); border-radius: 3px;
+    display: grid; place-items: center; color: var(--brass); font-size: 13px;
+    background: none; cursor: pointer; padding: 0;
+  }
+  .crest:hover { background: rgba(200,154,74,.1); }
+  .who { flex: 1; min-width: 0; }
+  .who .n { font-family: var(--display); font-size: 15px; line-height: 1.1; }
+  .who .m { font-family: var(--mono); font-size: 10px; color: var(--ink-mute); letter-spacing: .06em; }
+  .chatbtn {
+    background: none; border: 1px solid var(--edge); border-radius: 3px;
+    color: var(--ink-mute); font-size: 13px; width: 30px; height: 30px;
+    cursor: pointer; flex: none; padding: 0;
+  }
+
+  .screens { flex: 1; overflow-y: auto; overflow-x: hidden; }
+  .screen { display: none; padding: 14px; }
+  .screen.on { display: block; }
+
+  .scr-head {
+    font-family: var(--display); font-size: 14px; letter-spacing: .04em;
+    color: var(--ink); padding-bottom: 9px; margin-bottom: 12px;
+    border-bottom: 1px solid var(--edge-soft);
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  }
+  .scr-head span { font-family: var(--mono); font-size: 10px; color: var(--ink-mute); flex: none; }
+  .back {
+    background: none; border: 0; color: var(--brass); cursor: pointer;
+    font-family: var(--mono); font-size: 11px; padding: 0 8px 0 0;
+  }
+
+  .sec-label {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--ink-mute); margin: 18px 0 8px;
+  }
+  .sec-label:first-child { margin-top: 0; }
+
+  .card {
+    background: var(--stone-hi); border: 1px solid var(--edge-soft);
+    border-radius: 4px; padding: 11px 12px; margin-bottom: 7px;
+  }
+  button.card { width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit; display: block; }
+  button.card:hover { border-color: var(--edge); background: #26211B; }
+
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row .grow { flex: 1; min-width: 0; }
+
+  .icon-sq {
+    width: 34px; height: 34px; flex: none; border-radius: 3px;
+    background: var(--stone); border: 1px solid var(--edge);
+    display: grid; place-items: center; font-size: 15px;
+  }
+  .icon-lg { width: 42px; height: 42px; font-size: 19px; }
+
+  .t1 { font-size: 13px; line-height: 1.3; }
+  .t2 { font-size: 11px; color: var(--ink-mute); line-height: 1.35; margin-top: 2px; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .chev { color: var(--ink-mute); font-size: 14px; flex: none; }
+
+  .btn {
+    font-family: var(--ui); font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    padding: 6px 11px; border-radius: 3px;
+    border: 1px solid var(--brass); color: var(--brass);
+    background: none; cursor: pointer; flex: none;
+  }
+  .btn:hover { background: rgba(200,154,74,.12); }
+  .btn.ghost { border-color: var(--edge); color: var(--ink-mute); }
+  .btn.solid { background: var(--brass); color: #17120B; border-color: var(--brass); font-weight: 600; }
+
+  .bar { height: 5px; border-radius: 2px; background: #0C0A09; overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--brass); }
+  .bar.hp > i  { background: linear-gradient(90deg, #7E2C26, var(--blood)); }
+  .bar.foe > i { background: linear-gradient(90deg, #5B3A20, var(--copper)); }
+  .bar.xp > i  { background: linear-gradient(90deg, #2F5567, var(--skill)); }
+  .bar.sh { height: 3px; margin-bottom: 2px; }
+  .bar.sh > i { background: var(--skill); }
+
+  .pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+  .pips i { width: 7px; height: 7px; border-radius: 1px; background: var(--edge); display: block; }
+  .pips i.on { background: var(--brass); }
+
+  .badge {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .08em;
+    padding: 2px 5px; border-radius: 2px; flex: none; text-transform: uppercase;
+    border: 1px solid var(--edge); color: var(--ink-mute);
+  }
+  .badge.elite  { border-color: var(--r-heroic); color: var(--r-heroic); }
+  .badge.elite2 { border-color: var(--r-mystic); color: var(--r-mystic); }
+  .badge.here   { border-color: var(--brass); color: var(--brass); }
+  .badge.fac    { border-color: var(--edge); }
+  .badge.fac.match { border-color: var(--brass); color: var(--brass); }
+  .badge.tree   { border-color: var(--r-legendary); color: var(--r-legendary); }
+
+  /* combat */
+  .units { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+  .unit { text-align: center; min-width: 0; }
+  .unit .png {
+    height: 54px; border-radius: 3px; margin-bottom: 4px;
+    background: var(--stone-hi); border: 1px solid var(--edge);
+    display: grid; place-items: center; font-size: 20px;
+  }
+  .unit.empty .png { border-style: dashed; opacity: .3; }
+  .unit .nm { font-size: 9px; line-height: 1.2; margin-bottom: 3px; color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .unit.me .png { border-color: var(--brass); }
+
+  .clash {
+    text-align: center; padding: 14px 0 12px;
+    font-family: var(--mono); font-size: 25px; color: var(--blood);
+    font-variant-numeric: tabular-nums;
+  }
+  .clash small { display: block; font-size: 9px; color: var(--ink-mute); letter-spacing: .1em; margin-top: 3px; }
+
+  .log {
+    font-family: var(--mono); font-size: 10.5px; line-height: 1.8;
+    background: #0C0A09; border: 1px solid var(--edge-soft); border-radius: 4px;
+    padding: 9px 10px; margin-top: 12px;
+  }
+  .log div { color: var(--ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log .hit { color: var(--ink-dim); }
+  .log .crit { color: var(--r-legendary); }
+  .log .kill { color: var(--brass); }
+
+  .actions { display: flex; gap: 6px; margin-top: 12px; }
+  .actions .btn { flex: 1; padding: 9px 4px; font-size: 10px; }
+  .btn.lecz { border-color: var(--blood); color: #E4796F; background: rgba(176,58,50,.14); }
+
+  /* compare */
+  .power {
+    display: flex; align-items: baseline; gap: 8px;
+    font-family: var(--mono); font-size: 17px;
+    padding-bottom: 11px; margin-bottom: 12px;
+    border-bottom: 1px solid var(--edge-soft); font-variant-numeric: tabular-nums;
+  }
+  .power b { color: var(--ink); font-weight: 400; }
+  .power .up { color: var(--heal); font-size: 13px; margin-left: auto; }
+  .power .lbl { font-family: var(--ui); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-mute); }
+
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .cmp > div { background: var(--stone-hi); border: 1px solid var(--edge-soft); border-radius: 4px; padding: 10px; }
+  .cmp .side { font-family: var(--mono); font-size: 9px; letter-spacing: .14em; color: var(--ink-mute); text-transform: uppercase; }
+  .cmp .iname { font-family: var(--display); font-size: 14px; margin: 5px 0 1px; color: var(--r-legendary); }
+  .cmp .itier { font-family: var(--mono); font-size: 10px; color: var(--ink-mute); margin-bottom: 9px; }
+
+  .stat { display: flex; font-size: 11.5px; padding: 3.5px 0; border-top: 1px solid var(--edge-soft); }
+  .stat .k { color: var(--ink-mute); flex: 1; }
+  .stat .v { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .stat .a { width: 13px; text-align: right; }
+  .up { color: var(--heal); } .down { color: var(--blood); } .flat { color: var(--ink-mute); }
+
+  .warn {
+    font-size: 11px; line-height: 1.5; color: var(--ink-mute);
+    border-left: 2px solid var(--brass); padding: 7px 0 7px 10px; margin-top: 12px;
+  }
+  .warn b { color: var(--brass); font-weight: 500; }
+  .warn.cut { border-color: var(--blood); }
+  .warn.cut b { color: #D9736B; }
+
+  /* logbook */
+  .segs { display: flex; gap: 5px; margin-bottom: 12px; }
+  .segs button {
+    flex: 1; font-family: var(--ui); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; padding: 7px 0; cursor: pointer;
+    background: none; border: 1px solid var(--edge); border-radius: 3px; color: var(--ink-mute);
+  }
+  .segs button[aria-selected="true"] { border-color: var(--brass); color: var(--brass); background: rgba(200,154,74,.1); }
+
+  .chars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+  .chars > div {
+    background: var(--stone-hi); border: 1px solid var(--edge-soft); border-radius: 4px;
+    padding: 9px 4px; text-align: center;
+  }
+  .chars .on { border-color: var(--brass); }
+  .chars .ic2 { font-size: 17px; }
+  .chars .cl { font-size: 9.5px; margin-top: 4px; color: var(--ink-dim); }
+  .chars .lv { font-family: var(--mono); font-size: 9px; color: var(--ink-mute); margin-top: 1px; }
+  .chars .empty { border-style: dashed; opacity: .45; }
+
+  /* item detail */
+  .hero-item { display: flex; gap: 12px; align-items: flex-start; }
+  .hero-item .png2 {
+    width: 76px; height: 76px; flex: none; border-radius: 4px;
+    background: var(--stone); border: 2px solid var(--r-legendary);
+    display: grid; place-items: center; font-size: 34px;
+  }
+  .hero-item .nm2 { font-family: var(--display); font-size: 21px; line-height: 1.1; color: var(--r-legendary); }
+  .hero-item .ty2 { font-family: var(--mono); font-size: 10.5px; color: var(--ink-mute); margin-top: 4px; letter-spacing: .04em; }
+
+  .req { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 11.5px; }
+  .req.ok   { color: var(--heal); }
+  .req.fail { color: var(--blood); }
+
+  .dmg {
+    background: var(--stone-hi); border: 1px solid var(--edge);
+    border-radius: 4px; padding: 12px; margin: 12px 0 7px; text-align: center;
+  }
+  .dmg .lbl2 { font-family: var(--mono); font-size: 9px; letter-spacing: .18em; color: var(--ink-mute); text-transform: uppercase; }
+  .dmg .big {
+    font-family: var(--mono); font-size: 30px; color: var(--ink);
+    font-variant-numeric: tabular-nums; line-height: 1.2; margin: 3px 0;
+  }
+  .dmg .sub2 { font-family: var(--mono); font-size: 11px; color: var(--brass); }
+
+  .fx {
+    border: 1px solid rgba(217,130,43,.4); border-radius: 4px;
+    padding: 10px 11px; margin-top: 7px;
+    background: linear-gradient(180deg, rgba(217,130,43,.07), transparent);
+  }
+  .fx .h2 { font-family: var(--mono); font-size: 9px; letter-spacing: .16em; color: var(--r-legendary); text-transform: uppercase; }
+  .fx .n2 { font-family: var(--display); font-size: 15px; margin: 4px 0 3px; }
+  .fx .d2 { font-size: 11.5px; color: var(--ink-mute); line-height: 1.5; }
+
+  .sock { display: flex; align-items: center; gap: 9px; padding: 8px 0; border-top: 1px solid var(--edge-soft); font-size: 12px; }
+  .sock .gem { width: 13px; height: 13px; border-radius: 50%; flex: none; border: 1px solid var(--edge); }
+  .sock .gem.f1 { background: var(--r-mystic); border-color: var(--r-mystic); }
+  .sock .gem.f2 { background: var(--r-unique); border-color: var(--r-unique); }
+  .sock .val { margin-left: auto; font-family: var(--mono); color: var(--ink-dim); }
+  .sock.free { color: var(--ink-mute); }
+
+  .risk { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 12px; }
+  .risk .v2 { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .box {
+    width: 15px; height: 15px; border: 1px solid var(--brass); border-radius: 2px;
+    display: grid; place-items: center; color: var(--brass); font-size: 10px; flex: none;
+  }
+
+  /* drzewko */
+  .tree-wrap {
+    background: #0C0A09; border: 1px solid var(--edge-soft); border-radius: 4px;
+    overflow: hidden; touch-action: none;
+  }
+  .tree-wrap svg { display: block; width: 100%; height: auto; }
+  .tn-line { stroke: var(--edge); stroke-width: 1.5; }
+  .tn-line.on { stroke: var(--brass); stroke-width: 2; }
+  .tn { fill: var(--stone-hi); stroke: var(--edge); stroke-width: 1.5; }
+  .tn.on { fill: var(--brass); stroke: var(--brass); }
+  .tn.can { fill: var(--stone); stroke: var(--brass); stroke-dasharray: 3 2; }
+  .tn.key { fill: var(--stone-hi); stroke: var(--r-legendary); stroke-width: 2.5; }
+  .tn.key.on { fill: var(--r-legendary); }
+  .tn-lab { fill: var(--ink-mute); font-size: 7px; font-family: monospace; text-anchor: middle; }
+  .tn-lab.on { fill: var(--brass); }
+
+  /* raid roster */
+  .rost { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--edge-soft); font-size: 11.5px; }
+  .rost:first-child { border-top: 0; }
+  .rost .rl { font-family: var(--mono); font-size: 8.5px; width: 30px; flex: none; letter-spacing: .05em; }
+  .rost .rl.t { color: var(--r-unique); }
+  .rost .rl.h { color: var(--heal); }
+  .rost .rl.d { color: var(--brass); }
+  .rost .nm3 { width: 62px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rost .bar { flex: 1; }
+  .rost .pv { font-family: var(--mono); font-size: 9.5px; color: var(--ink-mute); width: 46px; text-align: right; flex: none; }
+  .rost.me2 { color: var(--brass); }
+
+  .queue-role { display: flex; gap: 5px; margin-bottom: 10px; }
+  .queue-role button {
+    flex: 1; font-family: var(--ui); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    padding: 10px 0; cursor: pointer; background: none;
+    border: 1px solid var(--edge); border-radius: 3px; color: var(--ink-mute);
+  }
+  .queue-role button[aria-pressed="true"] { border-color: var(--brass); color: var(--brass); background: rgba(200,154,74,.1); }
+
+  .found {
+    border: 1px solid var(--brass); border-radius: 4px; padding: 14px;
+    background: linear-gradient(180deg, rgba(200,154,74,.1), transparent);
+  }
+
+  /* pasma ulepszania */
+  .bands { display: flex; gap: 3px; margin: 4px 0 6px; }
+  .bands > div { flex: 1; text-align: center; padding: 7px 2px; border-radius: 3px; border: 1px solid var(--edge-soft); }
+  .bands .b1 { background: rgba(78,158,106,.1);  border-color: rgba(78,158,106,.35); }
+  .bands .b2 { background: rgba(200,154,74,.1);  border-color: rgba(200,154,74,.35); }
+  .bands .b3 { background: rgba(176,58,50,.12);  border-color: rgba(176,58,50,.45); }
+  .bands .rng { font-family: var(--mono); font-size: 12px; }
+  .bands .b1 .rng { color: var(--heal); }
+  .bands .b2 .rng { color: var(--brass); }
+  .bands .b3 .rng { color: #E4796F; }
+  .bands .cap { font-size: 8.5px; color: var(--ink-mute); margin-top: 3px; line-height: 1.3; }
+  .bands .here2 { outline: 1px solid var(--ink); outline-offset: 1px; }
+
+  /* ścieżka wyprawy */
+  .path { display: flex; flex-direction: column; gap: 0; }
+  .node { display: flex; align-items: center; gap: 10px; padding: 7px 0; position: relative; }
+  .node .dot {
+    width: 26px; height: 26px; flex: none; border-radius: 50%;
+    border: 1px solid var(--edge); background: var(--stone);
+    display: grid; place-items: center; font-size: 12px; z-index: 1;
+  }
+  .node.done .dot { border-color: var(--heal); color: var(--heal); }
+  .node.now  .dot { border-color: var(--brass); color: var(--brass); background: rgba(200,154,74,.15); }
+  .node.boss .dot { border-color: var(--r-mystic); color: var(--r-mystic); width: 32px; height: 32px; font-size: 15px; }
+  .node .line {
+    position: absolute; left: 12px; top: 0; bottom: 0; width: 1px;
+    background: var(--edge-soft); z-index: 0;
+  }
+  .node:first-child .line { top: 50%; }
+  .node:last-child  .line { bottom: 50%; }
+  .node .lab { font-size: 12px; }
+  .node .sub3 { font-size: 10.5px; color: var(--ink-mute); margin-top: 1px; }
+  .node.dim { opacity: .45; }
+
+  .run { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .run > div { background: var(--stone-hi); border: 1px solid var(--edge-soft); border-radius: 4px; padding: 8px 6px; text-align: center; }
+  .run .q2 { font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .run .l2 { font-size: 9px; color: var(--ink-mute); margin-top: 2px; }
+
+  .pick {
+    background: var(--stone-hi); border: 1px solid var(--edge); border-radius: 4px;
+    padding: 12px; margin-bottom: 7px; width: 100%; text-align: left;
+    cursor: pointer; font: inherit; color: inherit; display: block;
+  }
+  .pick:hover { border-color: var(--brass); }
+  .pick .ph { font-family: var(--display); font-size: 15px; margin-bottom: 4px; }
+  .pick .pd { font-size: 11.5px; color: var(--ink-mute); line-height: 1.5; }
+  .pick .pc2 { font-family: var(--mono); font-size: 10.5px; margin-top: 6px; }
+
+  /* okna poziomów */
+  .win { margin-top: 7px; }
+  .win .track {
+    position: relative; height: 8px; border-radius: 2px;
+    background: #0C0A09; border: 1px solid var(--edge-soft); overflow: hidden;
+  }
+  .win .track i { position: absolute; top: 0; bottom: 0; display: block; }
+  .win .band { background: rgba(200,154,74,.32); }
+  .win .band.dead { background: rgba(176,58,50,.22); }
+  .win .band.locked { background: rgba(125,114,102,.18); }
+  .win .you { width: 2px; background: var(--ink); }
+  .win .scale {
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 8.5px; color: var(--ink-mute); margin-top: 3px;
+  }
+
+  .tick { width: 15px; flex: none; text-align: center; font-size: 12px; color: var(--edge); }
+  .tick.done { color: var(--heal); }
+  .tick.now  { color: var(--brass); }
+  .tick.soon { color: var(--ink-mute); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .stat-card { background: var(--stone-hi); border: 1px solid var(--edge-soft); border-radius: 4px; padding: 10px; }
+  .stat-card .q { font-family: var(--mono); font-size: 17px; font-variant-numeric: tabular-nums; }
+  .stat-card .l { font-size: 10px; color: var(--ink-mute); margin-top: 2px; }
+
+  /* combat bar */
+  .cbar {
+    flex: none; padding: 8px 12px;
+    background: var(--stone-hi); border-top: 1px solid var(--edge); cursor: pointer;
+  }
+  .cbar .l1, .cbar .l2 { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+  .cbar .l1 { margin-bottom: 5px; }
+  .cbar .who2 { font-family: var(--mono); font-size: 10.5px; color: var(--ink-dim); flex: none; }
+  .cbar .bar { flex: 1; }
+  .cbar .pc { font-family: var(--mono); font-size: 10px; color: var(--ink-mute); width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+  .cbar .loot { font-family: var(--mono); font-size: 10px; color: var(--brass); flex: none; }
+  .cbar .mini {
+    font-family: var(--ui); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase;
+    border: 1px solid var(--blood); color: #E4796F; background: rgba(176,58,50,.18);
+    padding: 3px 8px; border-radius: 3px; flex: none;
+  }
+
+  .tabs {
+    flex: none; display: grid; grid-template-columns: repeat(5, 1fr);
+    background: var(--stone-hi); border-top: 1px solid var(--edge);
+  }
+  .tabs button {
+    background: none; border: 0; cursor: pointer; padding: 9px 2px 10px;
+    color: var(--ink-mute);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    border-top: 2px solid transparent;
+  }
+  .tabs button .ic { font-size: 15px; line-height: 1; }
+  .tabs button .tx { font-family: var(--mono); font-size: 8px; letter-spacing: .04em; }
+  .tabs button[aria-selected="true"] { color: var(--brass); border-top-color: var(--brass); }
+
+  :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+  @media (max-width: 900px) {
+    .stage { grid-template-columns: 1fr; gap: 28px; padding: 0 0 60px; }
+    .rail { padding: 0 20px; order: 2; }
+    .rail.first { display: none; }
+    .phone { order: 1; width: 100%; height: 100dvh; border: 0; border-radius: 0; position: static; box-shadow: none; }
+  }
+</style>
+
+<div class="stage">
+
+  <aside class="rail first">
+    <h1>RaidFolk Idle</h1>
+    <p class="sub">Makieta ekranów · v0.2</p>
+    <p>Po przebudowie: <strong>Bożek i wioska usunięte</strong>, walka to 5 jednostek, a zakładki to Przygoda / Drużyna / Ekwipunek / Log Book / Konto.</p>
+    <p>Klikaj karty w Przygodzie — wchodzą głębiej. Pasek walki nad zakładkami idzie z Tobą wszędzie.</p>
+
+    <div class="block" style="margin-top:30px">
+      <div class="block-label">Ograniczenia</div>
+      <div class="note-item"><b>Wszystko PNG, zero animacji.</b> Feedback niesie tekst, liczba, kolor i układ.</div>
+      <div class="note-item"><b>Walka w tle.</b> Pasek nad zakładkami widoczny zawsze.</div>
+      <div class="note-item"><b>Sesje po 3–5 minut.</b> Nic głębiej niż dwa dotknięcia od zakładki.</div>
+      <div class="note-item"><b>Ciemny kamień i metal.</b> Na ciemnym tle kolory rzadkości świecą.</div>
+    </div>
+  </aside>
+
+  <!-- ============ PHONE ============ -->
+  <div class="phone">
+
+    <div class="topbar">
+      <button class="crest" data-go="przygoda" title="Przygoda">⌂</button>
+      <div class="who">
+        <div class="n">Halgar · Ludzie</div>
+        <div class="m">LVL 47 · MOC 5 140 · PRZEDZIAŁ 1–99</div>
+      </div>
+      <button class="chatbtn" title="Czat">💬</button>
+    </div>
+
+    <div class="screens">
+
+      <!-- ---------- PRZYGODA (hub) ---------- -->
+      <section class="screen on" id="przygoda">
+        <div class="scr-head">Przygoda</div>
+
+        <button class="card row" data-go="kampania">
+          <div class="icon-sq icon-lg">🗺</div>
+          <div class="grow">
+            <div class="t1">Wieża</div>
+            <div class="t2">Piętro 47 · Wąwóz Popiołu · serwer na 63</div>
+          </div>
+          <span class="chev">›</span>
+        </button>
+
+        <button class="card row" data-go="dungeony">
+          <div class="icon-sq icon-lg">🏛</div>
+          <div class="grow">
+            <div class="t1">Wyprawy</div>
+            <div class="t2">Gniazdo Przędzy · fala 7 z 12 · 42% HP</div>
+          </div>
+          <span class="chev">›</span>
+        </button>
+
+        <button class="card row" data-go="worldboss">
+          <div class="icon-sq icon-lg">🔥</div>
+          <div class="grow">
+            <div class="t1">World Boss</div>
+            <div class="t2 num">Pożeracz Zmierzchu · 5h 12min · Kolos w niedzielę</div>
+          </div>
+          <span class="badge here">TRWA</span>
+        </button>
+
+        <button class="card row" data-go="skille">
+          <div class="icon-sq icon-lg">⛏</div>
+          <div class="grow">
+            <div class="t1">Skille</div>
+            <div class="t2">Mining aktywny · żelazo · 42 lvl</div>
+          </div>
+          <span class="chev">›</span>
+        </button>
+
+        <button class="card row" data-go="summon">
+          <div class="icon-sq icon-lg">🔯</div>
+          <div class="grow">
+            <div class="t1">Przywołanie</div>
+            <div class="t2">7 zwykłych · 3 zdobne · 1 pradawny klucz</div>
+          </div>
+          <span class="badge here">3 NOWE</span>
+        </button>
+
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">👑</div>
+            <div class="grow"><div class="t1">Heros dnia</div><div class="t2">Gotowy · raz dziennie</div></div>
+            <button class="btn solid">Idź</button>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Zaznaczony slot</span><span class="v" style="color:var(--brass)">Broń</span></div>
+          <div class="stat"><span class="k">Gwarancja</span><span class="v" style="color:var(--r-unique)">minimum Unique na ten slot</span></div>
+          <div class="stat"><span class="k">Wyżej</span><span class="v" style="color:var(--ink-mute)">Heroic 5% · Legendary 0,3%</span></div>
+        </div>
+
+        <div class="warn"><b>Heros gwarantuje slot i Unique, nie Legendary.</b> Zaznaczasz, że potrzebujesz broni — i Unique broń dostaniesz na pewno. Wyżej to już loteria. <u>Nigdy nie ma gwarantowanego Legendary.</u></div>
+        <div class="warn"><b>To rozwiązuje najgorszy problem lootu: martwe dropy.</b> Masz świetną broń i wypada Ci dwudziesta broń? Zaznaczasz buty. Losowość zostaje w rzadkości, znika z „czy to w ogóle mi się przyda”.</div>
+
+        <div class="warn"><b>To jest cała gra w jednym ekranie.</b> Cztery rodzaje zajęcia, jedno pod drugim, każde jedno dotknięcie od startu.</div>
+      </section>
+
+      <!-- ---------- WIEŻA ---------- -->
+      <section class="screen" id="kampania">
+        <div class="scr-head"><button class="back" data-go="przygoda">‹ Przygoda</button>Wieża <span>PIĘTRO 47</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row"><div class="grow"><div class="t1">Najwyższe piętro na serwerze</div><div class="t2">Kruk · zdobyte 4 dni temu</div></div><div style="font-family:var(--mono);font-size:22px;color:var(--brass)">63</div></div>
+        </div>
+
+        <div class="sec-label">Biom 5 · Wąwóz Popiołu · piętra 41–50</div>
+
+        <div class="card row" style="opacity:.45;border-style:dashed">
+          <div class="grow"><div class="t1" style="color:var(--ink-mute)">50 — ? ? ?</div><div class="t2">Boss piętra · nikt z serwera tu nie był</div></div>
+          <span class="badge">MGŁA</span>
+        </div>
+        <div class="card row" style="opacity:.45;border-style:dashed"><div class="grow"><div class="t1" style="color:var(--ink-mute)">49 — ? ? ?</div></div></div>
+        <div class="card row" style="opacity:.45;border-style:dashed"><div class="grow"><div class="t1" style="color:var(--ink-mute)">48 — ? ? ?</div></div></div>
+
+        <button class="card" data-go="pietro" style="border-color:var(--brass)">
+          <div class="row" style="margin-bottom:7px">
+            <div class="grow"><div class="t1">47 — Pomiot Goblinów</div><div class="t2">walka 7 z 10 · utknąłeś na ósmej</div></div>
+            <span class="badge here">TU JESTEŚ</span>
+          </div>
+          <div class="bar"><i style="width:70%"></i></div>
+        </button>
+
+        <div class="card row"><div class="grow"><div class="t1">46 — Pomiot Goblinów <span style="color:var(--r-uncommon)">+</span></div><div class="t2">zdobyte · +1 punkt drzewka</div></div><span class="tick done">✓</span></div>
+        <div class="card row"><div class="grow"><div class="t1">45 — Pomiot Goblinów <span style="color:var(--r-uncommon)">+</span></div><div class="t2">wariant wzmocniony · skok trudności</div></div><span class="tick done">✓</span></div>
+        <div class="card row" style="opacity:.6"><div class="grow"><div class="t1">44 … 41</div><div class="t2">zdobyte</div></div><span class="tick done">✓</span></div>
+
+        <div class="card row" style="opacity:.5;border-color:rgba(138,92,196,.4)">
+          <div class="grow"><div class="t1">40 — Gruk Rzeźnik</div><div class="t2">boss aktu IV · +5 punktów drzewka</div></div>
+          <span class="badge elite">BOSS</span>
+        </div>
+
+        <div class="sec-label">Co wiedzą inni o piętrach wyżej</div>
+
+        <div class="card">
+          <div class="row" style="margin-bottom:6px">
+            <div class="grow"><div class="t1">Piętro 50 — Strażnik Popiołu</div><div class="t2">przeszło 3 graczy · pierwszy: Kruk</div></div>
+            <span class="badge" style="border-color:var(--heal);color:var(--heal)">ZNANE</span>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Dropi</span><span class="v" style="color:var(--r-heroic)">Heroic bronie</span></div>
+          <div class="stat"><span class="k">Dropi</span><span class="v">Kamień Utrwalenia</span></div>
+        </div>
+
+        <div class="card" style="opacity:.55">
+          <div class="row"><div class="grow"><div class="t1">Biom 6 — nazwa nieznana</div><div class="t2">przeszło 2 graczy · nie podzielili się niczym</div></div></div>
+        </div>
+
+        <div class="card" style="opacity:.35;border-style:dashed">
+          <div class="row"><div class="grow"><div class="t1">Piętro 64 i wyżej</div><div class="t2">Nikt nie wszedł. Nikt nie wie.</div></div></div>
+        </div>
+
+        <div class="sec-label">Akty · po co tu wracać</div>
+
+        <button class="card" data-go="akty">
+          <div class="row" style="margin-bottom:7px">
+            <div class="icon-sq icon-lg">🌿</div>
+            <div class="grow"><div class="t1">Akt I — Rozstaje Cierni</div><div class="t2 num">piętra 1–10 · gobliny, szczury</div></div>
+            <span class="badge" style="border-color:var(--r-mystic);color:var(--r-mystic)">POTRZEBUJESZ</span>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Wyłączny składnik</span><span class="v">Cierniowy Korzeń</span></div>
+          <div class="stat"><span class="k">Masz</span><span class="v" style="color:var(--blood)">4 z 12</span></div>
+        </button>
+
+        <button class="card row" data-go="akty">
+          <div class="icon-sq icon-lg">🌫</div>
+          <div class="grow"><div class="t1">Akt II — Mokradła Szeptu</div><div class="t2 num">11–20 · Szeptany Muł · 12 z 12 ✓</div></div>
+          <span class="chev">›</span>
+        </button>
+
+        <button class="card row" data-go="akty">
+          <div class="icon-sq icon-lg">⛏</div>
+          <div class="grow"><div class="t1">Akt III — Kopalnia Zgniłego Kamienia</div><div class="t2 num">21–30 · Rdzawy Odłamek · 9 z 20</div></div>
+          <span class="chev">›</span>
+        </button>
+
+        <div class="warn"><b>Każdy akt ma materiał, którego nie ma nigdzie indziej.</b> Przepis na Mityczną broń wymaga składników z trzech aktów naraz — więc wracasz na piętro 6 mając poziom 47, i to nie jest strata czasu.</div>
+        <div class="warn"><b>Powrót nie daje poziomu.</b> Poziom leci wyłącznie z pierwszego zdobycia piętra, więc farmienie Aktu I na 47 poziomie niczego nie psuje: nie wypadasz z przedziału, nie influjesz się. Zbierasz materiał i wracasz.</div>
+        <div class="warn"><b>Trudność skaluje się do Ciebie.</b> Akt I na trudności 3 to nie są gobliny do jednego ciosu — inaczej powrót byłby klikaniem, a nie graniem.</div>
+
+        <div class="sec-label">Co daje wieża, a czego nie</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k" style="color:var(--heal)">Daje</span><span class="v">punkty drzewka</span></div>
+          <div class="stat"><span class="k" style="color:var(--heal)">Daje</span><span class="v">poziom postaci = piętro</span></div>
+          <div class="stat"><span class="k" style="color:var(--heal)">Daje</span><span class="v">odblokowania wypraw</span></div>
+          <div class="stat"><span class="k" style="color:var(--heal)">Daje</span><span class="v">złoto i exp skilli bojowych</span></div>
+          <div class="stat"><span class="k" style="color:var(--blood)">Nie daje</span><span class="v" style="color:var(--ink-mute)">sprzętu do farmienia</span></div>
+        </div>
+
+        <div class="warn"><b>Wieża to ścieżka, wyprawy to pętla.</b> W wieży idziesz raz, żeby urosnąć i coś odblokować. Sprzęt i grind są w wyprawach. Gdyby oba dawały to samo, konkurowałyby ze sobą i jedno byłoby zbędne.</div>
+
+        <div class="sec-label">Rytm wieży</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Każde piętro</span><span class="v">+1 poziom · +1 punkt drzewka</span></div>
+          <div class="stat"><span class="k">Trudność piętra</span><span class="v">jedna · przechodzisz raz</span></div>
+          <div class="stat"><span class="k">Co 5 pięter</span><span class="v" style="color:var(--r-uncommon)">wariant „+” — wyraźny skok trudności</span></div>
+          <div class="stat"><span class="k">Co 10 pięter</span><span class="v" style="color:var(--r-heroic)">boss aktu · +5 punktów drzewka</span></div>
+          <div class="stat"><span class="k">Nowy akt</span><span class="v">inne moby, własna wyprawa, własny składnik</span></div>
+        </div>
+
+        <div class="warn"><b>Piętro ma jedną trudność i przechodzi się je raz.</b> Trudności są w wyprawach — tam wracasz, tam wybierasz ryzyko. Wieża idzie w jedną stronę.</div>
+        <div class="warn cut"><b>Dlatego parkowanie kosztuje.</b> Zaparkowana postać zamraża poziom <u>i drzewko</u> — rosną jej tylko skille i sprzęt. Zostajesz w przedziale, w którym jesteś silny, ale przestajesz zdobywać punkty. Wchodzenie wyżej i parkowanie to realny wybór, a nie jednostronna korzyść.</div>
+        <div class="warn"><b>Rytm jest znany, zawartość nie.</b> Wiesz, że na 50 jest boss i nowy akt. Nie wiesz, czym jest ani co dropi — dopóki ktoś tam nie wejdzie.</div>
+        <div class="warn"><b>Mgła dotyczy tylko pięter.</b> Wyprawa, którą odblokowałeś, ma jawną listę dropu. <u>Eksploracja jest ślepa, farmienie jest świadome.</u></div>
+        <div class="warn"><b>Wiedza jest zasobem, którego nie da się wyfarmić.</b> Tabele dropów nie są w grze. Są w głowach ludzi, którzy byli wyżej. To jedyny system w tej grze, w którym inny gracz daje Ci coś, czego nie da się zdobyć samemu.</div>
+        <div class="warn cut"><b>„Przeszło 2 graczy, nie podzielili się niczym”.</b> Do rozstrzygnięcia: czy wiedza odsłania się automatycznie po pierwszym przejściu, czy gracz sam decyduje, czy ją opublikować. Druga wersja jest ciekawsza i groźniejsza.</div>
+      </section>
+
+      <!-- ---------- ELITY II ---------- -->
+      <section class="screen" id="elity">
+        <div class="scr-head"><button class="back" data-go="przygoda">‹ Przygoda</button>Elity II <span>TY: LVL 47</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="t1" style="margin-bottom:5px">Trzy kotwice, trzy komplety</div>
+          <div class="t2">Każdy poziom graniczny ma <span style="color:var(--brass)">trzy Elity II</span> — jedna daje bronie, druga zbroje, trzecia skarby. Żeby ubrać postać na tym poziomie, trzeba obejść wszystkie trzy.</div>
+        </div>
+
+        <div class="sec-label" style="color:var(--ink-dim)">Kotwica 36 · kategoria PvP „max 36”</div>
+        <div class="card" style="opacity:.5">
+          <div class="row"><div class="icon-sq">🗿</div><div class="grow"><div class="t1">Wół Kamienny</div><div class="t2 num">bronie i tarcze 34–36</div></div><span class="badge" style="border-color:var(--blood);color:#D9736B">WYROSŁEŚ</span></div>
+        </div>
+        <div class="card" style="opacity:.5">
+          <div class="row"><div class="icon-sq">🪱</div><div class="grow"><div class="t1">Zgniły Pełzacz</div><div class="t2 num">zbroje 34–36</div></div></div>
+        </div>
+        <div class="card" style="opacity:.5">
+          <div class="row"><div class="icon-sq">🕷</div><div class="grow"><div class="t1">Matka Przędzy</div><div class="t2 num">biżuteria, narzędzia, kamienie 34–36</div></div></div>
+        </div>
+
+        <div class="sec-label" style="color:var(--ink-dim)">W drodze</div>
+        <div class="card" style="border-color:rgba(196,69,62,.4)">
+          <div class="row">
+            <div class="icon-sq" style="border-color:var(--r-mystic)">👹</div>
+            <div class="grow"><div class="t1" style="color:var(--r-mystic)">Kolos Pierwszy <span class="num">40</span></div><div class="t2 num">własna wyprawka · okno 40–63</div></div>
+            <button class="btn solid">Bij</button>
+          </div>
+          <div class="win">
+            <div class="track"><i class="band" style="left:20%;width:12%"></i><i class="you" style="left:23%"></i></div>
+            <div class="scale"><span>1</span><span>50</span><span>100</span><span>150</span><span>200</span></div>
+          </div>
+          <div class="t2" style="margin-top:5px">Content dla wędrujących. Zaparkowany na 36 go nie dosięgnie.</div>
+        </div>
+
+        <div class="sec-label" style="color:var(--ink-dim)">Kotwica 64 · kategoria PvP „max 64”</div>
+        <div class="card"><div class="row"><div class="icon-sq">🔥</div><div class="grow"><div class="t1">Straż Popiołów</div><div class="t2 num">bronie i tarcze 62–64</div></div><span class="badge">ZA 17 LVL</span></div></div>
+        <div class="card"><div class="row"><div class="icon-sq">🛡</div><div class="grow"><div class="t1">Żelazny Bastion</div><div class="t2 num">zbroje 62–64</div></div></div></div>
+        <div class="card"><div class="row"><div class="icon-sq">💎</div><div class="grow"><div class="t1">Skarbnik Głębi</div><div class="t2 num">biżuteria, narzędzia, kamienie 62–64</div></div></div></div>
+
+        <div class="card" style="opacity:.4;margin-top:14px">
+          <div class="row"><div class="grow"><div class="t1">Kolos Drugi <span class="num">80</span> · Kotwica 100 · Kolos Trzeci <span class="num">120</span></div><div class="t2">dalej tym samym rytmem, do poziomu 200</div></div></div>
+        </div>
+
+        <div class="sec-label">Jak to się układa</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Kotwica 36</span><span class="v">3 Elity II · PvP max 36</span></div>
+          <div class="stat"><span class="k">Kolos 40</span><span class="v">okno 40–63</span></div>
+          <div class="stat"><span class="k">Kotwica 64</span><span class="v">3 Elity II · PvP max 64</span></div>
+          <div class="stat"><span class="k">Kolos 80</span><span class="v">okno 80–99</span></div>
+          <div class="stat"><span class="k">Kotwica 100</span><span class="v">3 Elity II · PvP max 100</span></div>
+          <div class="stat"><span class="k">Kolos 120</span><span class="v">okno 120–…</span></div>
+        </div>
+
+        <div class="warn"><b>Kolosy wypełniają drogę między kotwicami.</b> Zaparkowany gracz ma trzy Elity II, PvP i world bossa. Wędrujący ma Kolosa. Dwa różne sposoby grania, żaden nie zostaje bez celu — i nie ma martwego poziomu, na którym nie ma czego bić.</div>
+        <div class="warn"><b>Trzy Elity zamiast jednej to trzy adresy zamiast jednego.</b> Nie da się wyfarmić kompletu, siedząc na jednym bossie — trzeba obejść bronie, zbroje i skarby. Lista rzeczy do zrobienia zamiast jednego przycisku.</div>
+        <div class="warn cut"><b>Uwaga na kamienie ochronne.</b> Wrzuciłem je do trzeciej Elity razem z biżuterią i narzędziami. To najwygodniejsze miejsce, ale kamienie są głównym pokrętłem trudności całej gry — jeśli będą lecieć z farmowalnej Elity, spalanie broni przestanie cokolwiek znaczyć. Do decyzji, czy zostają tu, czy idą wyżej.</div>
+      </section>
+
+      <!-- ---------- PIĘTRO ---------- -->
+      <section class="screen" id="pietro">
+        <div class="scr-head"><button class="back" data-go="kampania">‹ Wieża</button>Piętro 47 <span>7 Z 10</span></div>
+
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">1 — Pomiot Goblinów</div></div><button class="btn ghost">Farm</button></div>
+        <div class="card row" style="opacity:.6"><span class="tick done">✓</span><div class="grow"><div class="t1">2 … 5 — Pomiot Goblinów</div></div></div>
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">6 — Pomiot Goblinów</div></div><button class="btn ghost">Farm</button></div>
+        <div class="card row" style="border-color:var(--brass)">
+          <span class="tick done">✓</span>
+          <div class="grow"><div class="t1">7 — Pomiot Goblinów</div><div class="t2">tu farmisz Atak, żeby przejść ósmą</div></div>
+          <button class="btn solid">Farm</button>
+        </div>
+
+        <div class="card row" style="border-color:var(--blood)">
+          <span class="tick" style="color:var(--blood)">✗</span>
+          <div class="grow"><div class="t1">8 — Goblin Wojownik</div><div class="t2" style="color:#E4796F">Trzy próby, trzy porażki</div></div>
+          <button class="btn">Spróbuj</button>
+        </div>
+
+        <div class="card row" style="opacity:.4"><span class="tick">🔒</span><div class="grow"><div class="t1">9 — ? ? ?</div><div class="t2">ostatnia zwykła walka piętra</div></div></div>
+        <button class="card row" data-go="boss" style="opacity:.55;border-color:rgba(196,69,62,.4)">
+          <span class="tick" style="color:var(--r-mystic)">👑</span>
+          <div class="grow"><div class="t1" style="color:var(--r-mystic)">10 — Boss</div><div class="t2">osobna walka · osobne zasady · trzeba go zrozumieć</div></div>
+          <span class="chev">›</span>
+        </button>
+
+        <div class="sec-label">Nagroda za piętro</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Punkty drzewka</span><span class="v" style="color:var(--brass)">+1</span></div>
+          <div class="stat"><span class="k">Poziom postaci</span><span class="v">48</span></div>
+          <div class="stat"><span class="k">Piętro 50 — boss aktu</span><span class="v" style="color:var(--r-legendary)">+5 punktów · waluta specjalna</span></div>
+        </div>
+
+        <div class="warn"><b>Ściana jest wewnątrz piętra, nie między piętrami.</b> Nie dajesz rady ósmej walce — więc wracasz na szóstą i siódmą, farmisz Atak, poprawiasz sprzęt, wracasz. To jest cała pętla wczesnej gry i nie wymaga ani jednego dodatkowego systemu.</div>
+        <div class="warn"><b>Dziewiąta i dziesiąta są zakryte.</b> Nawet w obrębie piętra, na którym stoisz, nie wiesz, co przed Tobą — dopóki tam nie dojdziesz albo ktoś nie opowie.</div>
+      </section>
+
+      <!-- ---------- BOSS PIĘTRA ---------- -->
+      <section class="screen" id="boss">
+        <div class="scr-head"><button class="back" data-go="kampania">‹ Wieża</button>Gruk Rzeźnik <span>AKT I · PIĘTRO 10</span></div>
+
+        <div class="card" style="border-color:var(--blood)">
+          <div class="row"><div class="grow"><div class="t1">Próby</div><div class="t2">Każda porażka czegoś Cię uczy</div></div><div style="font-family:var(--mono);font-size:22px;color:var(--blood)">3</div></div>
+        </div>
+
+        <div class="sec-label">Co już wiesz</div>
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">Odporny na obrażenia fizyczne</div><div class="t2">odkryte w próbie 1 — biłeś za 40% normalnych obrażeń</div></div></div>
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">Leczy się co 5 tur</div><div class="t2">odkryte w próbie 2 — wrócił z 30% na 55%</div></div></div>
+        <div class="card row" style="opacity:.45;border-style:dashed"><span class="tick">?</span><div class="grow"><div class="t1" style="color:var(--ink-mute)">Słabość — nieznana</div><div class="t2">musi być jakiś typ obrażeń, który przechodzi</div></div></div>
+        <div class="card row" style="opacity:.45;border-style:dashed"><span class="tick">?</span><div class="grow"><div class="t1" style="color:var(--ink-mute)">Druga faza — nieznana</div><div class="t2">nie zszedłeś poniżej 30% HP</div></div></div>
+
+        <div class="sec-label">Co mówią inni</div>
+        <div class="card" style="opacity:.55">
+          <div class="row"><div class="grow"><div class="t1">Kruk pokonał go 6 dni temu</div><div class="t2">Nie podzielił się niczym więcej</div></div></div>
+        </div>
+
+        <div class="sec-label">Przygotowanie</div>
+        <div class="card row"><div class="icon-sq">🍲</div><div class="grow"><div class="t1">Buffy z Cookingu</div><div class="t2">3 dania · brak odporności na fizyczne</div></div><button class="btn">Zmień</button></div>
+        <div class="card row"><div class="icon-sq">⚗</div><div class="grow"><div class="t1">Mikstury</div><div class="t2 num">8 sztuk</div></div><button class="btn ghost">Dokup</button></div>
+        <div class="card row"><div class="icon-sq">⚔</div><div class="grow"><div class="t1">Rotacja skilli</div><div class="t2">Rozłupanie → Cios → Wir</div></div><button class="btn">Ustaw</button></div>
+        <div class="card row" style="border-color:var(--brass)"><div class="icon-sq" style="border-color:var(--brass)">✨</div><div class="grow"><div class="t1">Masz różdżkę w banku</div><div class="t2" style="color:var(--brass)">Magia 34 — obrażenia magiczne mogą przejść</div></div><button class="btn solid">Załóż</button></div>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn solid" style="flex:2">Próba 4</button>
+          <button class="btn ghost">Turowa</button>
+        </div>
+
+        <div class="warn"><b>To jedyne miejsce, gdzie bramką jest wiedza, a nie moc.</b> Boss nie wymaga wyższej Mocy — wymaga zrozumienia. Trzy porażki nauczyły Cię, że fizyczne nie przechodzi i że się leczy. Czwarta próba to test hipotezy, a nie kolejne uderzenie głową w mur.</div>
+        <div class="warn"><b>Wszystkie systemy przygotowania spotykają się tutaj naraz.</b> Inny typ obrażeń znaczy inną broń, inny skill w drzewku, inne buffy z Cookingu, inne kamienie w gniazdach. Boss piętra jest egzaminem z tego, czy rozumiesz własną postać.</div>
+        <div class="warn cut"><b>I dlatego wiedza o bossie jest najcenniejszą rzeczą, jaką gracz może przekazać.</b> „Gruk jest odporny na fizyczne” oszczędza komuś trzy godziny. Żaden przedmiot w tej grze nie jest wart tyle, co to zdanie.</div>
+      </section>
+
+      <!-- ---------- AKTY ---------- -->
+      <section class="screen" id="akty">
+        <div class="scr-head"><button class="back" data-go="kampania">‹ Wieża</button>Akty <span>CZEGO BRAKUJE</span></div>
+
+        <div class="card" style="border-color:var(--r-mystic)">
+          <div class="t1" style="margin-bottom:6px;color:var(--r-mystic)">Kujesz: Mityczna Broń · przedział 36</div>
+          <div class="stat" style="border-top:0"><span class="k">Cierniowy Korzeń · Akt I</span><span class="v" style="color:var(--blood)">4 z 12</span></div>
+          <div class="stat"><span class="k">Szeptany Muł · Akt II</span><span class="v" style="color:var(--heal)">12 z 12 ✓</span></div>
+          <div class="stat"><span class="k">Rdzawy Odłamek · Akt III</span><span class="v" style="color:var(--blood)">9 z 20</span></div>
+          <div class="stat"><span class="k">Kieł Przędącej Matki · wyprawa</span><span class="v" style="color:var(--blood)">3 z 5</span></div>
+        </div>
+
+        <div class="sec-label">Akt I · Rozstaje Cierni · piętra 1–10</div>
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">🌿</div>
+            <div class="grow"><div class="t1">Cierniowa Nora</div><div class="t2">Jedyne źródło Cierniowego Korzenia w całej wieży</div></div>
+            <button class="btn solid">Wróć</button>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Rodziny mobów</span><span class="v">gobliny, szczury</span></div>
+          <div class="stat"><span class="k">Trudność 3</span><span class="v" style="color:var(--brass)">skalowana do lvl 47</span></div>
+          <div class="stat"><span class="k">Szansa na Korzeń</span><span class="v">trudność 1: 2% · 3: 11%</span></div>
+        </div>
+
+        <div class="warn"><b>Wracasz do wyprawy aktu, nie do pięter.</b> Piętra przechodzi się raz — dają punkty drzewka i odblokowują wyprawę. To wyprawa jest miejscem, do którego wraca się przez całą grę.</div>
+
+        <div class="sec-label">Akt II · Mokradła Szeptu · 11–20</div>
+        <div class="card row" style="opacity:.6">
+          <div class="icon-sq icon-lg">🌫</div>
+          <div class="grow"><div class="t1">Szeptany Muł</div><div class="t2 num">12 z 12 — masz komplet</div></div>
+          <span class="badge" style="border-color:var(--heal);color:var(--heal)">✓</span>
+        </div>
+
+        <div class="sec-label">Akt III · Kopalnia Zgniłego Kamienia · 21–30</div>
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">⛏</div>
+            <div class="grow"><div class="t1">Rdzawy Odłamek</div><div class="t2 num">9 z 20</div></div>
+            <button class="btn">Wróć</button>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Rodziny mobów</span><span class="v">konstrukty, nietoperze</span></div>
+        </div>
+
+        <div class="card" style="opacity:.4;border-style:dashed">
+          <div class="row"><div class="grow"><div class="t1">Akt VI i wyżej</div><div class="t2">Składniki nieznane — nikt tam nie był</div></div></div>
+        </div>
+
+        <div class="warn"><b>Ten ekran jest listą powodów, żeby wrócić.</b> Nie „stary content", tylko „brakuje mi czterech Cierniowych Korzeni". Konkret zamiast nostalgii.</div>
+        <div class="warn"><b>Wyższa trudność to lepsza szansa, nie inny łup.</b> Korzeń leci na każdej, ale na trudności 3 pięć razy częściej. Gracz sam decyduje, czy farmić szybciej i ryzykowniej, czy wolniej i bezpiecznie.</div>
+        <div class="warn"><b>Rodziny mobów robią z aktów miejsca, nie numery.</b> Gobliny są w Akcie I i nigdzie indziej. Za trzy miesiące nadal będziesz wracał do goblinów — i będą znajome.</div>
+      </section>
+
+      <!-- ---------- DUNGEONY ---------- -->
+      <section class="screen" id="dungeony">
+        <div class="scr-head"><button class="back" data-go="przygoda">‹ Przygoda</button>Wyprawy</div>
+
+        <div class="segs">
+          <button aria-selected="true">Solo</button>
+          <button aria-selected="false" data-go="dgn_party">Drużynowe</button>
+        </div>
+
+        <button class="card" data-go="wyprawa" style="border-color:var(--brass)">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">🕸</div>
+            <div class="grow"><div class="t1">Gniazdo Przędzy</div><div class="t2 num">odblokowane na piętrze 42 · ~15 min</div></div>
+            <span class="badge here">W TOKU</span>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Heroic bronie i tarcze</span><span class="v" style="color:var(--heal)">odkryto 3 z 7</span></div>
+          <div class="stat"><span class="k">Kieł Przędącej Matki</span><span class="v">składnik</span></div>
+          <div class="stat"><span class="k">Klucze zwykłe i zdobne</span><span class="v">—</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-legendary)">Legendary broń</span><span class="v" style="color:var(--ink-mute)">? ? ? nieodkryte</span></div>
+        </button>
+
+        <div class="warn"><b>Wiesz CO może wypaść, nie wiesz JAKIE.</b> Lista mówi „Legendary broń”. Jaka, z jakimi statystykami i jakim efektem — dowiesz się dopiero, gdy Ci wypadnie. Albo gdy ktoś opowie.</div>
+
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">🌿</div>
+            <div class="grow"><div class="t1">Cierniowa Nora</div><div class="t2 num">Akt I · piętro 6 · 8 fal</div></div>
+            <button class="btn">Wejdź</button>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Dropi</span><span class="v" style="color:var(--r-mystic)">Cierniowy Korzeń</span></div>
+          <div class="stat"><span class="k">Dropi</span><span class="v">klucze zwykłe · narzędzia</span></div>
+        </div>
+
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">🔱</div>
+            <div class="grow"><div class="t1">Zatopiony Arsenał</div><div class="t2 num">Akt IV · piętro 38 · 16 fal</div></div>
+            <button class="btn">Wejdź</button>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Dropi</span><span class="v" style="color:var(--r-heroic)">Heroic zbroje</span></div>
+          <div class="stat"><span class="k">Dropi</span><span class="v">Rdzeń Arsenału · kamienie umiejętności</span></div>
+        </div>
+
+        <div class="card row" style="opacity:.4;border-style:dashed">
+          <div class="icon-sq">🔒</div>
+          <div class="grow"><div class="t1">Kolejna wyprawa</div><div class="t2">Odblokuje się na piętrze 52</div></div>
+        </div>
+
+        <div class="sec-label">Poziomy przejścia · Gniazdo Przędzy</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">I — 8 fal</span><span class="v">drop ×1 · Legendary 0,02%</span></div>
+          <div class="stat"><span class="k">II — 12 fal</span><span class="v">drop ×2,5 · Legendary 0,1%</span></div>
+          <div class="stat"><span class="k">III — 16 fal</span><span class="v" style="color:var(--r-legendary)">drop ×6 · Legendary 0,4%</span></div>
+          <div class="stat"><span class="k" style="color:var(--ink-mute)">IV — 22 fale</span><span class="v" style="color:var(--ink-mute)">wymaga Mocy 8 000</span></div>
+          <div class="stat"><span class="k" style="color:var(--ink-mute)">V — 30 fal</span><span class="v" style="color:var(--ink-mute)">wymaga Mocy 14 000</span></div>
+        </div>
+
+        <div class="warn"><b>Trudności są tutaj, nie w wieży.</b> Piętro przechodzisz raz, na jednym poziomie. Wyprawę powtarzasz setki razy i za każdym razem decydujesz, ile ryzykujesz — to ona jest pętlą tej gry.</div>
+        <div class="warn"><b>Wyższy poziom to więcej fal, nie mocniejsze moby.</b> Dłuższa wyprawa przy niezmiennych miksturach i HP, które nie wraca. Trudność bierze się z wyczerpania, nie z większych liczb — i dlatego wyższe poziomy wymagają lepszego przygotowania, a nie tylko lepszego sprzętu.</div>
+
+        <div class="sec-label">Składniki · droga solo do Mystic i God</div>
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq" style="border-color:var(--r-mystic)">🦴</div>
+            <div class="grow"><div class="t1" style="color:var(--r-mystic)">Kieł Przędącej Matki</div><div class="t2 num">3 z 5 · z bossa wyprawy 40–59</div></div>
+          </div>
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq" style="border-color:var(--r-mystic)">🕯</div>
+            <div class="grow"><div class="t1" style="color:var(--r-mystic)">Popiół Krypty</div><div class="t2 num">7 z 12 · z Krypty Zapomnianych</div></div>
+          </div>
+          <div class="row">
+            <div class="icon-sq" style="border-color:var(--edge)">⚙</div>
+            <div class="grow"><div class="t1" style="color:var(--ink-mute)">Rdzeń Arsenału</div><div class="t2 num">0 z 8 · z Zatopionego Arsenału</div></div>
+          </div>
+          <div class="stat" style="margin-top:10px"><span class="k">Kuje: Smithing</span><span class="v" style="color:var(--r-mystic)">Mityczna broń · przedział 36</span></div>
+        </div>
+
+        <div class="warn"><b>Mystic i God nie lecą z dropu — kujesz je ze składników.</b> Legendary możesz wyrwać z wyprawy, ale szansa jest bardzo mała. Wyższe warstwy zbierasz częściami z mniejszych wypraw swojego przedziału i składasz u kowala.</div>
+        <div class="warn"><b>To otwiera solo drogę na sam szczyt.</b> Rajd na 25 osób daje to szybciej, ale gracz bez drużyny nie stoi pod ścianą — po prostu idzie dłużej. I to jest największa robota, jaką dostaje Smithing.</div>
+        <div class="warn"><b>Wyprawa to jedyne miejsce, gdzie coś jest na szali.</b> Farmienie jest bezpieczne. Tu HP nie odnawia się między falami, mikstury się kończą, a śmierć przed bossem kosztuje cały łup.</div>
+      </section>
+
+      <!-- ---------- WYPRAWA W TOKU ---------- -->
+      <section class="screen" id="wyprawa">
+        <div class="scr-head"><button class="back" data-go="dungeony">‹ Wyprawy</button>Gniazdo Przędzy <span>RZEŹNIA · ×6</span></div>
+
+        <div class="run">
+          <div><div class="q2" style="color:var(--blood)">42%</div><div class="l2">Twoje HP</div></div>
+          <div><div class="q2">3</div><div class="l2">Mikstury</div></div>
+          <div><div class="q2" style="color:var(--brass)">14</div><div class="l2">Łup</div></div>
+        </div>
+
+        <div class="card" style="margin-top:7px">
+          <div class="stat" style="border-top:0"><span class="k">Ilva</span><span class="v">66% HP</span></div>
+          <div class="stat"><span class="k">Torvald</span><span class="v">81% HP</span></div>
+          <div class="stat"><span class="k">Sela</span><span class="v" style="color:var(--blood)">12% HP</span></div>
+          <div class="stat"><span class="k">Wilk Cienia</span><span class="v" style="color:var(--ink-mute)">padł</span></div>
+        </div>
+
+        <div class="sec-label">Fala 7 z 12</div>
+        <div class="card" style="padding:4px 12px">
+          <div class="path">
+            <div class="node done dim"><div class="line"></div><div class="dot">✓</div><div class="grow"><div class="lab">Fale 1–4</div><div class="sub3">wyczyszczone</div></div></div>
+            <div class="node done dim"><div class="line"></div><div class="dot">✓</div><div class="grow"><div class="lab">Ognisko</div><div class="sub3">wybrałeś: +2 mikstury</div></div></div>
+            <div class="node done dim"><div class="line"></div><div class="dot">✓</div><div class="grow"><div class="lab">Fala 6 — elita</div><div class="sub3">Wilk Cienia padł</div></div></div>
+            <div class="node now"><div class="line"></div><div class="dot">◈</div><div class="grow"><div class="lab" style="color:var(--brass)">Rozdroże</div><div class="sub3">wybierz drogę dalej</div></div></div>
+            <div class="node"><div class="line"></div><div class="dot">⚔</div><div class="grow"><div class="lab">Fale 8–10</div></div></div>
+            <div class="node"><div class="line"></div><div class="dot">🔥</div><div class="grow"><div class="lab">Ognisko</div><div class="sub3">ostatnia szansa na odpoczynek</div></div></div>
+            <div class="node boss"><div class="line"></div><div class="dot">👑</div><div class="grow"><div class="lab" style="color:var(--r-mystic)">Przędąca Matka</div><div class="sub3">finałowy boss · skrzynia · Heroic 5%, Legendary 0,3%</div></div></div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:10px">
+          <button class="btn solid" style="flex:2" data-go="rozdroze">Idź dalej</button>
+        </div>
+
+        <div class="warn cut"><b>Nie da się wyjść z łupem.</b> Wyprawę kończy dopiero boss. Padniesz — zaczynasz od nowa i tracisz wszystko, co zebrałeś. Masz 42% HP, trzy mikstury, martwego peta i pięć fal do bossa. Nie ma awaryjnego wyjścia.</div>
+        <div class="warn"><b>HP nie odnawia się między falami.</b> Złe rozłożenie sił we wczesnych falach zabija Cię dopiero przy bossie, dwanaście minut później. Wyprawa jest zadaniem z zarządzania zasobem.</div>
+        <div class="warn"><b>To jedyne miejsce w grze bez asekuracji.</b> W kampanii giniesz, leczysz się miksturą i lecisz dalej. Tu nie ma powrotu — dlatego 15 minut wyprawy waży więcej niż godzina farmienia.</div>
+      </section>
+
+      <!-- ---------- SKRZYNIA PO BOSSIE ---------- -->
+      <section class="screen" id="skrzynia">
+        <div class="scr-head"><button class="back" data-go="wyprawa">‹ Wyprawa</button>Skrzynia <span>PRZĘDĄCA MATKA</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row"><div class="grow"><div class="t1">Otwierasz skrzynię</div><div class="t2">Przedmioty wychodzą od najgorszego do najlepszego</div></div><div style="font-family:var(--mono);font-size:20px;color:var(--brass)">6</div></div>
+        </div>
+
+        <div class="card row" style="opacity:.65"><div class="icon-sq" style="border-color:var(--r-common)">🗡</div><div class="grow"><div class="t1" style="color:var(--r-common)">Tępe Ostrze</div><div class="t2 num">Common · na przepalenie</div></div></div>
+        <div class="card row" style="opacity:.7"><div class="icon-sq" style="border-color:var(--r-common)">🪖</div><div class="grow"><div class="t1" style="color:var(--r-common)">Wyszczerbiony Hełm</div><div class="t2 num">Common</div></div></div>
+        <div class="card row" style="opacity:.8"><div class="icon-sq" style="border-color:var(--r-uncommon)">💍</div><div class="grow"><div class="t1" style="color:var(--r-uncommon)">Pierścień Tropiciela</div><div class="t2 num">Uncommon</div></div></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-unique)">🦴</div><div class="grow"><div class="t1" style="color:var(--r-unique)">Kieł Przędącej Matki</div><div class="t2 num">składnik · 4 z 5</div></div></div>
+        <div class="card row" style="border-color:rgba(138,92,196,.5)"><div class="icon-sq" style="border-color:var(--r-heroic)">🛡</div><div class="grow"><div class="t1" style="color:var(--r-heroic)">Puklerz Przędzy</div><div class="t2 num">Heroic · 2 gniazda · NOWE ODKRYCIE</div></div><span class="badge here">NOWE</span></div>
+
+        <div class="card" style="border-color:var(--brass);border-style:dashed">
+          <div class="row"><div class="grow"><div class="t1" style="color:var(--brass)">Ostatni przedmiot</div><div class="t2">jeszcze się nie odsłonił</div></div><button class="btn solid">Odsłoń</button></div>
+        </div>
+
+        <div class="sec-label">Szanse z tej skrzyni</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k" style="color:var(--r-heroic)">Heroic</span><span class="v">5%</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-legendary)">Legendary</span><span class="v">0,3%</span></div>
+        </div>
+
+        <div class="warn"><b>Od najgorszego do najlepszego — i to jest cała animacja, jakiej ta gra potrzebuje.</b> Bez ruchu, bez efektów. Sam porządek odsłaniania buduje napięcie: każdy kolejny przedmiot może być tym jednym.</div>
+        <div class="warn"><b>Ostatni odsłania się na kliknięcie.</b> Gracz sam decyduje, kiedy go zobaczyć. To jedyny moment w grze, w którym warto go zatrzymać na dwie sekundy.</div>
+      </section>
+
+      <!-- ---------- ROZDROŻE ---------- -->
+      <section class="screen" id="rozdroze">
+        <div class="scr-head"><button class="back" data-go="wyprawa">‹ Wyprawa</button>Rozdroże <span>FALA 7 / 12</span></div>
+
+        <div class="card" style="border-color:var(--blood)">
+          <div class="row"><div class="grow"><div class="t1">Twój stan</div><div class="t2">42% HP · 3 mikstury · pet padł</div></div><span class="badge" style="border-color:var(--blood);color:#D9736B">SŁABO</span></div>
+        </div>
+
+        <div class="sec-label">Wybierz jedną drogę</div>
+
+        <button class="pick">
+          <div class="ph">Zawalony korytarz</div>
+          <div class="pd">Trzy zwykłe fale. Nic nie zyskujesz, ale nic Cię nie zaskoczy.</div>
+          <div class="pc2" style="color:var(--heal)">bezpieczne · drop bez zmian</div>
+        </button>
+
+        <button class="pick">
+          <div class="ph">Ołtarz Przędzy</div>
+          <div class="pd">Cała drużyna leczy się do pełna. Przędąca Matka dostaje 25% więcej HP.</div>
+          <div class="pc2" style="color:var(--brass)">pełne HP · trudniejszy boss</div>
+        </button>
+
+        <button class="pick" style="border-color:rgba(217,130,43,.5)">
+          <div class="ph" style="color:var(--r-legendary)">Kokon Skarbów</div>
+          <div class="pd">Gwarantowany przedmiot Heroic i podwójny łup do końca wyprawy. Strzeże go elita, która bije w najsłabszego.</div>
+          <div class="pc2" style="color:var(--r-legendary)">łup ×2 · walka z elitą przy 42% HP</div>
+        </button>
+
+        <button class="pick">
+          <div class="ph">Szczelina</div>
+          <div class="pd">Przeskakujesz dwie fale i idziesz prosto do ostatniego ogniska. Tracisz łup z pominiętych fal.</div>
+          <div class="pc2" style="color:var(--ink-mute)">krócej · mniej łupu · docierasz zdrowszy</div>
+        </button>
+
+        <div class="warn"><b>Cztery drogi, żadna bezpłatna.</b> Ołtarz ratuje Ci HP, ale rośnie boss. Kokon podwaja łup, ale możesz na nim zginąć. Szczelina daje przeżycie za cenę zysku. To jest ta aktywna gra, której reszcie gry brakuje.</div>
+      </section>
+
+      <!-- ---------- WYPRAWY DRUŻYNOWE ---------- -->
+      <section class="screen" id="dgn_party">
+        <div class="scr-head"><button class="back" data-go="dungeony">‹ Wyprawy</button>Drużynowe</div>
+
+        <div class="segs">
+          <button aria-selected="false" data-go="dungeony">Solo</button>
+          <button aria-selected="true">Drużynowe</button>
+        </div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="t1" style="margin-bottom:5px">Pięciu graczy zamiast pięciu jednostek</div>
+          <div class="t2">W wyprawie drużynowej nie bierzesz sojuszników ani peta. Pięć pól zajmuje pięciu graczy — po jednej głównej postaci każdy.</div>
+        </div>
+
+        <div class="card row" style="border-color:var(--brass)">
+          <div class="icon-sq icon-lg">🔱</div>
+          <div class="grow"><div class="t1">Zatopiony Arsenał</div><div class="t2 num">Poziom 40–59 · 3/5 w kolejce</div></div>
+          <button class="btn solid">Zapisz się</button>
+        </div>
+
+        <div class="card">
+          <div class="sec-label" style="margin-top:0">Skład kolejki</div>
+          <div class="stat" style="border-top:0"><span class="k">Halgar — Atak 58, bez tarczy</span><span class="v">DPS</span></div>
+          <div class="stat"><span class="k">Bergen — Obrona 61, tarcza</span><span class="v">Tank</span></div>
+          <div class="stat"><span class="k">Zorza — Magia 55, Runa Życia</span><span class="v" style="color:var(--heal)">Heal</span></div>
+          <div class="stat"><span class="k" style="color:var(--ink-mute)">wolne miejsce</span><span class="v" style="color:var(--ink-mute)">—</span></div>
+          <div class="stat"><span class="k" style="color:var(--ink-mute)">wolne miejsce</span><span class="v" style="color:var(--ink-mute)">—</span></div>
+        </div>
+
+        <div class="warn"><b>Bez rozdroży, bez wyborów, bez ryzyka utraty łupu.</b> Stałe fale, jedna symulacja, jednakowa nagroda dla wszystkich. Zapisujesz się i wychodzisz — serwer policzy, gdy zbierze się piątka, i przyśle log z powiadomieniem.</div>
+        <div class="warn"><b>Dlatego role graczy nagle znaczą.</b> Nie możesz przynieść własnej uzdrowicielki, więc potrzebujesz kogoś, kto trenował Magię i ma Runę Życia. Tank to ktoś, kto płacił podatek za tarczę. Ranking world bossa i skład wyprawy mówią tym samym językiem.</div>
+      </section>
+
+      <!-- ---------- WORLD BOSS ---------- -->
+      <section class="screen" id="worldboss">
+        <div class="scr-head"><button class="back" data-go="przygoda">‹ Przygoda</button>World Boss</div>
+
+        <div class="sec-label">Codzienny · dla wszystkich, bez progów</div>
+
+        <div class="segs">
+          <button aria-selected="false">do 36</button>
+          <button aria-selected="true">do 64</button>
+          <button aria-selected="false">do 100</button>
+        </div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row" style="margin-bottom:9px">
+            <div class="icon-sq icon-lg">🔥</div>
+            <div class="grow"><div class="t1">Pożeracz Zmierzchu</div><div class="t2 num">przedział do 64 · 16:00–22:00 · zostało 5h 12min</div></div>
+            <button class="btn solid">Atakuj</button>
+          </div>
+          <div class="stat" style="border-top:0"><span class="k">Twoje obrażenia</span><span class="v">412 mln</span></div>
+          <div class="stat"><span class="k">Próg</span><span class="v" style="color:var(--brass)">3 z 6</span></div>
+          <div class="bar" style="margin-top:7px"><i style="width:52%"></i></div>
+        </div>
+
+        <div class="warn"><b>Bije każdy, kto się mieści w przedziale.</b> Bez progu Mocy, bez pokoju, bez umawiania się. Boss nigdy nie ginie, więc wejdziesz o 16:05 albo o 21:40 i zawsze stoi.</div>
+        <div class="warn"><b>Osobny boss na przedział.</b> Gracz zaparkowany na 36 nie konkuruje z tym z 64. Ten sam podział co kategorie PvP — jedno miejsce parkowania obsługuje wszystko naraz.</div>
+
+        <div class="sec-label">Kolos · 10 osób, za progiem Mocy</div>
+
+        <button class="card row" data-go="pokoj" style="border-color:var(--brass)">
+          <div class="icon-sq icon-lg" style="border-color:var(--r-mystic)">👹</div>
+          <div class="grow"><div class="t1" style="color:var(--r-mystic)">Kolos Pierwszy</div><div class="t2 num">10 osób · 2 tanki, 2 healerzy · Moc 4 000 ✓</div></div>
+          <span class="chev">›</span>
+        </button>
+
+        <div class="card" style="opacity:.55">
+          <div class="row">
+            <div class="icon-sq icon-lg">🗿</div>
+            <div class="grow"><div class="t1">Kolos Drugi</div><div class="t2 num">Moc 9 500 · brakuje Ci 4 360</div></div>
+            <span class="badge" style="border-color:var(--blood);color:#D9736B">ZAMKNIĘTY</span>
+          </div>
+          <div class="bar" style="margin-top:7px"><i style="width:54%"></i></div>
+        </div>
+
+        <div class="sec-label">Tytan · 25 osób, tylko weekend</div>
+
+        <button class="card row" data-go="tytan" style="border-color:rgba(196,69,62,.5)">
+          <div class="icon-sq icon-lg" style="border-color:var(--r-mystic)">🐂</div>
+          <div class="grow"><div class="t1" style="color:var(--r-mystic)">Pradawny Wół</div><div class="t2 num">25 osób · min. 3 tanki, 5 healerów · sob–niedz</div></div>
+          <span class="chev">›</span>
+        </button>
+
+        <div class="sec-label">Co leci z Kolosa</div>
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq" style="border-color:var(--r-mystic)">🪖</div>
+            <div class="grow"><div class="t1" style="color:var(--r-mystic)">Przedmioty Mystic</div><div class="t2">Przedostatnia warstwa sprzętu</div></div>
+          </div>
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq" style="border-color:var(--r-god)">👑</div>
+            <div class="grow"><div class="t1" style="color:var(--r-god)">Przedmioty God</div><div class="t2">Nie lecą nigdzie indziej</div></div>
+          </div>
+          <div class="row">
+            <div class="icon-sq" style="border-color:var(--r-legendary)">🎲</div>
+            <div class="grow"><div class="t1" style="color:var(--r-legendary)">Rolle na sojuszników i pety</div><div class="t2">Warstwa Mystic — jedyne źródło</div></div>
+          </div>
+        </div>
+
+        <div class="warn"><b>Rolle są tu ważniejsze niż itemy.</b> Sojusznik od Legendary w górę ma własne drzewko umiejętności. Roll z Kolosa nie daje Ci większej liczby — daje cały nowy system do rozwijania. I dopiero on pozwala domknąć synergię frakcyjną na wszystkich czterech slotach.</div>
+        <div class="warn"><b>To jest gacha, ale zdrowa.</b> Rolla nie da się kupić i nie leci znikąd indziej. Jedyną walutą jest cotygodniowy Kolos, na którego trzeba mieć Moc. Płacisz sprzętem i czasem, nie kartą — i dlatego ranking nadal coś znaczy.</div>
+
+        <div class="sec-label">Ranking DPS · przedział do 64</div>
+        <div class="card row"><span class="num" style="width:26px;color:var(--ink-mute)">1.</span><div class="grow"><div class="t1">Nienawiść</div></div><span class="num t2">2,41 mld</span></div>
+        <div class="card row"><span class="num" style="width:26px;color:var(--ink-mute)">2.</span><div class="grow"><div class="t1">Bergen</div></div><span class="num t2">2,18 mld</span></div>
+        <div class="card row" style="border-color:var(--brass)"><span class="num" style="width:26px;color:var(--brass)">87.</span><div class="grow"><div class="t1">Ty</div></div><span class="num t2" style="color:var(--brass)">412 mln</span></div>
+
+        <div class="warn"><b>Dwa różne wydarzenia, dwa różne progi wejścia.</b> Codzienny boss nie pyta o nic — wchodzisz i bijesz. Kolos pyta o Moc, o skład i o to, czy ktoś Cię wpuści do pokoju. Jedno jest dla wszystkich, drugie dla tych, którzy zrobili robotę.</div>
+        <div class="warn cut"><b>Pasek do Kolosa Drugiego robi robotę.</b> „Brakuje 4 360 Mocy” to konkretny cel dla całego ulepszania. Bez tego +14 na broni jest tylko większą liczbą.</div>
+      </section>
+
+      <!-- ---------- TYTAN 25 · KOLEJKA ---------- -->
+      <section class="screen" id="tytan">
+        <div class="scr-head"><button class="back" data-go="worldboss">‹ World Boss</button>Pradawny Wół <span>25 OSÓB · WEEKEND</span></div>
+
+        <div class="sec-label">Twoja rola w kolejce</div>
+        <div class="queue-role">
+          <button aria-pressed="false">Tank</button>
+          <button aria-pressed="false">Heal</button>
+          <button aria-pressed="true">DPS</button>
+        </div>
+        <div class="card">
+          <div class="t2">Rola wynika z Twojego sprzętu. <b style="color:var(--ink-dim)">Atak 58, broń dwuręczna, brak tarczy</b> — możesz stanąć tylko jako DPS. Chcesz tankować? Załóż tarczę i podnieś Obronę.</div>
+        </div>
+
+        <div class="sec-label">Wymagany skład</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Tanki</span><span class="v">min. 3</span></div>
+          <div class="stat"><span class="k">Healerzy</span><span class="v">min. 5</span></div>
+          <div class="stat"><span class="k">DPS</span><span class="v">reszta, do 25</span></div>
+        </div>
+
+        <div class="sec-label">Kolejka teraz</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Tanki</span><span class="v" style="color:var(--blood)">1 z 3</span></div>
+          <div class="stat"><span class="k">Healerzy</span><span class="v" style="color:var(--brass)">4 z 5</span></div>
+          <div class="stat"><span class="k">DPS</span><span class="v" style="color:var(--heal)">31 czeka</span></div>
+          <div class="stat"><span class="k">Szacowany czas</span><span class="v">~9 min</span></div>
+        </div>
+
+        <div class="found" style="margin-top:12px">
+          <div class="t1" style="color:var(--brass);margin-bottom:6px">Znaleziono drużynę</div>
+          <div class="stat" style="border-top:0"><span class="k">Skład</span><span class="v">3 tanki · 5 heal · 17 dps</span></div>
+          <div class="stat"><span class="k">Łączna Moc</span><span class="v">142 800</span></div>
+          <div class="stat"><span class="k">Sugerowana</span><span class="v" style="color:var(--heal)">120 000 ✓</span></div>
+          <div class="stat"><span class="k">Zaakceptowało</span><span class="v">21 z 25 · zostało 0:24</span></div>
+          <div class="actions" style="margin-top:11px">
+            <button class="btn solid">＋ Akceptuj</button>
+            <button class="btn ghost">− Odrzuć</button>
+          </div>
+        </div>
+
+        <div class="warn"><b>Kolejka zamiast szukania ludzi po czacie.</b> Wybierasz rolę, czekasz, dostajesz skład do zatwierdzenia jednym kliknięciem. Po komplecie akceptacji walka rusza sama — nikt nie siedzi przy telefonie.</div>
+        <div class="warn"><b>Minimalny skład to nie biurokracja, tylko treść.</b> „1 tank z 3” mówi graczowi, czego brakuje serwerowi. Kto założy tarczę, wchodzi od ręki zamiast czekać dziewięć minut w kolejce DPS-ów. Wymagania składu same regulują, kim ludzie chcą być.</div>
+
+        <div class="sec-label">Jak automat radzi sobie z agro i leczeniem</div>
+        <div class="card">
+          <div class="t1" style="margin-bottom:7px;color:var(--brass)">Nie potrzeba sztucznej inteligencji. Potrzeba dwóch liczb.</div>
+          <div class="stat" style="border-top:0"><span class="k">Agro</span><span class="v">Prowokacja</span></div>
+          <div class="t2" style="margin:4px 0 10px">Każdy cios bossa leci w jednostkę wybraną z wagą Prowokacji. Tarcza, pancerz i skille Obrony ją podnoszą — więc tank ściąga ciosy dlatego, że go zbudowałeś, a nie dlatego, że coś kliknął.</div>
+          <div class="stat"><span class="k">Leczenie</span><span class="v">próg + kolejność</span></div>
+          <div class="t2" style="margin-top:4px">Healer leczy najniższego poniżej ustawionego progu, według swojej rotacji. Każde kolejne leczenie w walce działa o 10% słabiej — to samo, co w walce solo.</div>
+        </div>
+
+        <div class="warn"><b>W automatycznej walce umiejętnością gracza nie jest reagowanie, tylko przygotowanie.</b> Nie klikasz prowokacji — masz ją albo nie. Nie łapiesz momentu na heal — ustawiłeś próg i wygotowałeś mikstury. Rajd przegrywa nie dlatego, że ktoś zaspał, tylko dlatego, że skład był źle zbudowany.</div>
+        <div class="warn cut"><b>Skutek uboczny, który trzeba znać:</b> skoro nikt nie klika, to rajd wygrywa się w tygodniu poprzedzającym, nie w sobotę. Sobota jest wynikiem, nie rozgrywką. To jest spójne z resztą gry, ale warto to powiedzieć wprost, zanim ktoś oczekuje emocji z klikania.</div>
+      </section>
+
+      <!-- ---------- POKÓJ KOLOSA ---------- -->
+      <section class="screen" id="pokoj">
+        <div class="scr-head"><button class="back" data-go="worldboss">‹ World Boss</button>Kolos Pierwszy <span>POKÓJ BERGENA</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row"><div class="grow"><div class="t1">Wymagana Moc</div><div class="t2">Każdy uczestnik osobno · sprawdzane przy wejściu</div></div><span class="num" style="font-size:16px">4 000</span></div>
+        </div>
+
+        <div class="sec-label">Skład · 7 z 10 · wymagane 2 tanki, 2 heal</div>
+
+        <div class="card" style="padding:6px 12px">
+          <div class="rost"><span class="rl t">TANK</span><span class="nm3">Bergen</span><span class="bar"><i style="width:100%"></i></span><span class="pv">6 200</span></div>
+          <div class="rost"><span class="rl t">TANK</span><span class="nm3">Halvard</span><span class="bar"><i style="width:88%"></i></span><span class="pv">5 460</span></div>
+          <div class="rost"><span class="rl h">HEAL</span><span class="nm3">Zorza</span><span class="bar"><i style="width:94%"></i></span><span class="pv">5 800</span></div>
+          <div class="rost"><span class="rl h">HEAL</span><span class="nm3">Iwa</span><span class="bar"><i style="width:76%"></i></span><span class="pv">4 720</span></div>
+          <div class="rost me2"><span class="rl d">DPS</span><span class="nm3">Halgar — Ty</span><span class="bar"><i style="width:83%"></i></span><span class="pv">5 140</span></div>
+          <div class="rost"><span class="rl d">DPS</span><span class="nm3">Kruk</span><span class="bar"><i style="width:97%"></i></span><span class="pv">6 010</span></div>
+          <div class="rost"><span class="rl d">DPS</span><span class="nm3">Sowa</span><span class="bar"><i style="width:71%"></i></span><span class="pv">4 380</span></div>
+          <div class="rost" style="opacity:.35"><span class="rl">—</span><span class="nm3">wolne</span><span class="bar"><i style="width:0"></i></span><span class="pv">—</span></div>
+          <div class="rost" style="opacity:.35"><span class="rl">—</span><span class="nm3">wolne</span><span class="bar"><i style="width:0"></i></span><span class="pv">—</span></div>
+          <div class="rost" style="opacity:.35"><span class="rl">—</span><span class="nm3">wolne</span><span class="bar"><i style="width:0"></i></span><span class="pv">—</span></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="stat" style="border-top:0"><span class="k">Łączna Moc</span><span class="v">37 710</span></div>
+          <div class="stat"><span class="k">Sugerowana na Kolosa I</span><span class="v" style="color:var(--brass)">48 000</span></div>
+          <div class="stat"><span class="k">Tanki</span><span class="v" style="color:var(--heal)">2 z 2 ✓</span></div>
+          <div class="stat"><span class="k">Healerzy</span><span class="v" style="color:var(--heal)">2 z 2 ✓</span></div>
+        </div>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn ghost">Odpal — decyduje Bergen</button>
+          <button class="btn">Opuść pokój</button>
+        </div>
+
+        <div class="warn"><b>Założyciel patrzy i decyduje.</b> Widzi Moc każdego i jego rolę. Siedmiu ludzi z 37 710 Mocy przy sugerowanych 48 000 to jego decyzja — poczekać na trzech więcej czy spróbować teraz.</div>
+        <div class="warn"><b>Pokój dla Kolosa, kolejka dla Tytana.</b> Dziesięć osób da się zebrać ręcznie i warto, bo skład ma znaczenie. Dwudziestu pięciu nie da się — dlatego Tytan ma automatyczną kolejkę z wymogami ról.</div>
+        <div class="warn cut"><b>Tu Twój build ma publiczność.</b> „Obrona 61, tarcza” to jedyne miejsce w grze, gdzie ktoś patrzy na Twoją postać i ocenia ją. Podatek za tarczę, Runa Życia z RuneCraftingu, komplet sprzętu na Moc — wszystko to nagle jest widoczne dla innych ludzi.</div>
+      </section>
+
+      <!-- ---------- SKILLE (lista) ---------- -->
+      <section class="screen" id="skille">
+        <div class="scr-head"><button class="back" data-go="przygoda">‹ Przygoda</button>Skille <span>ŁĄCZNIE 328</span></div>
+
+        <div class="sec-label">Bojowe · poziom skilla = poziom sprzętu, który założysz</div>
+
+        <div class="card row"><div class="icon-sq">⚔</div><div class="grow"><div class="t1">Atak <span class="num" style="color:var(--brass)">58</span></div><div class="t2">Bronie mele · zakładasz do poziomu 58</div></div><span class="badge here">ROŚNIE</span></div>
+        <div class="card row"><div class="icon-sq">🏹</div><div class="grow"><div class="t1">Atak dystansowy <span class="num" style="color:var(--ink-mute)">12</span></div><div class="t2">Łuki, kusze, pistolety · do poziomu 12</div></div></div>
+        <div class="card row"><div class="icon-sq">✨</div><div class="grow"><div class="t1">Magia <span class="num" style="color:var(--brass)">34</span></div><div class="t2">Różdżki, orby, zwoje, przyzwania</div></div></div>
+        <div class="card row"><div class="icon-sq">🛡</div><div class="grow"><div class="t1">Obrona <span class="num" style="color:var(--brass)">41</span></div><div class="t2">Pancerz, hełm, buty · do poziomu 41</div></div><span class="badge here">ROŚNIE</span></div>
+        <div class="card row" style="border-color:rgba(176,58,50,.35)"><div class="icon-sq">❤</div><div class="grow"><div class="t1">Zdrowie <span class="num" style="color:var(--brass)">49</span></div><div class="t2">Rośnie zawsze · nie odblokowuje sprzętu</div></div><span class="badge here">ROŚNIE</span></div>
+
+        <div class="sec-label">Jak dzieli się exp z walki</div>
+        <div class="card">
+          <div class="t1" style="margin-bottom:9px;color:var(--brass)">Jedna zasada: liczy się druga ręka.</div>
+          <div class="stat" style="border-top:0"><span class="k">Dwuręczna</span><span class="v">100% Atak</span></div>
+          <div class="stat"><span class="k">Dwie bronie</span><span class="v">100% Atak</span></div>
+          <div class="stat"><span class="k">Broń + tarcza</span><span class="v">50% Atak · 50% Obrona</span></div>
+          <div class="stat"><span class="k">Wielka różdżka (2 sloty)</span><span class="v">100% Magia</span></div>
+          <div class="stat"><span class="k">Różdżka + orb</span><span class="v">100% Magia</span></div>
+          <div class="stat"><span class="k">Różdżka + tarcza</span><span class="v">50% Magia · 50% Obrona</span></div>
+          <div class="stat"><span class="k">Łuk, kusza</span><span class="v">100% Dystansowy</span></div>
+        </div>
+
+        <div class="warn"><b>Tarcza w drugiej ręce zawsze zabiera połowę expa na Obronę.</b> Cokolwiek trzymasz w prawej. Dzięki temu „tank” nie jest klasą, tylko decyzją o drugiej ręce — mag z tarczą też jest tankiem.</div>
+
+        <div class="sec-label">Dwa progi na każdym przedmiocie</div>
+        <div class="card">
+          <div class="row" style="margin-bottom:9px">
+            <div class="icon-sq">🔢</div>
+            <div class="grow"><div class="t1">Poziom postaci</div><div class="t2">Pilnuje uczciwości przedziałów. Bez niego postać z konta wysłałaby swojemu alto­wi na 25 sprzęt ze setki i rozwaliła kategorię „max 25”.</div></div>
+          </div>
+          <div class="row">
+            <div class="icon-sq">⚔</div>
+            <div class="grow"><div class="t1">Poziom skilla</div><div class="t2">Pilnuje buildu. Poziom postaci dostajesz z kampanii — nie może kupować specjalizacji, której nie wytrenowałeś.</div></div>
+          </div>
+        </div>
+
+        <div class="warn"><b>Oba progi działają w obie strony i to jest sens.</b> Postać na 100 bez treningu Magii nie założy różdżki na 40. Postać z Atakiem 58 na poziomie 20 nie założy miecza na 36. Poziom nie kupuje buildu, a build nie kupuje przedziału.</div>
+
+        <div class="sec-label">Który skill bramkuje co</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Miecz, topór, młot</span><span class="v">Atak</span></div>
+          <div class="stat"><span class="k">Łuk, kusza, pistolet</span><span class="v">Atak dystansowy</span></div>
+          <div class="stat"><span class="k">Różdżka, orb, zwój</span><span class="v">Magia</span></div>
+          <div class="stat"><span class="k">Pancerz, hełm, tarcza</span><span class="v">Obrona</span></div>
+          <div class="stat"><span class="k">Pierścień Wojownika</span><span class="v">Atak</span></div>
+          <div class="stat"><span class="k">Pierścień Maga</span><span class="v">Magia</span></div>
+          <div class="stat"><span class="k">Pierścień Łowcy</span><span class="v">Atak dystansowy</span></div>
+          <div class="stat"><span class="k">Amulet Opoki</span><span class="v">Obrona</span></div>
+          <div class="stat"><span class="k">Amulet Wytrwałości</span><span class="v">Zdrowie</span></div>
+        </div>
+
+        <div class="warn"><b>Jedna reguła zamiast wyjątku.</b> Przedmiot wymaga tego skilla, który reprezentuje. Biżuteria nie jest już specjalnym przypadkiem — pierścień maga wymaga Magii, pierścień wojownika Ataku. Siłacz nigdy nie musi tknąć różdżki.</div>
+        <div class="warn"><b>Typ biżuterii decyduje o puli afiksów.</b> Masz już zasadę „pule afiksów zależą od slotu”. Tu jest to samo, tylko o stopień drobniej: Pierścień Maga losuje z magicznej puli i dlatego wymaga Magii. Bramka nie jest doklejona — wynika z tego, czym przedmiot jest.</div>
+        <div class="warn"><b>Zdrowie przestaje być ślepym zaułkiem.</b> Wcześniej nie otwierało niczego. Amulety oparte o HP i regenerację dają mu wreszcie sprzęt, na który można czekać.</div>
+
+        <div class="warn"><b>To zastępuje klasy.</b> Nie wybierasz kim jesteś — stajesz się tym, czego używasz. Weź różdżkę, rośnie Magia i sięgniesz po lepszą różdżkę. Twój build to Twój ekwipunek, a Twój ekwipunek to Twoje skille.</div>
+        <div class="warn"><b>Tarcza to podatek, nie bonus.</b> Nosisz ją i Atak rośnie o połowę wolniej, ale otwierasz sobie pancerz. Zdejmujesz ją i bijesz dwa razy szybciej w Atak, ale zostajesz w słabej zbroi. To jest ta sama decyzja co „mocniejszy towarzysz czy synergia” — codzienna i bez dobrej odpowiedzi.</div>
+
+        <div class="sec-label">Zbierackie</div>
+
+        <button class="card" style="border-color:var(--skill)" data-go="sk_mining">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg" style="border-color:var(--skill)">⛏</div>
+            <div class="grow"><div class="t1">Mining — żelazo</div><div class="t2 num">lvl 42 · 68% · 214 rud w torbie</div></div>
+            <span class="badge here">AKTYWNE</span>
+          </div>
+          <div class="bar xp"><i style="width:68%"></i></div>
+        </button>
+
+        <button class="card row" data-go="sk_mining"><div class="icon-sq">🔨</div><div class="grow"><div class="t1">Smithing</div><div class="t2 num">lvl 31 · przepalasz rudę, kujesz ekwipunek</div></div><span class="chev">›</span></button>
+        <button class="card row" data-go="sk_mining"><div class="icon-sq">🎣</div><div class="grow"><div class="t1">Fishing</div><div class="t2 num">lvl 22 · ryby dla Cookingu</div></div><span class="chev">›</span></button>
+        <button class="card row" data-go="sk_mining"><div class="icon-sq">🍲</div><div class="grow"><div class="t1">Cooking</div><div class="t2 num">lvl 27 · buffy przed walką + jedzenie na exp peta</div></div><span class="chev">›</span></button>
+        <button class="card row" data-go="sk_mining"><div class="icon-sq">⚗</div><div class="grow"><div class="t1">Alchemy</div><div class="t2 num">lvl 19 · mikstury lecznicze</div></div><span class="chev">›</span></button>
+        <button class="card row" data-go="sk_runy"><div class="icon-sq">🔮</div><div class="grow"><div class="t1">RuneCrafting</div><div class="t2 num">lvl 8 · runy potrzebne do Magii</div></div><span class="chev">›</span></button>
+        <button class="card row" data-go="sk_mining"><div class="icon-sq">🌾</div><div class="grow"><div class="t1">Farming</div><div class="t2 num">lvl 15 · rośliny i zwierzęta na jedzenie</div></div><span class="chev">›</span></button>
+
+        <div class="sec-label">Cooking a Alchemy — dwie różne rzeczy</div>
+        <div class="card">
+          <div class="row" style="margin-bottom:9px">
+            <div class="icon-sq">🍲</div>
+            <div class="grow"><div class="t1">Cooking — buffy przed walką</div><div class="t2">Jedno danie dla Ciebie, dla każdego sojusznika i dla peta. Osobno gotujesz jedzenie dające <b style="color:var(--ink-dim)">exp petowi</b>.</div></div>
+          </div>
+          <div class="row">
+            <div class="icon-sq">⚗</div>
+            <div class="grow"><div class="t1">Alchemy — mikstury w walce</div><div class="t2">To one leczą w trakcie. Każda kolejna w tej samej walce działa o 10% słabiej.</div></div>
+          </div>
+        </div>
+
+        <div class="warn"><b>Każdy skill karmi walkę.</b> Mining i Smithing dają sprzęt i kryształy. Farming i Fishing dają surowiec, Cooking robi z niego buffy i karmę dla peta, Alchemy mikstury. RuneCrafting daje runy, bez których nie rzucisz zaklęcia.</div>
+        <div class="warn"><b>Buffy przed walką to jedyna decyzja przed startem.</b> Pięć dań na pięć jednostek, każde inne. Reszta walki jest automatyczna — więc to jest moment, w którym przygotowanie zamienia się w wynik.</div>
+      </section>
+
+      <!-- ---------- PRZYWOŁANIE ---------- -->
+      <section class="screen" id="summon">
+        <div class="scr-head"><button class="back" data-go="przygoda">‹ Przygoda</button>Przywołanie</div>
+
+        <div class="sec-label">Klucze · drop z wypraw</div>
+        <div class="res">
+          <div><div class="q">7</div><div class="l">Zwykły</div></div>
+          <div><div class="q" style="color:var(--r-heroic)">3</div><div class="l">Zdobny</div></div>
+          <div><div class="q" style="color:var(--r-legendary)">1</div><div class="l">Pradawny</div></div>
+          <div><div class="q" style="color:var(--ink-mute)">0</div><div class="l">Boski</div></div>
+        </div>
+
+        <div class="sec-label">Przywołaj</div>
+
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">👥</div>
+            <div class="grow"><div class="t1">Sojusznik</div><div class="t2">Klucz zwykły · Common – Unique</div></div>
+            <button class="btn solid">Przywołaj</button>
+          </div>
+          <div class="t2">Zdobny klucz daje Heroic. Pradawny — Legendary z własnym drzewkiem.</div>
+        </div>
+
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">🐺</div>
+            <div class="grow"><div class="t1">Pet</div><div class="t2">Klucz zwykły · Common – Unique</div></div>
+            <button class="btn solid">Przywołaj</button>
+          </div>
+          <div class="t2">Duplikat podnosi gwiazdkę posiadanego peta zamiast marnować klucz.</div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg">🧰</div>
+            <div class="grow"><div class="t1">Skrzynia</div><div class="t2">Sprzęt, kryształy, składniki, kamienie umiejętności</div></div>
+            <button class="btn">Otwórz</button>
+          </div>
+        </div>
+
+        <div class="warn"><b>To jest źródło sojuszników i petów.</b> Zaczynasz sam, pierwszego sojusznika przywołujesz kluczem z wyprawy. Wysokie tiery lecą tylko z rzadkich kluczy — a te tylko z Kolosów i Tytanów.</div>
+        <div class="warn"><b>Klucz jest walutą, której nie da się kupić.</b> Leci wyłącznie z wypraw i rajdów. Dlatego przywołanie jest gachą, ale płacisz w niej czasem i sprzętem, nie kartą.</div>
+        <div class="warn"><b>Jeden ekran zamiast trzech systemów.</b> Sojusznicy, pety i skrzynie chodzą przez tę samą kieszeń kluczy. Gracz uczy się raz.</div>
+      </section>
+
+      <!-- ---------- WYBÓR KLASY ---------- -->
+      <section class="screen" id="klasa">
+        <div class="scr-head"><button class="back" data-go="druzyna">‹ Drużyna</button>Nowa postać <span>SLOT 4 Z 4</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="t1" style="margin-bottom:5px">Klasa niczego nie zamyka</div>
+          <div class="t2">Daje szybszy exp w swoim skillu i punkt startowy na drzewku. Możesz bić czym chcesz i nosić co chcesz — po prostu w swojej specjalności rośniesz dwa razy szybciej.</div>
+        </div>
+
+        <button class="card" style="border-color:var(--brass)">
+          <div class="row">
+            <div class="icon-sq icon-lg" style="border-color:var(--brass)">🗡</div>
+            <div class="grow"><div class="t1">Wojownik</div><div class="t2">Broń mele, dwuręczna albo dwie naraz</div></div>
+            <span class="badge here">WYBRANE</span>
+          </div>
+          <div class="stat" style="margin-top:8px"><span class="k">Exp</span><span class="v" style="color:var(--brass)">+50% do Ataku</span></div>
+          <div class="stat"><span class="k">Start na drzewku</span><span class="v">gałąź Siły</span></div>
+          <div class="stat"><span class="k">Wyprawka</span><span class="v">topór dwuręczny</span></div>
+        </button>
+
+        <button class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg">🏹</div>
+            <div class="grow"><div class="t1">Łucznik</div><div class="t2">Łuki, kusze, pistolety</div></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="stat" style="margin-top:8px"><span class="k">Exp</span><span class="v">+50% do Ataku dystansowego</span></div>
+          <div class="stat"><span class="k">Start na drzewku</span><span class="v">gałąź Zręczności</span></div>
+        </button>
+
+        <button class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg">✨</div>
+            <div class="grow"><div class="t1">Mag</div><div class="t2">Różdżki, orby, zwoje, runy</div></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="stat" style="margin-top:8px"><span class="k">Exp</span><span class="v">+50% do Magii</span></div>
+          <div class="stat"><span class="k">Start na drzewku</span><span class="v">gałąź Intelektu</span></div>
+        </button>
+
+        <button class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg">🛡</div>
+            <div class="grow"><div class="t1">Obrońca</div><div class="t2">Tarcza i ciężka zbroja</div></div>
+            <span class="chev">›</span>
+          </div>
+          <div class="stat" style="margin-top:8px"><span class="k">Exp</span><span class="v">+50% do Obrony i Zdrowia</span></div>
+          <div class="stat"><span class="k">Start na drzewku</span><span class="v">gałąź Wytrzymałości</span></div>
+        </button>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn solid" style="flex:2">Twórz Wojownika</button>
+        </div>
+
+        <div class="warn"><b>Bonus, nigdy kara.</b> Wojownik nie bije gorzej różdżką — po prostu wolniej podnosi Magię. Podatek za tarczę już dzieli exp na pół; drugi system kar zablokowałby wszystkie buildy mieszane.</div>
+        <div class="warn"><b>Klasa to punkt startu na drzewku, nie klatka.</b> Tak jak w PoE: zaczynasz w gałęzi Siły, ale możesz dojść wszędzie. Identyfikacja bez zamykania drogi.</div>
+        <div class="warn"><b>Klasę da się zmienić za walutę specjalną.</b> Przy czterech postaciach i parkowaniu na kotwicach zła decyzja w pierwszej godzinie nie może kosztować tygodni. Drogo, ale nie na zawsze.</div>
+        <div class="warn cut"><b>Klasa boostuje exp skilli, nie postaci.</b> Blokada expa zamraża poziom postaci — skille rosną dalej. Dlatego bonus klasowy działa nawet wtedy, gdy postać stoi zaparkowana na kotwicy przez trzy miesiące.</div>
+      </section>
+
+      <!-- ---------- DRZEWKO ---------- -->
+      <section class="screen" id="drzewko">
+        <div class="scr-head"><button class="back" data-go="druzyna">‹ Drużyna</button>Drzewko <span>47 / 200 PKT</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row"><div class="grow"><div class="t1">Punkty do wydania</div><div class="t2">1 co poziom · dodatkowe za pokonane etapy kampanii</div></div><div style="font-family:var(--mono);font-size:22px;color:var(--brass)">4</div></div>
+        </div>
+
+        <div class="sec-label">Gałąź siły · fragment</div>
+        <div class="tree-wrap">
+          <svg viewBox="0 0 340 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fragment drzewka pasywnego">
+            <line class="tn-line on" x1="170" y1="268" x2="132" y2="236"/>
+            <line class="tn-line on" x1="132" y1="236" x2="98"  y2="202"/>
+            <line class="tn-line on" x1="98"  y1="202" x2="64"  y2="168"/>
+            <line class="tn-line"    x1="64"  y1="168" x2="48"  y2="122"/>
+            <line class="tn-line"    x1="98"  y1="202" x2="112" y2="150"/>
+            <line class="tn-line"    x1="112" y1="150" x2="150" y2="112"/>
+            <line class="tn-line"    x1="170" y1="268" x2="170" y2="228"/>
+            <line class="tn-line"    x1="170" y1="228" x2="170" y2="186"/>
+            <line class="tn-line"    x1="170" y1="186" x2="170" y2="144"/>
+            <line class="tn-line"    x1="170" y1="144" x2="150" y2="112"/>
+            <line class="tn-line"    x1="170" y1="268" x2="208" y2="236"/>
+            <line class="tn-line"    x1="208" y1="236" x2="242" y2="202"/>
+            <line class="tn-line"    x1="242" y1="202" x2="276" y2="168"/>
+            <line class="tn-line"    x1="276" y1="168" x2="292" y2="122"/>
+
+            <circle class="tn on"  cx="170" cy="268" r="10"/>
+            <circle class="tn on"  cx="132" cy="236" r="8"/>
+            <circle class="tn on"  cx="98"  cy="202" r="8"/>
+            <circle class="tn on"  cx="64"  cy="168" r="8"/>
+            <circle class="tn key can" cx="48" cy="122" r="13"/>
+            <circle class="tn can" cx="170" cy="228" r="8"/>
+            <circle class="tn"     cx="112" cy="150" r="8"/>
+            <circle class="tn"     cx="170" cy="186" r="8"/>
+            <circle class="tn"     cx="170" cy="144" r="8"/>
+            <circle class="tn key" cx="150" cy="112" r="13"/>
+            <circle class="tn can" cx="208" cy="236" r="8"/>
+            <circle class="tn"     cx="242" cy="202" r="8"/>
+            <circle class="tn"     cx="276" cy="168" r="8"/>
+            <circle class="tn key" cx="292" cy="122" r="13"/>
+
+            <text class="tn-lab on" x="170" y="291">start</text>
+            <text class="tn-lab" x="48"  y="100">MIAŻDŻENIE</text>
+            <text class="tn-lab" x="150" y="90">ŻELAZNA WOLA</text>
+            <text class="tn-lab" x="292" y="100">POŚPIECH</text>
+          </svg>
+        </div>
+
+        <div class="sec-label">Trzy rodzaje węzłów</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Małe · połączenia</span><span class="v">+4 Siła, +30 HP</span></div>
+          <div class="stat"><span class="k">Duże · procentowe</span><span class="v">+12% obrażeń dwuręczną</span></div>
+          <div class="stat"><span class="k">Duże · umiejętności</span><span class="v" style="color:var(--r-legendary)">nowy skill do rotacji</span></div>
+        </div>
+
+        <div class="sec-label">Wybrany węzeł</div>
+        <div class="card" style="border-color:var(--r-legendary)">
+          <div class="row" style="margin-bottom:7px">
+            <div class="icon-sq icon-lg" style="border-color:var(--r-legendary)">🌀</div>
+            <div class="grow"><div class="t1" style="color:var(--r-legendary)">Wir</div><div class="t2">Umiejętność · koszt 1 punkt · broń mele</div></div>
+          </div>
+          <div class="t2" style="line-height:1.55">Uderzasz wszystkich przeciwników naraz za 60% obrażeń. Kamienie w broni mogą podnieść zasięg i obrażenia tej umiejętności.</div>
+          <button class="btn solid" style="margin-top:10px;width:100%">Weź za 1 punkt</button>
+        </div>
+
+        <div class="sec-label">Umiejętności w drzewku · przykłady</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Wojownik — Wir</span><span class="v">AoE, 60% obrażeń</span></div>
+          <div class="stat"><span class="k">Mag — Kula Ognia</span><span class="v">pojedynczy cel, wysokie</span></div>
+          <div class="stat"><span class="k">Łucznik — Szybka Strzała</span><span class="v">+prędkość na kolejny atak</span></div>
+          <div class="stat"><span class="k">Obrońca — Prowokacja</span><span class="v">ściąga na siebie ciosy</span></div>
+        </div>
+
+        <div class="sec-label">Co masz wzięte</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Siła</span><span class="v">+34</span></div>
+          <div class="stat"><span class="k">Obrażenia bronią dwuręczną</span><span class="v">+18%</span></div>
+          <div class="stat"><span class="k">Zdrowie</span><span class="v">+220</span></div>
+          <div class="stat"><span class="k">Umiejętności</span><span class="v">2 · Rozłupanie, Cios</span></div>
+        </div>
+
+        <div class="warn"><b>Umiejętności lecą z drzewka, nie ze sprzętu.</b> Kamienie w broni je <u>ulepszają</u>, nie dają. Dzięki temu postać zaparkowana na kotwicy nie może mieć więcej umiejętności bazowych niż pozwala jej drzewko — bogaty gracz nie kupi sobie rotacji lepszym sprzętem.</div>
+        <div class="warn"><b>Węzły kluczowe coś zabierają.</b> Miażdżenie daje przebicie pancerza kosztem krytów. Dzięki temu drzewko nie jest listą zakupów, tylko serią decyzji — a dwie postacie na tym samym poziomie mogą grać zupełnie inaczej.</div>
+        <div class="warn"><b>Punkty lecą też z kampanii, nie tylko z poziomów.</b> Dzięki temu gracz zaparkowany na kotwicy dalej rośnie — przez content, a nie przez pasek expa. To ważne, bo blokada expa jest tu główną strategią, a nie wyjątkiem.</div>
+        <div class="warn cut"><b>Na telefonie drzewko PoE wymaga przesuwania i zbliżania.</b> To jest wycinek jednej gałęzi. Pełne drzewo to płótno, po którym się jeździ palcem, plus wyszukiwarka węzłów — inaczej gracz zgubi się w pierwszej minucie.</div>
+      </section>
+
+      <!-- ---------- STATYSTYKI ---------- -->
+      <section class="screen" id="staty">
+        <div class="scr-head"><button class="back" data-go="druzyna">‹ Drużyna</button>Statystyki <span>HALGAR · LVL 47</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row"><div class="grow"><div class="t1">Punkty do rozdania</div><div class="t2">Dostajesz je co poziom</div></div><div style="font-family:var(--mono);font-size:22px;color:var(--brass)">3</div></div>
+        </div>
+
+        <div class="card row">
+          <div class="grow"><div class="t1">Siła</div><div class="t2">Obrażenia · trochę HP · energia</div></div>
+          <span class="num" style="font-size:17px;width:34px;text-align:right">42</span>
+          <button class="btn">+</button>
+        </div>
+        <div class="card row">
+          <div class="grow"><div class="t1">Intelekt</div><div class="t2">Obrażenia magiczne · mana</div></div>
+          <span class="num" style="font-size:17px;width:34px;text-align:right">18</span>
+          <button class="btn">+</button>
+        </div>
+        <div class="card row">
+          <div class="grow"><div class="t1">Zręczność</div><div class="t2">Prędkość ataku · szansa i siła kryta</div></div>
+          <span class="num" style="font-size:17px;width:34px;text-align:right">31</span>
+          <button class="btn">+</button>
+        </div>
+        <div class="card row">
+          <div class="grow"><div class="t1">Wytrzymałość</div><div class="t2">HP · regeneracja · pancerz i odporność</div></div>
+          <span class="num" style="font-size:17px;width:34px;text-align:right">27</span>
+          <button class="btn">+</button>
+        </div>
+
+        <div class="sec-label">Wynikowe · z atrybutów i ekwipunku</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Zdrowie</span><span class="v">2 480</span></div>
+          <div class="stat"><span class="k">Regeneracja</span><span class="v">14 / turę</span></div>
+          <div class="stat"><span class="k">Pancerz</span><span class="v">320</span></div>
+          <div class="stat"><span class="k">Odporność magiczna</span><span class="v">280</span></div>
+          <div class="stat"><span class="k">Prędkość ataku</span><span class="v">142</span></div>
+          <div class="stat"><span class="k">Kryt</span><span class="v">18,5% × 2,1</span></div>
+          <div class="stat"><span class="k">Energia / Mana</span><span class="v">120 / 240</span></div>
+        </div>
+
+        <div class="warn"><b>Cztery atrybuty, cztery różne osie.</b> Siła bije, Intelekt czaruje, Zręczność przyspiesza i kryje, Wytrzymałość utrzymuje przy życiu. Żadna nie jest „lepsza” — decydują o tym, na co się nastawiasz.</div>
+      </section>
+
+      <!-- ---------- SKILL: MINING ---------- -->
+      <section class="screen" id="sk_mining">
+        <div class="scr-head"><button class="back" data-go="skille">‹ Skille</button>Mining <span>POZIOM 42</span></div>
+
+        <div class="card" style="border-color:var(--skill)">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg" style="border-color:var(--skill)">⛏</div>
+            <div class="grow"><div class="t1">Kopiesz: żelazo</div><div class="t2 num">1 284 / 1 890 xp do poziomu 43</div></div>
+            <button class="btn solid">Kop</button>
+          </div>
+          <div class="bar xp"><i style="width:68%"></i></div>
+        </div>
+
+        <div class="sec-label">Co odblokowuje poziom</div>
+
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">Miedź</div><div class="t2 num">poziom 1 · 8 xp za rudę</div></div></div>
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">Cyna</div><div class="t2 num">poziom 15 · 18 xp</div></div></div>
+        <div class="card row" style="border-color:var(--brass)"><span class="tick now">▸</span><div class="grow"><div class="t1">Żelazo</div><div class="t2 num">poziom 30 · 35 xp</div></div><span class="badge here">KOPIESZ</span></div>
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">Węgiel</div><div class="t2 num">poziom 41 · 50 xp</div></div><button class="btn ghost">Przełącz</button></div>
+        <div class="card row"><span class="tick soon">◦</span><div class="grow"><div class="t1">Mithril</div><div class="t2 num">poziom 55 · 72 xp</div></div><span class="badge">ZA 13 LVL</span></div>
+        <div class="card row" style="opacity:.5"><span class="tick">◦</span><div class="grow"><div class="t1">Adamantyt</div><div class="t2 num">poziom 70 · 95 xp</div></div></div>
+        <div class="card row" style="opacity:.35"><span class="tick">◦</span><div class="grow"><div class="t1">Runit</div><div class="t2 num">poziom 85 · 125 xp</div></div></div>
+
+        <div class="sec-label">Po co to jest</div>
+        <div class="card">
+          <div class="t1" style="margin-bottom:6px">Ruda → Smithing → sztaby → <span style="color:var(--brass)">ekwipunek i ulepszanie</span></div>
+          <div class="t2">Plus szansa na <span style="color:var(--r-unique)">dodatkowy kryształ</span> przy każdej rudzie — a kryształy idą prosto w ulepszanie broni. Mining i Smithing domykają się nawzajem i karmią filar „zbierałem materiały, żeby ją ulepszyć”.</div>
+        </div>
+
+        <div class="warn"><b>Drabinka to generator celów.</b> Gracz zawsze widzi, co dostanie za następne kilkanaście poziomów. Działa lepiej niż pasek expa, bo nagroda ma nazwę.</div>
+      </section>
+
+      <!-- ---------- SKILL: RUNECRAFTING ---------- -->
+      <section class="screen" id="sk_runy">
+        <div class="scr-head"><button class="back" data-go="skille">‹ Skille</button>RuneCrafting <span>POZIOM 8</span></div>
+
+        <div class="card">
+          <div class="row" style="margin-bottom:8px">
+            <div class="icon-sq icon-lg">🔮</div>
+            <div class="grow"><div class="t1">Tworzysz: Runa Ognia</div><div class="t2 num">140 / 620 xp do poziomu 9</div></div>
+            <button class="btn solid">Twórz</button>
+          </div>
+          <div class="bar xp"><i style="width:23%"></i></div>
+        </div>
+
+        <div class="sec-label">Przepis</div>
+        <div class="card">
+          <div class="row">
+            <div class="icon-sq">💠</div>
+            <div class="grow"><div class="t1">Essencja</div><div class="t2">Mining od poziomu 5</div></div>
+            <span style="color:var(--ink-mute)">+</span>
+            <div class="icon-sq">🔥</div>
+            <div class="grow"><div class="t1">Ognik</div><div class="t2">drop z dungeonu</div></div>
+          </div>
+          <div class="t1" style="margin-top:9px;color:var(--brass)">= Runa Ognia → paliwo dla Magii</div>
+        </div>
+
+        <div class="sec-label">Co odblokowuje poziom</div>
+        <div class="card row"><span class="tick done">✓</span><div class="grow"><div class="t1">Runa Ognia</div><div class="t2">poziom 1 · zaklęcia obrażeń</div></div></div>
+        <div class="card row"><span class="tick now">▸</span><div class="grow"><div class="t1">Runa Wody</div><div class="t2">poziom 12 · spowolnienia</div></div><span class="badge">ZA 4 LVL</span></div>
+        <div class="card row"><span class="tick soon">◦</span><div class="grow"><div class="t1">Runa Życia</div><div class="t2">poziom 28 · <span style="color:var(--heal)">zaklęcia leczenia</span></div></div></div>
+        <div class="card row" style="opacity:.5"><span class="tick">◦</span><div class="grow"><div class="t1">Runa Dusz</div><div class="t2">poziom 45 · przyzwania</div></div></div>
+        <div class="card row" style="opacity:.35"><span class="tick">◦</span><div class="grow"><div class="t1" style="color:var(--r-legendary)">Runa Krwi</div><div class="t2">poziom 70 · wysysanie życia</div></div></div>
+
+        <div class="warn"><b>To jest najmocniejsze wiązanie w całej grze.</b> Bez run nie rzucisz zaklęcia. Bez Miningu nie masz essencji. Bez dungeonu nie masz ogników. Mag musi kopać, skillować i chodzić w grupie — trzy systemy naraz, żeby zadziałał czwarty.</div>
+        <div class="warn cut"><b>Ale to też ryzyko.</b> Gracz, który chce być magiem, ma przed sobą trzy skille zanim rzuci pierwsze zaklęcie. Jeśli próg wejścia jest za wysoki, nikt nie zostanie magiem. Runa Ognia na poziomie 1 musi być naprawdę łatwa.</div>
+      </section>
+
+      <!-- ---------- WALKA ---------- -->
+      <section class="screen" id="walka">
+        <div class="scr-head"><button class="back" data-go="kampania">‹ Kampania</button>1-3 Kopalnia <span>FALA 3/8</span></div>
+
+        <div class="units">
+          <div class="unit"><div class="png">👺</div><div class="nm">Goblin</div><div class="bar foe"><i style="width:34%"></i></div></div>
+          <div class="unit"><div class="png">👺</div><div class="nm">Goblin</div><div class="bar foe"><i style="width:88%"></i></div></div>
+          <div class="unit"><div class="png">👹</div><div class="nm">Nadzorca</div><div class="bar foe"><i style="width:61%"></i></div></div>
+          <div class="unit"><div class="png">🦇</div><div class="nm">Nietoperz</div><div class="bar foe"><i style="width:12%"></i></div></div>
+          <div class="unit empty"><div class="png"></div><div class="nm">—</div><div class="bar"><i style="width:0"></i></div></div>
+        </div>
+
+        <div class="clash">−340<small>ROZŁUPANIE · TRAFIENIE KRYTYCZNE</small></div>
+
+        <div class="units">
+          <div class="unit me"><div class="png">🗡</div><div class="nm">Ty</div><div class="bar hp"><i style="width:42%"></i></div></div>
+          <div class="unit"><div class="png">🕯</div><div class="nm">Ilva</div><div class="bar hp"><i style="width:66%"></i></div></div>
+          <div class="unit"><div class="png">🛡</div><div class="nm">Torvald</div><div class="bar hp"><i style="width:81%"></i></div></div>
+          <div class="unit"><div class="png">🏹</div><div class="nm">Sela</div><div class="bar hp"><i style="width:94%"></i></div></div>
+          <div class="unit"><div class="png">🐺</div><div class="nm">Wilk</div><div class="bar hp"><i style="width:90%"></i></div></div>
+        </div>
+
+        <div class="log">
+          <div class="crit">Ty → Rozłupanie → 340 KRYT</div>
+          <div class="kill">Goblin pada</div>
+          <div class="hit">Nadzorca → Zatrute Ostrze → −104 (pancerz 320), jad</div>
+          <div class="hit">Ilva → Zapiekany Okoń → +180 (leczenie ×0,9)</div>
+          <div>Sela → Salwa → 112 · Wilk → Szarpnięcie → 88</div>
+        </div>
+
+        <div class="actions">
+          <button class="btn">Rozłupanie</button>
+          <button class="btn">Cios</button>
+          <button class="btn lecz">❤ Lecz</button>
+          <button class="btn ghost">⏭</button>
+        </div>
+
+        <div class="warn"><b>Pięć jednostek: Ty, trzech sojuszników i pet.</b> Pancerz zdejmuje część obrażeń z każdego ciosu — bez pul, bez tarcz do wyczerpania, bez liczenia.</div>
+        <div class="warn"><b>Jeden zegar zamiast dwóch.</b> Leczenie słabnie o 10% z każdym użyciem i to jest cała mechanika wytrzymałości w długiej walce. Prościej i czytelniej.</div>
+      </section>
+
+      <!-- ---------- DRUŻYNA ---------- -->
+      <section class="screen" id="druzyna">
+        <div class="scr-head">Drużyna <span>FRAKCJA: LUDZIE</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row">
+            <div class="icon-sq icon-lg" style="border-color:var(--brass)">🗡</div>
+            <div class="grow"><div class="t1">Halgar — Ty</div><div class="t2 num">Wojownik · lvl 47 · Atak 58 · Obrona 41</div></div>
+            <span class="badge fac match">LUDZIE</span>
+          </div>
+          <div class="actions" style="margin-top:9px">
+            <button class="btn" data-go="drzewko">Drzewko</button>
+            <button class="btn" data-go="staty">Statystyki</button>
+            <button class="btn" data-go="skille">Skille</button>
+          </div>
+        </div>
+
+        <div class="sec-label">Sojusznicy · 3 sloty</div>
+
+        <div class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg" style="border-color:var(--r-legendary)">🕯</div>
+            <div class="grow"><div class="t1" style="color:var(--r-legendary)">Kapłanka Ilva</div><div class="t2 num">Legendary · mnożnik 0,71 · pozycja 2</div></div>
+            <span class="badge fac match">LUDZIE</span>
+          </div>
+          <div class="actions" style="margin-top:9px">
+            <button class="btn">Drzewko</button>
+            <button class="btn ghost">EQ</button>
+            <button class="btn ghost">Rozkaz</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg" style="border-color:var(--r-heroic)">🛡</div>
+            <div class="grow"><div class="t1" style="color:var(--r-heroic)">Torvald</div><div class="t2 num">Heroic · mnożnik 0,54 · pozycja 3</div></div>
+            <span class="badge fac">KRASNOLUDY</span>
+          </div>
+          <div class="actions" style="margin-top:9px">
+            <button class="btn ghost">Bez drzewka</button>
+            <button class="btn">EQ</button>
+            <button class="btn ghost">Rozkaz</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg" style="border-color:var(--r-unique)">🏹</div>
+            <div class="grow"><div class="t1" style="color:var(--r-unique)">Sela</div><div class="t2 num">Unique · mnożnik 0,38 · pozycja 4</div></div>
+            <span class="badge fac match">LUDZIE</span>
+          </div>
+          <div class="actions" style="margin-top:9px">
+            <button class="btn ghost">Bez drzewka</button>
+            <button class="btn">EQ</button>
+            <button class="btn ghost">Rozkaz</button>
+          </div>
+        </div>
+
+        <div class="sec-label">Pet · 1 slot</div>
+        <div class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg" style="border-color:var(--r-unique)">🐺</div>
+            <div class="grow"><div class="t1" style="color:var(--r-unique)">Wilk Cienia</div><div class="t2 num">Unique ★★ · item: Obroża Tropu</div></div>
+            <span class="badge fac">DEMONY</span>
+          </div>
+          <div class="actions" style="margin-top:9px">
+            <button class="btn">Drzewko</button>
+            <button class="btn ghost">Item</button>
+            <button class="btn ghost">Karm</button>
+          </div>
+        </div>
+
+        <div class="warn"><b>Drzewko tylko od Legendary w górę.</b> Reszta ma sam ekwipunek. To jest powód, żeby polować na legendarnego sojusznika — nie wyższa liczba, tylko cały nowy system pod niego.</div>
+        <div class="warn"><b>Synergia frakcyjna — 3 z 4.</b> Torvald i Wilk są spoza frakcji. Mocniejsi, ale kosztują bonus drużynowy. Na każdym slocie ta sama decyzja.</div>
+      </section>
+
+      <!-- ---------- EKWIPUNEK ---------- -->
+      <section class="screen" id="ekwipunek">
+        <div class="scr-head">Ekwipunek <span>68 / 120</span></div>
+
+        <div class="segs">
+          <button aria-selected="true">Plecak</button>
+          <button aria-selected="false" data-go="bank">Bank</button>
+          <button aria-selected="false" data-go="rynek">Rynek</button>
+        </div>
+
+        <div class="power">
+          <span class="lbl">Moc</span>
+          <b>5 140</b><span style="color:var(--ink-mute)">→</span><b>5 402</b>
+          <span class="up">▲ +262</span>
+        </div>
+
+        <div class="cmp">
+          <div>
+            <div class="side">Nowy</div>
+            <div class="iname">Pazur Zimy</div>
+            <div class="itier">Legendary +0 · dwuręczny</div>
+            <div class="stat"><span class="k">Obrażenia broni</span><span class="v">198–255</span><span class="a down">▼</span></div>
+            <div class="stat"><span class="k">Prędkość</span><span class="v">0,9/s</span><span class="a up">▲</span></div>
+            <div class="stat"><span class="k">Siła</span><span class="v">+34</span><span class="a up">▲</span></div>
+            <div class="stat"><span class="k">Wszystkie staty</span><span class="v">+12</span><span class="a flat">▬</span></div>
+            <div class="stat"><span class="k">Kryt</span><span class="v">6,0%</span><span class="a flat">▬</span></div>
+            <div class="stat"><span class="k">Efekt</span><span class="v">Mróz</span><span class="a flat">▬</span></div>
+            <div class="stat"><span class="k">Gniazda</span><span class="v">●●●○</span><span class="a up">▲</span></div>
+          </div>
+          <div>
+            <div class="side">Noszony</div>
+            <div class="iname">Kieł Krwi</div>
+            <div class="itier">Legendary +14 · dwuręczny</div>
+            <div class="stat"><span class="k">Obrażenia broni</span><span class="v">262–331</span><span class="a"></span></div>
+            <div class="stat"><span class="k">Prędkość</span><span class="v">0,8/s</span><span class="a"></span></div>
+            <div class="stat"><span class="k">Siła</span><span class="v">+30</span><span class="a"></span></div>
+            <div class="stat"><span class="k">Wszystkie staty</span><span class="v">+12</span><span class="a"></span></div>
+            <div class="stat"><span class="k">Kryt</span><span class="v">6,0%</span><span class="a"></span></div>
+            <div class="stat"><span class="k">Efekt</span><span class="v">Krwawienie 8%</span><span class="a"></span></div>
+            <div class="stat"><span class="k">Gniazda</span><span class="v">●●○○</span><span class="a"></span></div>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:10px">
+          <button class="btn solid">Załóż</button>
+          <button class="btn" data-go="bron">Karta broni</button>
+          <button class="btn ghost">Przepal</button>
+        </div>
+
+        <div class="sec-label">Skąd się bierze Twoje uderzenie</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Obrażenia broni</span><span class="v">262–331</span></div>
+          <div class="stat"><span class="k">Płaskie z reszty EQ</span><span class="v">+48</span></div>
+          <div class="stat" style="border-top:1px solid var(--edge)"><span class="k" style="color:var(--ink-dim)">Baza</span><span class="v" style="color:var(--ink-dim)">310–379</span></div>
+          <div class="stat"><span class="k">Siła 222 → mnożnik</span><span class="v" style="color:var(--brass)">×3,22</span></div>
+          <div class="stat" style="border-top:1px solid var(--edge)"><span class="k" style="color:var(--ink)">Trafienie</span><span class="v" style="color:var(--brass);font-size:14px">998–1 220</span></div>
+        </div>
+
+        <div class="warn"><b>Broń daje bazę. Atrybuty ją mnożą.</b> Bez broni mnożysz zero. Bez Siły masz gołą bazę. Potrzebujesz obu i żadne nie wypycha drugiego z równania.</div>
+        <div class="warn"><b>Dlatego plusy siedzą na obrażeniach broni.</b> Kieł Krwi +14 bije 262–331, Pazur Zimy +0 tylko 198–255 — mimo że Pazur ma więcej Siły i o jedno gniazdo więcej. Miesiąc ulepszania widać w jednej linijce.</div>
+
+        <div class="sec-label">Rzadkość · ten sam pierścień, siedem wersji</div>
+
+        <div class="cmp">
+          <div>
+            <div class="side">Common</div>
+            <div class="iname" style="color:var(--r-common)">Pierścień Maga</div>
+            <div class="itier">1 gniazdo afiksu</div>
+            <div class="stat"><span class="k">Intelekt</span><span class="v">+8</span></div>
+            <div class="stat"><span class="k">Wszystkie staty</span><span class="v">+3</span></div>
+            <div class="stat"><span class="k">Mana</span><span class="v">+5</span></div>
+            <div class="stat"><span class="k" style="opacity:.4">Kryt</span><span class="v" style="opacity:.4">—</span></div>
+            <div class="stat"><span class="k" style="opacity:.4">Moc kryta</span><span class="v" style="opacity:.4">—</span></div>
+            <div class="stat"><span class="k" style="opacity:.4">Efekt</span><span class="v" style="opacity:.4">—</span></div>
+          </div>
+          <div style="border-color:var(--r-legendary)">
+            <div class="side">Legendary</div>
+            <div class="iname">Pierścień Maga</div>
+            <div class="itier">3–4 gniazda afiksów</div>
+            <div class="stat"><span class="k">Intelekt</span><span class="v up">+30</span></div>
+            <div class="stat"><span class="k">Wszystkie staty</span><span class="v up">+12</span></div>
+            <div class="stat"><span class="k">Mana</span><span class="v up">+48</span></div>
+            <div class="stat"><span class="k">Kryt</span><span class="v up">+5,5%</span></div>
+            <div class="stat"><span class="k">Moc kryta</span><span class="v up">+0,4</span></div>
+            <div class="stat"><span class="k">Efekt</span><span class="v" style="color:var(--r-legendary)">tak</span></div>
+          </div>
+        </div>
+
+        <div class="warn"><b>Rzadkość dokłada linie, nie tylko liczby.</b> Common ma trzy wiersze i jedno gniazdo. Legendary ma sześć wierszy, specjalny efekt i cztery gniazda. Dlatego wyższa rzadkość czuje się inaczej, a nie tylko większa.</div>
+        <div class="warn"><b>Gniazda afiksów to prawdziwa nagroda.</b> Jedno gniazdo to jeden wybór. Cztery to build. Skok z 1 na 4 daje więcej przestrzeni na kombinowanie niż jakikolwiek przyrost liczb.</div>
+        <div class="warn cut"><b>Poprawiłem jedną liczbę i chcę, żebyś o tym wiedział.</b> Mówiłeś „Legendary +40 do wszystkich statystyk”. Wpisałem +12. Przy +40 jeden pierścień daje +160 punktów atrybutów, a Twoja postać na lvl 47 ma ich w sumie 118 z całego levelowania. Dziesięć takich slotów i rozdawanie punktów przestaje mieć znaczenie. Przy Common ustawiłeś „wszystkie staty” na 37% głównego atrybutu (3 wobec 8) — trzymam ten sam stosunek na Legendary.</div>
+
+        <div class="sec-label">Narzędzia · osobne sloty, nie kolidują z walką</div>
+        <div class="card">
+          <div class="row">
+            <div class="icon-sq icon-lg" style="border-color:var(--r-legendary)">⛏</div>
+            <div class="grow">
+              <div class="t1" style="color:var(--r-legendary)">Kilof Głębi</div>
+              <div class="t2 num">Legendary +6 · drop z Tytana</div>
+            </div>
+          </div>
+          <div class="stat" style="margin-top:8px"><span class="k">Prędkość kopania</span><span class="v up">+68%</span></div>
+          <div class="stat"><span class="k">Szansa na podwójną rudę</span><span class="v up">14%</span></div>
+          <div class="stat"><span class="k">Szansa na kryształ</span><span class="v" style="color:var(--r-unique)">9,5%</span></div>
+        </div>
+
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-heroic)">🔨</div><div class="grow"><div class="t1" style="color:var(--r-heroic)">Młot Hutnika</div><div class="t2 num">Heroic +4 · Smithing</div></div></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-uncommon)">🎣</div><div class="grow"><div class="t1" style="color:var(--r-uncommon)">Zwykła wędka</div><div class="t2 num">Uncommon +0 · Fishing</div></div></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-unique)">🍳</div><div class="grow"><div class="t1" style="color:var(--r-unique)">Patelnia Kucharza</div><div class="t2 num">Unique +2 · Cooking</div></div></div>
+        <div class="card row" style="opacity:.45"><div class="icon-sq">🔮</div><div class="grow"><div class="t1">Brak dłuta</div><div class="t2">RuneCrafting · −40% prędkości</div></div></div>
+        <div class="card row" style="opacity:.45"><div class="icon-sq">🌾</div><div class="grow"><div class="t1">Brak motyki</div><div class="t2">Farming · −40% prędkości</div></div></div>
+
+        <div class="warn"><b>Narzędzia to zwykłe itemy.</b> Ta sama rzadkość, te same plusy, ten sam kowal, to samo przekucie. Zero nowych systemów — tylko nowe sloty.</div>
+        <div class="warn"><b>Kilof niesie szansę na kryształ.</b> To jest najmocniejszy hak w całej grze: legendarny kilof z Tytana daje kryształy, kryształy idą w ulepszanie broni. Boss karmi skilla, skill karmi broń, broń karmi bossa.</div>
+
+        <div class="sec-label">Plecak</div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-mystic)">🪖</div><div class="grow"><div class="t1" style="color:var(--r-mystic)">Hełm Popiołów</div><div class="t2 num">Mystic +3 · wymaga Obrona 55</div></div></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-heroic)">🛡</div><div class="grow"><div class="t1" style="color:var(--r-heroic)">Puklerz Straży</div><div class="t2 num">Heroic +7 · wymaga Obrona 40</div></div></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-legendary)">💍</div><div class="grow"><div class="t1" style="color:var(--r-legendary)">Pierścień Wojownika</div><div class="t2 num">Legendary +2 · +48 Atak, +4% kryt · wymaga <span style="color:var(--brass)">Atak 45</span></div></div></div>
+        <div class="card row" style="opacity:.5"><div class="icon-sq" style="border-color:var(--r-heroic)">💍</div><div class="grow"><div class="t1" style="color:var(--r-heroic)">Pierścień Maga</div><div class="t2 num">Heroic +0 · +82 moc magii · wymaga <span style="color:var(--blood)">Magia 40 — masz 34</span></div></div></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-unique)">📿</div><div class="grow"><div class="t1" style="color:var(--r-unique)">Amulet Wytrwałości</div><div class="t2 num">Unique +3 · +210 HP, +6 regen · wymaga <span style="color:var(--brass)">Zdrowie 35</span></div></div></div>
+      </section>
+
+      <!-- ---------- BROŃ — KARTA PRZEDMIOTU ---------- -->
+      <section class="screen" id="bron">
+        <div class="scr-head"><button class="back" data-go="ekwipunek">‹ Ekwipunek</button>Kieł Krwi <span>NOSZONA</span></div>
+
+        <div class="hero-item">
+          <div class="png2">🗡</div>
+          <div class="grow">
+            <div class="nm2">Kieł Krwi</div>
+            <div class="ty2">LEGENDARY &nbsp;+14&nbsp; · MIECZ DWURĘCZNY</div>
+            <div class="ty2">drop: Gruk Rzeźnik</div>
+            <div class="req ok">✓ Poziom 36 — masz 47</div>
+            <div class="req ok">✓ Atak 45 — masz 58</div>
+          </div>
+        </div>
+
+        <div class="dmg">
+          <div class="lbl2">Obrażenia broni</div>
+          <div class="big">262 – 331</div>
+          <div class="sub2">237 na sekundę · po mnożniku 998 – 1 220</div>
+        </div>
+
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Prędkość ataku</span><span class="v">0,8 / s</span></div>
+          <div class="stat"><span class="k">Siła</span><span class="v">+30</span></div>
+          <div class="stat"><span class="k">Wszystkie statystyki</span><span class="v">+12</span></div>
+          <div class="stat"><span class="k">Szansa na kryt</span><span class="v">+5,5%</span></div>
+          <div class="stat"><span class="k">Moc kryta</span><span class="v">+0,4</span></div>
+        </div>
+
+        <div class="fx">
+          <div class="h2">Efekt legendarny</div>
+          <div class="n2">Krwawienie</div>
+          <div class="d2">Każde trafienie zadaje dodatkowo 8% obrażeń przez 3 tury. Kumuluje się do pięciu razy. Nie działa na konstrukty.</div>
+        </div>
+
+        <div class="sec-label">Gniazda · 2 z 4 · ulepszają umiejętności z drzewka</div>
+        <div class="card" style="padding-top:2px">
+          <div class="sock"><span class="gem" style="background:var(--r-legendary);border-color:var(--r-legendary)"></span><span>Kamień Wiru</span><span class="val">Wir +25% zasięgu</span></div>
+          <div class="sock"><span class="gem f1"></span><span>Rubin Furii</span><span class="val">+14 Siła</span></div>
+          <div class="sock free"><span class="gem"></span><span>Puste</span><button class="btn ghost" style="margin-left:auto">Wstaw</button></div>
+          <div class="sock free"><span class="gem"></span><span>Puste</span><button class="btn ghost" style="margin-left:auto">Wstaw</button></div>
+        </div>
+
+        <div class="warn"><b>Kamienie ulepszają, nie dają.</b> Umiejętności bierzesz z drzewka. Kamień Wiru bez Wiru w drzewku nie robi nic — dlatego sprzęt nie kupuje rotacji, a postać na kotwicy ma tyle umiejętności, ile sobie wychodziła.</div>
+        <div class="warn"><b>Gniazdo bierze ulepszenie umiejętności albo statystykę.</b> Szerszy Wir czy więcej Siły w każdym ciosie — ta sama decyzja co tarcza kontra dwuręczna, tylko na poziomie przedmiotu.</div>
+        <div class="warn"><b>Dlatego rzadkość znaczy tak dużo.</b> Common ma jedno gniazdo. Legendary ma cztery — dopiero tam zaczyna się build.</div>
+
+        <div class="sec-label">Ulepszanie</div>
+        <div class="card row">
+          <div class="grow"><div class="t1">+14 → +15</div><div class="t2" style="color:#E4796F">Pasmo spalenia · 5% powodzenia</div></div>
+          <button class="btn solid" data-go="ulepsz">Otwórz</button>
+        </div>
+
+        <div class="sec-label">Wartość odzysku</div>
+        <div class="card">
+          <div class="risk"><span>Włożone kryształy</span><span class="v2">4 210</span></div>
+          <div class="risk"><span>Przekucie zwróci</span><span class="v2" style="color:var(--r-unique)">~2 950</span></div>
+          <div class="risk"><span style="color:var(--ink-mute)">Przepalenie zwróci</span><span class="v2" style="color:var(--ink-mute)">180 + materiały</span></div>
+        </div>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn solid" data-go="ulepsz">Ulepsz</button>
+          <button class="btn" data-go="kowal">Afiksy</button>
+          <button class="btn ghost">Przekuj</button>
+          <button class="btn ghost">Przepal</button>
+        </div>
+
+        <div class="warn"><b>Ryzyko widać zanim klikniesz.</b> 38% i dwa kamienie na stanie, wszystko na jednym ekranie. Nigdy nie ma dialogu „czy na pewno” po fakcie — bo gracz, który stracił broń w wyskakującym okienku, ma pretensje do gry, a nie do siebie.</div>
+        <div class="warn"><b>Wartość odzysku też jest widoczna z góry.</b> Wiesz, że przekucie zwróci 2 950 z 4 210, zanim podejmiesz decyzję. Bez zgadywania i bez żałowania.</div>
+      </section>
+
+      <!-- ---------- ULEPSZANIE ---------- -->
+      <section class="screen" id="ulepsz">
+        <div class="scr-head"><button class="back" data-go="bron">‹ Kieł Krwi</button>Ulepszanie <span>+14 → +15</span></div>
+
+        <div class="sec-label">Krok 1 · Energia · najpierw nakarm broń</div>
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row" style="margin-bottom:8px">
+            <div class="grow"><div class="t1">Energia do +15</div><div class="t2">Broń musi mieć komplet, zanim kowal ją tknie</div></div>
+            <span class="num" style="color:var(--brass)">840 / 1 200</span>
+          </div>
+          <div class="bar"><i style="width:70%"></i></div>
+          <div class="actions" style="margin-top:10px"><button class="btn solid" style="flex:1" data-go="przepal">Przepal przedmioty</button></div>
+        </div>
+
+        <div class="warn"><b>Ulepszanie ma dwa kroki, nie jeden.</b> Najpierw karmisz broń energią z przepalonych przedmiotów, potem kowal próbuje ulepszenia. Bez pełnej energii przycisk u kowala jest martwy.</div>
+        <div class="warn"><b>Dlatego śmieciowy drop nie jest śmieciem.</b> Każde Tępe Ostrze z piętra 12 to energia. Zwykłe walki w wieży przestają być tylko expem — są paliwem.</div>
+
+        <div class="sec-label">Krok 2 · Trzy pasma ryzyka</div>
+        <div class="bands">
+          <div class="b1"><div class="rng">+1 → +6</div><div class="cap">nie wchodzi<br>tracisz materiały</div></div>
+          <div class="b2"><div class="rng">+6 → +10</div><div class="cap">nieudane<br>spada poziom</div></div>
+          <div class="b3 here2"><div class="rng">+10 → +15</div><div class="cap">nieudane<br>broń przepada</div></div>
+        </div>
+
+        <div class="card" style="border-color:var(--blood)">
+          <div class="risk" style="padding-top:0"><span style="color:var(--ink-dim)">Szansa powodzenia</span><span class="v2" style="color:var(--blood);font-size:15px">5%</span></div>
+          <div class="risk"><span style="color:#E4796F">Nieudane</span><span class="v2" style="color:var(--blood)">Kieł Krwi przepada</span></div>
+          <div class="risk"><span>Koszt próby</span><span class="v2">840 kryształów</span></div>
+        </div>
+
+        <div class="sec-label">Szanse w paśmie spalenia</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">+10 → +11</span><span class="v">25%</span></div>
+          <div class="stat"><span class="k">+11 → +12</span><span class="v">20%</span></div>
+          <div class="stat"><span class="k">+12 → +13</span><span class="v">15%</span></div>
+          <div class="stat"><span class="k">+13 → +14</span><span class="v">10%</span></div>
+          <div class="stat"><span class="k">+14 → +15</span><span class="v" style="color:var(--blood)">5%</span></div>
+        </div>
+
+        <div class="sec-label">Kamienie · drop z Herosów i Tytanów</div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row">
+            <span class="box">✓</span>
+            <div class="grow"><div class="t1">Kamień Ocalenia</div><div class="t2">Nieudane ulepszanie zostawia broń na +14</div></div>
+            <span class="num" style="color:var(--heal)">masz 2</span>
+          </div>
+        </div>
+
+        <div class="card" style="opacity:.5">
+          <div class="row">
+            <span class="box" style="border-color:var(--edge);color:var(--edge)"></span>
+            <div class="grow"><div class="t1">Kamień Utrwalenia</div><div class="t2">Blokuje spadek poziomu w paśmie +6 → +10</div></div>
+            <span class="num" style="color:var(--ink-mute)">nie dotyczy</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="risk" style="padding-top:0"><span style="color:var(--ink-dim)">Wynik z Kamieniem Ocalenia</span></div>
+          <div class="risk"><span style="color:var(--heal)">5% — udane</span><span class="v2" style="color:var(--heal)">+15</span></div>
+          <div class="risk"><span>95% — nieudane</span><span class="v2">zostaje +14, kamień znika</span></div>
+        </div>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn solid">Ulepsz z kamieniem</button>
+          <button class="btn ghost">Ulepsz bez</button>
+        </div>
+
+        <div class="warn"><b>Dwa kamienie, nie jeden.</b> Gdyby jeden chronił przed wszystkim, nikt nie zużyłby go w paśmie +6 → +10 — wszyscy trzymaliby go na +10 → +15, a ochrona przed spadkiem poziomu byłaby martwą mechaniką. Osobny, tańszy kamień na środkowe pasmo sprawia, że oba mają sens.</div>
+        <div class="warn"><b>Kamienie lecą tylko z Herosów i Tytanów.</b> Heros raz dziennie, Tytan raz w tygodniu — więc podaż jest ograniczona z definicji, bez ustawiania szansy dropu. To jest jedyne miejsce, gdzie zegar dzienny robi coś ważnego dla ekonomii.</div>
+        <div class="warn"><b>Trzy pasma uczą gracza stopniowo.</b> Do +6 nie ma czego się bać, więc gracz nabiera odwagi. Na +6 traci poziom i uczy się, że to boli. Na +10 wie już, czym ryzykuje — i dopiero wtedy dostaje możliwość utraty wszystkiego.</div>
+      </section>
+
+      <!-- ---------- PRZEPALANIE ---------- -->
+      <section class="screen" id="przepal">
+        <div class="scr-head"><button class="back" data-go="ulepsz">‹ Ulepszanie</button>Przepalanie <span>KIEŁ KRWI +14</span></div>
+
+        <div class="card" style="border-color:var(--brass)">
+          <div class="row" style="margin-bottom:8px">
+            <div class="grow"><div class="t1">Energia</div><div class="t2">Do odblokowania +15 brakuje 360</div></div>
+            <span class="num" style="color:var(--brass);font-size:16px">840 / 1 200</span>
+          </div>
+          <div class="bar"><i style="width:70%"></i></div>
+        </div>
+
+        <div class="sec-label">Ile daje przepalenie</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k" style="color:var(--r-common)">Common</span><span class="v">1</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-uncommon)">Uncommon</span><span class="v">3</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-unique)">Unique</span><span class="v">8</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-heroic)">Heroic</span><span class="v">20</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-legendary)">Legendary</span><span class="v">50</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-mystic)">Mystic</span><span class="v">120</span></div>
+          <div class="stat"><span class="k" style="color:var(--r-god)">God</span><span class="v">300</span></div>
+        </div>
+
+        <div class="sec-label">Do przepalenia</div>
+        <div class="card row"><span class="box">✓</span><div class="icon-sq" style="border-color:var(--r-common)">🗡</div><div class="grow"><div class="t1" style="color:var(--r-common)">Tępe Ostrze ×14</div></div><span class="num t2">+14</span></div>
+        <div class="card row"><span class="box">✓</span><div class="icon-sq" style="border-color:var(--r-common)">🪖</div><div class="grow"><div class="t1" style="color:var(--r-common)">Wyszczerbiony Hełm ×9</div></div><span class="num t2">+9</span></div>
+        <div class="card row"><span class="box">✓</span><div class="icon-sq" style="border-color:var(--r-uncommon)">💍</div><div class="grow"><div class="t1" style="color:var(--r-uncommon)">Pierścień Tropiciela ×6</div></div><span class="num t2">+18</span></div>
+        <div class="card row"><span class="box" style="border-color:var(--edge);color:var(--edge)"></span><div class="icon-sq" style="border-color:var(--r-heroic)">🛡</div><div class="grow"><div class="t1" style="color:var(--r-heroic)">Puklerz Straży +7</div><div class="t2" style="color:#E4796F">nosisz go</div></div><span class="num t2">+20</span></div>
+
+        <div class="card" style="margin-top:10px;border-color:var(--brass)">
+          <div class="stat" style="border-top:0"><span class="k">Zaznaczone</span><span class="v">29 przedmiotów</span></div>
+          <div class="stat"><span class="k">Energia</span><span class="v" style="color:var(--brass)">+41</span></div>
+          <div class="stat"><span class="k">Po przepaleniu</span><span class="v">881 / 1 200</span></div>
+        </div>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn solid" style="flex:2">Przepal 29 przedmiotów</button>
+        </div>
+
+        <div class="warn"><b>Energia to drugi zegar ulepszania.</b> Kryształy kupują próbę, energia kupuje prawo do próby. Możesz mieć pełną sakwę kryształów i i tak nie ruszyć broni, dopóki jej nie nakarmisz.</div>
+        <div class="warn"><b>To sprawia, że plecak nigdy nie jest pełen śmieci.</b> Wszystko, co wypada, ma jedno z dwóch przeznaczeń: nosisz albo palisz. Nie ma trzeciej kategorii „leży i zawadza”.</div>
+        <div class="warn cut"><b>Przy wyższych plusach liczby robią się poważne.</b> 1 200 energii z Commonów to 1 200 przedmiotów. Realnie karmi się to Heroicami i Legendary z przekutych zestawów — czyli sprzętem, który już Ci niepotrzebny. Warto sprawdzić przy testach, czy progi nie zmuszają do palenia rzeczy, które gracz chciałby zatrzymać.</div>
+      </section>
+
+      <!-- ---------- KOWAL · AFIKSY ---------- -->
+      <section class="screen" id="kowal">
+        <div class="scr-head"><button class="back" data-go="bron">‹ Kieł Krwi</button>Kowal <span>LOSOWANIE AFIKSÓW</span></div>
+
+        <div class="card">
+          <div class="row"><div class="grow"><div class="t1">Złoto</div></div><span class="num" style="font-size:17px;color:var(--brass)">184 200</span></div>
+        </div>
+
+        <div class="sec-label">Afiksy · zablokuj to, co chcesz zachować</div>
+
+        <div class="card row" style="border-color:var(--brass)">
+          <span class="box">🔒</span>
+          <div class="grow"><div class="t1">Krwawienie 8%</div><div class="t2">Zablokowany · zakres afiksu 4–10%</div></div>
+          <span class="num t2" style="color:var(--brass)">3 200</span>
+        </div>
+
+        <div class="card row" style="border-color:var(--brass)">
+          <span class="box">🔒</span>
+          <div class="grow"><div class="t1">+34 Siła</div><div class="t2">Zablokowany · zakres 20–40</div></div>
+          <span class="num t2" style="color:var(--brass)">3 200</span>
+        </div>
+
+        <div class="card row">
+          <span class="box" style="border-color:var(--edge);color:var(--edge)"></span>
+          <div class="grow"><div class="t1">+12% siła krytyka</div><div class="t2" style="color:#E4796F">Wolny — poleci przy losowaniu</div></div>
+          <button class="btn ghost">Zablokuj</button>
+        </div>
+
+        <div class="card row" style="opacity:.5">
+          <span class="box" style="border-color:var(--edge);color:var(--edge)"></span>
+          <div class="grow"><div class="t1">Puste gniazdo</div></div>
+        </div>
+
+        <div class="sec-label">Koszt</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Losowanie · Legendary</span><span class="v">4 000</span></div>
+          <div class="stat"><span class="k">2 blokady po 3 200</span><span class="v">6 400</span></div>
+          <div class="stat"><span class="k">7. losowanie tego przedmiotu</span><span class="v">×2,4</span></div>
+          <div class="stat" style="border-top:1px solid var(--edge)"><span class="k" style="color:var(--ink)">Razem</span><span class="v" style="color:var(--brass);font-size:14px">24 960</span></div>
+          <div class="stat"><span class="k" style="color:var(--ink-mute)">Sufit mnożnika</span><span class="v" style="color:var(--ink-mute)">×5 · potem stały</span></div>
+        </div>
+
+        <div class="sec-label">Czego się spodziewać</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Pula afiksów dla broni</span><span class="v">18 możliwych</span></div>
+          <div class="stat"><span class="k">Losujesz 1 wolne gniazdo</span><span class="v" style="color:var(--brass)">średnio 18 prób</span></div>
+          <div class="stat"><span class="k">Gdybyś nie blokował nic</span><span class="v" style="color:var(--blood)">1 na 105 000</span></div>
+          <div class="stat"><span class="k">Twoje dotąd</span><span class="v">7</span></div>
+        </div>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn solid" style="flex:2">Losuj za 24 960</button>
+        </div>
+
+        <div class="sec-label">Skala · ile kosztuje ostatni afiks</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Legendary · 2 blokady</span><span class="v">~25 tys. × 18 = <b style="color:var(--ink-dim)">450 tys.</b></span></div>
+          <div class="stat"><span class="k">Mystic · 3 blokady</span><span class="v">~120 tys. × 18 = <b style="color:var(--ink-dim)">2,2 mln</b></span></div>
+          <div class="stat"><span class="k">God · 3 blokady</span><span class="v" style="color:var(--r-god)">~280 tys. × 18 = <b>5 mln</b></span></div>
+        </div>
+
+        <div class="warn"><b>Ostatni afiks na przedmiocie God kosztuje około pięciu milionów złota.</b> W kurwę drogo i całkowicie realnie — to jest cel na tygodnie farmienia, a nie loteria bez końca. Dokładnie ta różnica decyduje, czy gracz farmi dalej, czy odpuszcza.</div>
+        <div class="warn"><b>Blokady są tym, co robi z tego system, a nie loterię.</b> Bez nich losowanie czterech gniazd z puli osiemnastu to trafienie 1 na 105 tysięcy — ściana. Z trzema blokadami losujesz jedno gniazdo i średnio po 18 próbach masz swoje.</div>
+        <div class="warn"><b>Złoto kupuje precyzję, nie moc.</b> Kto nie blokuje, płaci mało i liczy na szczęście. Kto blokuje trzy afiksy na przedmiocie God, płaci krocie za każdą próbę — i to jest właśnie ten worek bez dna, którego szuka ekonomia.</div>
+        <div class="warn"><b>Sufit mnożnika przy ×5.</b> Bez niego dwudzieste losowanie kosztuje tyle, że przedmiot staje się ekonomicznie zamurowany i nikt go nie kończy.</div>
+        <div class="warn"><b>Trafienie afiksu to nie koniec.</b> Siła losuje się w zakresie 20–40. Możesz mieć właściwy afiks ze słabym rzutem i losować dalej — tu leży prawdziwa głębia.</div>
+      </section>
+
+      <!-- ---------- RYNEK ---------- -->
+      <section class="screen" id="rynek">
+        <div class="scr-head"><button class="back" data-go="ekwipunek">‹ Ekwipunek</button>Rynek</div>
+
+        <div class="segs">
+          <button aria-selected="true">Kupuj</button>
+          <button aria-selected="false">Sprzedaj</button>
+          <button aria-selected="false">Moje</button>
+        </div>
+
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-heroic)">🛡</div><div class="grow"><div class="t1" style="color:var(--r-heroic)">Puklerz Straży +7</div><div class="t2 num">Obrona 40 · 2 gniazda · sprzedaje Bergen</div></div><span class="num t2" style="color:var(--brass)">84 000</span></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-unique)">💍</div><div class="grow"><div class="t1" style="color:var(--r-unique)">Pierścień Maga +2</div><div class="t2 num">Magia 40 · sprzedaje Zorza</div></div><span class="num t2" style="color:var(--brass)">21 500</span></div>
+        <div class="card row"><div class="icon-sq" style="border-color:var(--r-mystic)">💎</div><div class="grow"><div class="t1" style="color:var(--r-mystic)">Cierniowy Korzeń ×5</div><div class="t2 num">składnik Aktu I · sprzedaje Kruk</div></div><span class="num t2" style="color:var(--brass)">46 000</span></div>
+
+        <div class="sec-label">Prowizja</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Cena wystawienia</span><span class="v">84 000</span></div>
+          <div class="stat"><span class="k">Prowizja 8%</span><span class="v" style="color:var(--blood)">−6 720 · znika z gry</span></div>
+          <div class="stat"><span class="k">Sprzedający dostaje</span><span class="v">77 280</span></div>
+        </div>
+
+        <div class="warn"><b>Rynek sam w sobie nie jest ujściem złota — prowizja jest.</b> Kupno przenosi złoto do drugiego gracza; suma w świecie się nie zmienia. Dopiero 8% wypalone przy każdej transakcji naprawdę je usuwa.</div>
+        <div class="warn"><b>Ten sink skaluje się sam.</b> Im więcej ludzie handlują i im droższe rzeczy krążą, tym więcej złota wyparowuje. Nie trzeba go stroić razem z gospodarką — rośnie razem z nią.</div>
+        <div class="warn cut"><b>Handel to V1.x, ale prowizję trzeba zaprojektować teraz.</b> Rynek dołożony później do gospodarki bez ujść oznacza inflację, której nie da się cofnąć bez kasowania ludziom pieniędzy.</div>
+      </section>
+
+      <!-- ---------- BANK ---------- -->
+      <section class="screen" id="bank">
+        <div class="scr-head">Ekwipunek <span>BANK · 412 / 600</span></div>
+
+        <div class="segs">
+          <button aria-selected="false" data-go="ekwipunek">Plecak</button>
+          <button aria-selected="true">Bank</button>
+        </div>
+
+        <div class="sec-label">Postacie na koncie · bank wspólny</div>
+        <div class="chars">
+          <div class="on"><div class="ic2">🗡</div><div class="cl">Halgar</div><div class="lv">lvl 47</div></div>
+          <div><div class="ic2">🛡</div><div class="cl">Brod</div><div class="lv">lvl 25 🔒</div></div>
+          <div><div class="ic2">✨</div><div class="cl">Vela</div><div class="lv">lvl 50 🔒</div></div>
+          <div class="empty"><div class="ic2">＋</div><div class="cl">Wolny slot</div><div class="lv">—</div></div>
+        </div>
+        <div class="actions" style="margin-bottom:10px"><button class="btn" data-go="klasa" style="flex:1">Stwórz czwartą postać</button></div>
+
+        <div class="warn"><b>🔒 oznacza zablokowany exp.</b> Brod stoi na 25 i trzyma dostęp do Wołu Kamiennego oraz kategorii PvP „max 25”. Vela siedzi na 50 dla kategorii „max 50”. Halgar rośnie dalej i po drodze wyrasta z contentu — dlatego dropi tam itemy dla tamtych dwóch.</div>
+
+        <div class="sec-label">Depozyt · filtr: itemy 23–25 dla Broda</div>
+        <div class="card row">
+          <div class="icon-sq" style="border-color:var(--r-legendary)">🗡</div>
+          <div class="grow"><div class="t1" style="color:var(--r-legendary)">Kieł Krwi</div><div class="t2 num">Legendary +14 · przedział 1–99</div></div>
+          <button class="btn">Wyślij</button>
+        </div>
+        <div class="card row">
+          <div class="icon-sq" style="border-color:var(--r-mystic)">🪖</div>
+          <div class="grow"><div class="t1" style="color:var(--r-mystic)">Hełm Popiołów</div><div class="t2 num">Mystic +3 · przedział 100–199</div></div>
+          <button class="btn ghost">Nie pasuje</button>
+        </div>
+        <div class="card row">
+          <div class="icon-sq" style="border-color:var(--r-heroic)">🛡</div>
+          <div class="grow"><div class="t1" style="color:var(--r-heroic)">Puklerz Straży</div><div class="t2 num">Heroic +7 · przedział 1–99</div></div>
+          <button class="btn">Wyślij</button>
+        </div>
+        <div class="card row">
+          <div class="icon-sq" style="border-color:var(--r-unique)">💎</div>
+          <div class="grow"><div class="t1" style="color:var(--r-unique)">Kryształy ulepszeń</div><div class="t2 num">1 240 sztuk · wspólne</div></div>
+          <button class="btn">Wyślij</button>
+        </div>
+
+        <div class="warn"><b>Bank jest kontowy, nie postaciowy.</b> Legendarna broń z przedziału 1–99, której Twój główny już nie potrzebuje, ląduje u postaci zaparkowanej na 99. Nic się nie marnuje — stary sprzęt dostaje drugie życie zamiast trafiać do przepalenia.</div>
+      </section>
+
+      <!-- ---------- LOG BOOK ---------- -->
+      <section class="screen" id="logbook">
+        <div class="scr-head">Log Book</div>
+
+        <div class="grid2">
+          <div class="stat-card"><div class="q">218<span style="color:var(--ink-mute);font-size:12px"> / 640</span></div><div class="l">Przedmioty odkryte</div></div>
+          <div class="stat-card"><div class="q">47<span style="color:var(--ink-mute);font-size:12px"> / 180</span></div><div class="l">Potwory poznane</div></div>
+        </div>
+
+        <div class="sec-label">Do odhaczenia dzisiaj · 3 z 6</div>
+        <div class="card row"><div class="icon-sq">✔</div><div class="grow"><div class="t1" style="color:var(--ink-mute);text-decoration:line-through">Zaloguj się</div></div><span class="badge">ODEBRANE</span></div>
+        <div class="card row"><div class="icon-sq">✔</div><div class="grow"><div class="t1" style="color:var(--ink-mute);text-decoration:line-through">Zabij 100 przeciwników</div></div><span class="badge">ODEBRANE</span></div>
+        <div class="card row"><div class="icon-sq">✔</div><div class="grow"><div class="t1" style="color:var(--ink-mute);text-decoration:line-through">Wykop 50 rud</div></div><button class="btn solid">Odbierz</button></div>
+        <div class="card row"><div class="icon-sq">👑</div><div class="grow"><div class="t1">Pokonaj Herosa</div><div class="t2 num">0 / 1 · daje Kamień Utrwalenia</div></div></div>
+        <div class="card row"><div class="icon-sq">🕸</div><div class="grow"><div class="t1">Przejdź jedną wyprawę</div><div class="t2 num">0 / 1</div></div></div>
+        <div class="card row" style="opacity:.5"><div class="icon-sq">🏰</div><div class="grow"><div class="t1">Odbierz nagrodę z gildii</div><div class="t2">V1.x</div></div></div>
+
+        <div class="warn"><b>Lista jest kontowa, nie postaciowa.</b> Cztery postacie × własne dzienne zadania zamieniłyby grę w pracę. Jedna lista na konto, którą odhaczasz kimkolwiek.</div>
+
+        <div class="sec-label">Skąd co leci</div>
+        <div class="card">
+          <div class="stat" style="border-top:0"><span class="k">Zwykłe walki w wieży</span><span class="v">mikstury, podstawowe kamienie, broń na przepał</span></div>
+          <div class="stat"><span class="k">Boss piętra co 10</span><span class="v" style="color:var(--brass)">waluta specjalna · punkty drzewka</span></div>
+          <div class="stat"><span class="k">Wyprawy</span><span class="v" style="color:var(--brass)">złoto · waluta · sprzęt · klucze</span></div>
+          <div class="stat"><span class="k">Skrzynia bossa wyprawy</span><span class="v" style="color:var(--r-heroic)">Heroic 5% · Legendary 0,3%</span></div>
+          <div class="stat"><span class="k">Heros, raz dziennie</span><span class="v">wybrany slot, losowa rzadkość + kamień</span></div>
+          <div class="stat"><span class="k">Tytan, raz w tygodniu</span><span class="v" style="color:var(--r-mystic)">Mystic + kamienie</span></div>
+          <div class="stat"><span class="k">Kolos, raz w tygodniu</span><span class="v" style="color:var(--r-god)">Mystic, God, rolle</span></div>
+        </div>
+
+        <div class="warn"><b>Każda warstwa ma jedno źródło i jeden zegar.</b> Żaden przeciwnik nie dubluje innego, więc nigdy nie ma pytania „co dziś bić” — pytanie brzmi „czego mi brakuje”.</div>
+
+        <div class="sec-label">Bestiariusz</div>
+        <div class="card row"><div class="icon-sq">👺</div><div class="grow"><div class="t1">Goblin</div><div class="t2 num">Zabito 1 847 · mastery 4/5</div></div></div>
+        <div class="card row"><div class="icon-sq">👹</div><div class="grow"><div class="t1">Nadzorca Kopalni</div><div class="t2 num">Zabito 62 · mastery 2/5</div></div></div>
+        <div class="card row"><div class="icon-sq">👑</div><div class="grow"><div class="t1">Gruk Rzeźnik</div><div class="t2 num">Zabito 17 · mastery 1/5</div></div></div>
+
+        <div class="warn"><b>Ekran zbiorczy.</b> Kolekcje, bestiariusz, osiągnięcia i zadania dzienne w jednym miejscu — to jest lista rzeczy, które gracz jeszcze może zdobyć.</div>
+      </section>
+
+      <!-- ---------- KONTO ---------- -->
+      <section class="screen" id="konto">
+        <div class="scr-head">Konto</div>
+
+        <div class="card row">
+          <div class="icon-sq icon-lg">🗡</div>
+          <div class="grow"><div class="t1">Szermierz</div><div class="t2 num">Ludzie · lvl 47 · gra od 12 dni</div></div>
+        </div>
+
+        <div class="sec-label">Powiadomienia</div>
+        <div class="card row"><div class="grow"><div class="t1">World Boss za 15 minut</div></div><span class="badge here">WŁ.</span></div>
+        <div class="card row"><div class="grow"><div class="t1">Walka zakończona</div></div><span class="badge here">WŁ.</span></div>
+        <div class="card row"><div class="grow"><div class="t1">Wypadł Legendary lub wyżej</div></div><span class="badge here">WŁ.</span></div>
+        <div class="card row"><div class="grow"><div class="t1">Heros i Tytan gotowi</div></div><span class="badge here">WŁ.</span></div>
+        <div class="card row"><div class="grow"><div class="t1" style="color:var(--ink-mute)">Ktoś przebił Twój wynik</div></div><span class="badge">WYŁ.</span></div>
+        <div class="card row"><div class="grow"><div class="t1" style="color:var(--ink-mute)">Skill osiągnął nowy poziom</div></div><span class="badge">WYŁ.</span></div>
+
+        <div class="sec-label">Ustawienia</div>
+        <div class="card row"><div class="grow"><div class="t1">Prędkość walki</div></div><span class="badge here">×2</span></div>
+        <div class="card row"><div class="grow"><div class="t1">Auto-rotacja skilli</div></div><span class="badge here">WŁ.</span></div>
+        <div class="card row"><div class="grow"><div class="t1">Automatyczne mikstury</div><div class="t2">Poniżej 30% HP</div></div><span class="badge here">WŁ.</span></div>
+        <div class="card row"><div class="grow"><div class="t1">Język</div></div><span class="badge here">POLSKI</span></div>
+        <div class="card row"><div class="grow"><div class="t1" style="color:var(--ink-mute)">Sklep · Regulamin · Konto</div></div><span class="chev">›</span></div>
+
+        <div class="warn"><b>Nie ma tu blokady doświadczenia — i nie musi być.</b> Poziom leci wyłącznie z pierwszego przejścia etapu, więc parkujesz po prostu nie idąc dalej. Wyższe trudności tego samego etapu dają punkty drzewka bez poziomu, więc zaparkowana postać dalej rośnie.</div>
+      </section>
+
+    </div>
+
+    <!-- ---------- PASEK WALKI ---------- -->
+    <div class="cbar" data-go="walka" title="Wróć do walki">
+      <div class="l1">
+        <span class="who2">⚔ Nadzorca</span>
+        <span class="bar foe"><i style="width:61%"></i></span>
+        <span class="pc">61%</span>
+        <span class="loot">🎒 14</span>
+      </div>
+      <div class="l2">
+        <span class="who2">TY</span>
+        <span class="bar hp"><i style="width:42%"></i></span>
+        <span class="pc">42%</span>
+        <span class="mini">❤ Lecz</span>
+      </div>
+    </div>
+
+    <!-- ---------- ZAKŁADKI ---------- -->
+    <nav class="tabs">
+      <button data-go="przygoda"  aria-selected="true"><span class="ic">🗺</span><span class="tx">PRZYGODA</span></button>
+      <button data-go="druzyna"   aria-selected="false"><span class="ic">👥</span><span class="tx">DRUŻYNA</span></button>
+      <button data-go="ekwipunek" aria-selected="false"><span class="ic">🎒</span><span class="tx">EKWIPUNEK</span></button>
+      <button data-go="logbook"   aria-selected="false"><span class="ic">📖</span><span class="tx">LOG BOOK</span></button>
+      <button data-go="konto"     aria-selected="false"><span class="ic">⚙</span><span class="tx">KONTO</span></button>
+    </nav>
+
+  </div>
+
+  <!-- ============ RIGHT RAIL ============ -->
+  <aside class="rail">
+
+    <div class="block">
+      <div class="block-label">Co się zmieniło w v0.4</div>
+      <div class="note-item"><span class="tag cut">Usunięte</span><b>Klasy.</b> Nie ma Szermierza ani Kapłana. Jesteś tym, czego używasz.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Cztery atrybuty</b> — Siła, Intelekt, Zręczność, Wytrzymałość. Rozdajesz co poziom, dochodzą z ekwipunku.</div>
+      <div class="note-item"><span class="tag cut">Usunięte</span><b>Pula ochrony.</b> Zostaje zwykły pancerz. Tarcza istnieje jako przedmiot, ale nie ma osobnego licznika.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Skille bramkują sprzęt.</b> Atak → bronie mele, Dystansowy → łuki, Magia → różdżki i biżuteria, Obrona → pancerz. Zdrowie nic nie otwiera.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Tarcza dzieli exp 50/50</b> między Atak i Obronę. Bez tarczy 100% w Atak.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Sześć skilli zbierackich</b> — Mining, Smithing, Fishing, Cooking, RuneCrafting, Farming.</div>
+
+      <div class="block-label" style="margin-top:22px">Wcześniej, w v0.2</div>
+      <div class="note-item"><span class="tag cut">Usunięte</span><b>Bożek</b> — slot znika, zostaje 5 jednostek zamiast 4.</div>
+      <div class="note-item"><span class="tag cut">Usunięte</span><b>Wioska</b> — razem z nią surowce, najemnicy, PvP wiosek i cała warstwa offline.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Przygoda</b> — Kampania, Dungeony, World Boss i Skill Hunting w jednym hubie.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Skill Hunting</b> — górnictwo, kowalstwo, drwalstwo, zielarstwo, kradzież. Model RuneScape.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Log Book</b> — kolekcje, bestiariusz, zadania dzienne, osiągnięcia.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Drużyna 1 + 3 + 1</b> — drzewko tylko dla głównej postaci, peta i sojuszników od Legendary w górę.</div>
+      <div class="note-item"><span class="tag ok">Nowe</span><b>Bank</b> w Ekwipunku — wspólny dla wszystkich postaci na koncie. Do 4 postaci zaparkowanych na różnych przedziałach.</div>
+    </div>
+
+    <div class="block">
+      <div class="block-label">Dlaczego bank zmienia grę</div>
+      <p>Cztery postacie ze wspólnym bankiem, każda zablokowana na innym poziomie, każda w innym przedziale world bossa. <strong>Blokada expa przestaje być opcją dla dziwaków i staje się główną strategią.</strong></p>
+      <p>Trzy skutki, których wcześniej nie było:</p>
+      <div class="note-item"><b>Stary sprzęt nie umiera.</b> Legendary z przedziału 1–99 idzie do postaci zaparkowanej na 99 zamiast do przepalenia.</div>
+      <div class="note-item"><b>Cztery klasy mają sens na jednym koncie.</b> Tank, healer i DPS to trzy osobne rankingi — możesz obsadzić wszystkie trzy.</div>
+      <div class="note-item"><b>Dopracowanie sprzętu na etap ma cel.</b> Nie wyrastasz z niego za tydzień, bo ta postać już nigdzie nie idzie.</div>
+    </div>
+
+    <div class="block">
+      <div class="block-label">Zgadywane — powiedz jeśli źle</div>
+      <div class="note-item"><span class="tag wip">Zgadka</span><b>Walka to 5 na 5.</b> Drużyna ma 5 jednostek, więc wróg też. Może być 5 na 4.</div>
+      <div class="note-item"><span class="tag wip">Zgadka</span><b>Ranking mieszka w World Bossie.</b> Nie ma już zakładki społecznościowej, a ranking dotyczy tylko bossa.</div>
+      <div class="note-item"><span class="tag wip">Zgadka</span><b>Czat to ikona w nagłówku</b>, wysuwana szuflada. Nie ma dla niego zakładki.</div>
+      <div class="note-item"><span class="tag wip">Zgadka</span><b>Blokada expa siedzi w Koncie.</b> Nigdzie indziej nie pasowała.</div>
+      <div class="note-item"><span class="tag wip">Propozycja</span><b>Skille działają offline.</b> Bez wioski nic już nie działa przy zamkniętej aplikacji. To jest jedyny kandydat.</div>
+    </div>
+
+    <div class="block">
+      <div class="block-label">Kolory rzadkości</div>
+      <div class="rarity-row"><span class="swatch" style="background:var(--r-common)"></span>Common<span class="src">zwykłe moby</span></div>
+      <div class="rarity-row"><span class="swatch" style="background:var(--r-uncommon)"></span>Uncommon<span class="src">zwykłe moby</span></div>
+      <div class="rarity-row"><span class="swatch" style="background:var(--r-unique)"></span>Unique<span class="src">zwykłe moby</span></div>
+      <div class="rarity-row"><span class="swatch" style="background:var(--r-heroic)"></span>Heroic<span class="src">Elity II</span></div>
+      <div class="rarity-row"><span class="swatch" style="background:var(--r-legendary)"></span>Legendary<span class="src">Herosi</span></div>
+      <div class="rarity-row"><span class="swatch" style="background:var(--r-mystic)"></span>Mystic<span class="src">Tytani</span></div>
+      <div class="rarity-row"><span class="swatch" style="background:var(--r-god)"></span>God<span class="src">Tytani, World Boss</span></div>
+    </div>
+
+    <div class="block">
+      <div class="block-label">Czego tu nie ma</div>
+      <p>Żadnej logiki gry. Walka nie liczy, loot nie spada, przyciski nie zapisują. Makieta do oceny układu, nie prototyp.</p>
+      <p>Emoji stoją w miejscu PNG-ów, które wygenerujesz.</p>
+    </div>
+
+  </aside>
+</div>
+
+<script>
+  const screens = document.querySelectorAll('.screen');
+  const tabs = document.querySelectorAll('.tabs button');
+  const TAB_OF = {
+    przygoda:'przygoda', kampania:'przygoda', dungeony:'przygoda',
+    worldboss:'przygoda', skille:'przygoda', walka:'przygoda', elity:'przygoda',
+    akty:'przygoda', pietro:'przygoda', boss:'przygoda', skrzynia:'przygoda',
+    sk_mining:'przygoda', sk_runy:'przygoda', summon:'przygoda',
+    staty:'druzyna', drzewko:'druzyna', klasa:'druzyna',
+    wyprawa:'przygoda', rozdroze:'przygoda', dgn_party:'przygoda', pokoj:'przygoda', tytan:'przygoda',
+    druzyna:'druzyna', ekwipunek:'ekwipunek', bank:'ekwipunek', bron:'ekwipunek', ulepsz:'ekwipunek', kowal:'ekwipunek', rynek:'ekwipunek', przepal:'ekwipunek',
+    logbook:'logbook', konto:'konto'
+  };
+
+  function go(id, skipHash) {
+    if (!document.getElementById(id)) return;
+    screens.forEach(s => s.classList.toggle('on', s.id === id));
+    const tab = TAB_OF[id];
+    tabs.forEach(t => t.setAttribute('aria-selected', String(t.dataset.go === tab)));
+    document.querySelector('.screens').scrollTop = 0;
+    if (!skipHash) history.replaceState(null, '', '#' + id);
+  }
+
+  document.querySelectorAll('[data-go]').forEach(el => {
+    el.addEventListener('click', e => { e.stopPropagation(); go(el.dataset.go); });
+  });
+
+  // wejście z adresu: ...makieta_ui.html#bron
+  if (location.hash.length > 1) go(location.hash.slice(1), true);
+  window.addEventListener('hashchange', () => go(location.hash.slice(1), true));
+</script>
