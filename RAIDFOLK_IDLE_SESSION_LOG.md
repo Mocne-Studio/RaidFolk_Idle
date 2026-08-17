@@ -84,3 +84,76 @@ co się działo, bez czytania całego diffa.
   z poleceniem — żadnych Wypraw przed tą rozmową.
 - Potem pierwsze w kolejce: posadzić sojuszników i peta w walce. Silnik przyjmuje
   pięć jednostek od początku, Przywołanie już produkuje obsadę — brakuje sklejenia.
+
+---
+
+## 2026-08-17 (druga sesja) — corrections pass
+
+**START HEAD:** `84317f1`
+**END HEAD:** `0b4ac30`
+
+### DONE
+
+- **Skasowany czterostronicowy pseudo-poradnik** po herbie. Flow to teraz
+  herb → imię → gra, bez ani jednego przystanku.
+- **Skasowany wybór klasy głównej postaci** razem z ekranem, endpointem
+  `/api/classes` i wszystkim, co w kliencie od niego zależało.
+- **Główna postać dostała stały profil „Bohater"** — obrażenia z Siły, Intelektu
+  i Zręczności naraz, jedno uniwersalne drzewko (Siła / Hart / Tempo).
+- **Układ jednoekranowy.** `.screens` przestało być długą stroną; każdy ekran to
+  kolumna flex, a przewijają się wyłącznie pudełka z danymi.
+- **Responsywność na tablet i desktop** — 520 / 900 / 1180 px. Wcześniej gra była
+  paskiem 520 px pośrodku pustej strony.
+- **Ekwipunek przebudowany** — makieta postaci 3×3 z portretem, siatka statystyk
+  z podpowiedziami, panel szczegółu z różnicą wobec noszonego, kategorie plecaka.
+- **`ilvl` → „Poziom przedmiotu"** z wyjaśnieniem w podpowiedzi.
+- **Górnictwo gra naprawdę** — exp, poziomy, pasek, drabinka pięciu surowców,
+  cykle lecące same, surowce lądujące w Ekwipunku.
+- **Naprawione zakleszczenie walki turowej** zgłoszone przez testera.
+
+### CHANGED
+
+- `game/config.js` — profil `bohater`, drzewko `bohater`, prawdziwe dane Górnictwa
+- `game/character.js` — `PROFIL`, migracja każdej klasy na Bohatera, `prof`,
+  `materials`, `activity`, `xpNeed`, `addSkillXp`, `canGather`; testy przepisane
+- `server.js` — `/api/classes` skasowane, `/api/mine`, `/api/minestop`,
+  `/api/minetick`, `/api/abandon`; `startFight` wraca do niedokończonej walki;
+  `/api/mode` porzuca ją zamiast blokować; `skillsView`, `materialsView`
+- `public/index.html` — usunięte sekcje wprowadzenia i wyboru klasy
+- `public/app.js` — usunięte `INTRO` i `showClasses`; przebudowany Ekwipunek;
+  pętla Górnictwa; dwu- i trzykolumnowe układy; karta „Wróć do walki / Porzuć";
+  przycisk zmiany trybu w pasku walki
+- `public/style.css` — układ jednoekranowy, punkty łamania, style Ekwipunku,
+  Skilli i drzewka; usunięte martwe style wprowadzenia i wyboru klasy
+
+### DECISIONS
+
+- **Gracz nie ma klasy i nie będzie miał.** Klasy przechodzą do Sojuszników.
+  Sześć drzewek klasowych zostaje w config — policzone i przetestowane, czekają.
+- **Bohater liczy trzy atrybuty ofensywne w pełni**, dzielnik 110. Skutek uboczny,
+  który jest zyskiem: znika martwy drop.
+- **`ilvl` zostaje jako pole**, bo realnie bramkuje zakładanie i skaluje bazę
+  przedmiotu. Zmieniona tylko nazwa i dodane wyjaśnienie.
+- **Porzucenie walki nic nie kosztuje.** Blokada „najpierw dokończ walkę" robiła
+  z tego pułapkę bez wyjścia, a przegrana i tak nie kosztuje nic poza powrotem
+  na pierwszą falę.
+- **Górnictwo bez postępu offline.** Zegar trzyma klient, serwer wydaje dokładnie
+  jeden cykl i sprawdza czas.
+- **Ekran tworzenia herbu wolno przewijać.** Nie jest ekranem gameplayowym.
+
+### TESTS
+
+- `node game/combat.js` — przechodzą
+- `node game/character.js` — przechodzą, testy przepisane pod brak klasy gracza
+- Zmierzone `scrollHeight` vs `clientHeight` sześciu zakładek na **1280×720**,
+  **768×1024** i **375×812** — żadna nie przewija się jako strona, brak poziomego scrolla
+- Ręcznie: herb → imię → gra; Ekwipunek z porównaniem przedmiotów; Górnictwo do
+  poziomu 5 z odblokowaniem Cyny i Żelaza; 37 sztuk Miedzi w Ekwipunku → Surowce
+- Ręcznie odtworzone i naprawione zakleszczenie: `Walka już trwa` → `WRACA DO WALKI`,
+  `Najpierw dokończ walkę` → `ok, porzucona=true`
+
+### NEXT
+
+- **Werdykt właściciela.** Scope zatrzymany.
+- Potem: Sojusznicy w walce (i klasy wracają po ich stronie), następnie Kowalstwo,
+  żeby ruda miała gdzie trafić.

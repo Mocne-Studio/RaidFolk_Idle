@@ -989,3 +989,139 @@ Zasada, którą drabinka ma unieść już teraz: **poziom decyduje CO, narzędzi
 **Polski.** Specyfikacja vertical slice’a używała angielskich etykiet
 (`ADVENTURE`, `TEAM`, `SUMMON`) — przeczytane jako nazwy systemów, nie tekst do
 wyświetlenia. Cała gra, dokumenty i commity są polskie.
+
+---
+
+## 18. DECYZJE Z CORRECTIONS PASS (17 sierpnia 2026, druga sesja)
+
+Jak sekcja 17: to są **decyzje trwałe, wdrożone w kodzie**. Gdzie wcześniejsze
+rozdziały mówią co innego — a mówią, bo opisują klasy gracza i Dusze — **wygrywa
+ta sekcja**.
+
+### 18.1 Główna postać NIE MA KLASY
+
+Gracz nie wybiera klasy przy tworzeniu postaci i nie wybierze jej później.
+Ekran wyboru klasy został skasowany razem z endpointem `/api/classes`.
+
+Zamiast tego postać ma stały profil **Bohater**:
+
+- obrażenia liczą się z **Siły, Intelektu i Zręczności naraz**, dzielnik 110;
+- Wytrzymałość dalej daje wyłącznie życie i pancerz;
+- drzewko jest **jedno i uniwersalne**: Siła / Hart / Tempo, trzy gałęzie po pięć węzłów.
+
+Skutek uboczny, który akurat jest zyskiem: **znika martwy drop**. Afiks Siły,
+Intelektu i Zręczności robi coś każdemu, więc żadna broń ani pierścień nie są
+z góry śmieciem.
+
+Wszystkie postacie z bazy — Wędrowiec, Wojownik, Mag, cokolwiek — stają się
+Bohaterem przy pierwszym wczytaniu, a punkty wydane w martwych węzłach wracają
+do puli.
+
+### 18.2 Klasy należą do Sojuszników
+
+Sześć klas z sekcji o klasach (Wojownik, Paladyn, Łowca, Tropiciel, Mag, Tancerz
+Ostrzy) **nie znika z projektu** — zmienia właściciela. Będą charakteryzować
+Sojuszników, nie gracza.
+
+Ich liczby i drzewka zostają w `game/config.js` nietknięte: policzone,
+przetestowane i gotowe do użycia, gdy Sojusznicy wejdą do walki.
+
+**Dusze przestają być potrzebne w dotychczasowej formie** — obiecywały granie
+kolejną klasą jako osobną postacią, a klas dla gracza już nie ma.
+
+### 18.3 Po herbie i imieniu wchodzi się prosto do gry
+
+Czterostronicowe wprowadzenie zostało skasowane. Ścieżka to:
+
+```
+HERB → IMIĘ → GRA
+```
+
+Żadnego `Dalej → Dalej → Dalej`. Jeśli coś wymaga wyjaśnienia, wyjaśnia się to
+**kontekstowo, w miejscu, gdzie gracz tego używa** — podpowiedzią przy statystyce,
+zdaniem na karcie, opisem pod przyciskiem. Nie osobnym ekranem na wejściu.
+
+### 18.4 Ekrany gameplayowe projektuje się pod JEDEN EKRAN
+
+To jest reguła UX, nie sugestia. Podstawowa zawartość ekranu ma się mieścić
+bez przewijania na telefonie, tablecie i desktopie.
+
+**Przeładowanego ekranu nie rozwiązuje się dodaniem scrolla.** Rozwiązuje się go
+układem: kolumnami, grupowaniem, zakładkami, kategoriami, kompaktowymi panelami
+i podpowiedziami zamiast akapitów.
+
+Przewijać wolno się **wyłącznie dużym zbiorom danych** — plecakowi, bestiariuszowi,
+logowi walki — i to **wewnątrz własnego pudełka**, nie całą stroną.
+
+Wyjątek: ekran tworzenia herbu. Trzydzieści symboli i pięć palet nie zmieści się
+inaczej, a nie jest to ekran gameplayowy.
+
+### 18.5 Responsywność
+
+| Szerokość | Zachowanie |
+|---|---|
+| < 760 px | telefon: jedna kolumna, `#app` do 520 px |
+| 760–1099 px | tablet: `#app` do 900 px, układy dwukolumnowe |
+| ≥ 1100 px | desktop: `#app` do 1180 px, plecak w trzech kolumnach |
+
+Wcześniej gra była paskiem 520 px pośrodku pustej strony na każdym ekranie
+większym od telefonu.
+
+### 18.6 Zwykły ekwipunek należy TYLKO do głównej postaci
+
+Sojusznicy i pety **nie noszą hełmów, napierśników, butów ani broni**. Rosną
+rzadkością, duplikatami i gwiazdkami.
+
+Docelowo — i dopiero wtedy — Legendary Sojusznik dostanie **jeden Relikt**,
+a Legendary pet **jedną broń peta**. Nic poza tym. Pełnego systemu ekwipunku
+dla towarzyszy nie będzie.
+
+### 18.7 „Poziom przedmiotu" zamiast `ilvl`
+
+Skrót `ilvl` zniknął z interfejsu. Pole zostaje, bo pełni dwie realne funkcje:
+bramkuje założenie (`reqLevel`) i skaluje bazę obrażeń albo pancerza. W UI nazywa
+się **Poziom przedmiotu** i ma podpowiedź mówiącą, do czego służy.
+
+### 18.8 Ekwipunek: makieta postaci, nie lista danych
+
+Ekran Ekwipunku pokazuje:
+
+- **makietę postaci 3×3** z portretem w środku — głowa u góry, bronie po bokach,
+  pancerz pod spodem, dodatki w rogach;
+- **siatkę statystyk** z podpowiedziami: Zdrowie, Atak, Obrona, Kryt, Prędkość,
+  Moc, Celność, Unik, Blok;
+- **panel szczegółu** z nazwą, rzadkością, typem, slotem, afiksami i **różnicą
+  wobec noszonego**;
+- **plecak z kategoriami**: Wszystko / Broń / Pancerz / Dodatki / Surowce.
+
+### 18.9 Górnictwo jest pierwszą grywalną profesją
+
+Górnictwo ma pełną pętlę: kopiesz → dostajesz rudę i exp → wbijasz poziom →
+odblokowujesz kolejny surowiec. Kolejne cykle lecą same, aż klikniesz Przerwij.
+
+Drabinka: Miedź 1 · Cyna 3 · Żelazo 5 · Węgiel 8 · Mithril 12. **To nie są
+finalne liczby** — są celowo niskie, żeby dało się zobaczyć kilka odblokowań
+w minutę.
+
+Zasada, którą ta pętla ma nieść od początku:
+**POZIOM decyduje, CO możesz zebrać. NARZĘDZIE decyduje, JAK SZYBKO.**
+(Narzędzia jeszcze nie ma — dziś kopie się gołymi rękami.)
+
+Górnictwo jest **wzorem dla pozostałych sześciu profesji**, nie wyjątkiem.
+Postępu offline nie ma i w tej wersji nie będzie: zegar trzyma klient, a serwer
+wydaje dokładnie jeden cykl i sprawdza czas.
+
+### 18.10 Porzucenie walki nic nie kosztuje
+
+Niedokończona walka turowa **nie może być ślepym zaułkiem**. Wcześniej blokowała
+i rozpoczęcie nowej walki, i zmianę trybu, a ekran jej nie pokazywał — postać
+zakleszczała się na stałe.
+
+Teraz:
+
+- „Walcz" **wraca** do niedokończonej walki zamiast zwracać błąd;
+- zmiana trybu **porzuca** walkę i przełącza tryb;
+- jest jawny przycisk „Porzuć", a w pasku walki przełącznik trybu.
+
+Porzucenie kosztuje tyle co przegrana, czyli powrót na pierwszą falę piętra —
+a więc nic poza czasem.

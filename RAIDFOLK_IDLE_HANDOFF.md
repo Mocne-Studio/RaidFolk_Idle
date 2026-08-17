@@ -31,15 +31,31 @@ Nie sięgaj do niej po nic, nie modyfikuj jej, nie traktuj tego repo jako jej ga
 Pełne przejście, które zadziałało ręcznie od początku do końca:
 
 ```
-herb → nick → wprowadzenie → wybór klasy → główne UI
+herb → imię → OD RAZU gra
 → hub Wyprawy → Puszcza → piętra 1–9 na automacie
 → piętro 10, boss turowy → wygrana → trofeum
-→ Drużyna / Ekwipunek / Skille / Przywołanie / Kronika
+→ Ekwipunek: makieta postaci, statystyki, kategorie plecaka
+→ Skille: Górnictwo kopie naprawdę, exp, poziomy, odblokowania
+→ Drużyna / Przywołanie / Kronika
 ```
 
+- **Wejście do gry** — herb, imię i **od razu gra**. Nie ma wprowadzenia
+  ani wyboru klasy; jedno i drugie zostało skasowane.
+- **Główna postać nie ma klasy.** Stały profil „Bohater": obrażenia liczą się
+  z Siły, Intelektu i Zręczności naraz (`dmgDivisor: 110`), drzewko jest jedno
+  i uniwersalne (Siła / Hart / Tempo). Klasy należą do Sojuszników.
+- **Układ jednoekranowy** — żaden z sześciu ekranów nie przewija się jako strona.
+  Przewijają się wyłącznie pudełka z danymi: plecak, bestiariusz, log walki.
+- **Responsywność** — 520 px telefon, 900 px tablet, 1180 px desktop.
 - **Nawigacja** — sześć zakładek: Wyprawa, Drużyna, Ekwipunek, Skille,
   Przywołanie, Kronika. Postać i Drzewko siedzą pod przyciskiem profilu
   w nagłówku (herb + nick + poziom + moc + sakiewka).
+- **Ekwipunek** — makieta postaci 3×3 z portretem w środku, siatka statystyk
+  z podpowiedziami, panel szczegółu z **różnicą wobec noszonego**, kategorie
+  plecaka (Wszystko / Broń / Pancerz / Dodatki / Surowce).
+- **Górnictwo** — pełna pętla: kopiesz, dostajesz rudę i exp, wbijasz poziom,
+  odblokowujesz kolejny surowiec. Kolejne cykle lecą same do „Przerwij".
+  Surowce lądują w Ekwipunku → Surowce. Kopanie przeżywa odświeżenie strony.
 - **Stały pasek walki** — nad zakładkami, widoczny na każdym ekranie, dopóki coś
   się bije. Niesie biom, piętro, falę, oba paski HP, tempo ×1/×2, STOP i DO WALKI.
 - **Wyprawa (hub)** — Wieża otwarta; Wyprawa `WKRÓTCE`; World Boss, Kolos, Tytan
@@ -70,8 +86,9 @@ herb → nick → wprowadzenie → wybór klasy → główne UI
 - **Drużyna** — struktura pięciu slotów stoi, silnik walki od początku przyjmuje
   pięć jednostek po stronie gracza. Przywołani sojusznicy i pety **lądują
   w kolekcji, ale jeszcze nie wchodzą do walki**. Kart z ekranu nie da się rozwinąć.
-- **Skille zbierackie** — siedem profesji z prawdziwymi drabinkami, ale to
-  **sama makieta**: poziomy stoją na 1, nic się nie zbiera, nic się nie zapisuje.
+- **Skille zbierackie** — **Górnictwo gra naprawdę.** Pozostałe sześć profesji
+  to nadal makiety z drabinkami: poziomy stoją na 1, nic się nie zbiera.
+  Surowce nie mają jeszcze zastosowania — Kowalstwo ich nie przetapia.
 - **Przywołanie** — brak prawdziwych szans, pity, duplikatów i gwiazdek.
 - **Kronika** — Przedmioty i Osiągnięcia to na razie karty wyjaśniające zamiar.
 
@@ -89,11 +106,12 @@ etykiety klas na przedmiotach.
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `4dd5503` — „Dokumenty: HANDOFF, SESSION LOG, sekcja 17 w DESIGN, aktualizacja CLAUDE.md" |
+| HEAD | `0b4ac30` — „Corrections pass: bez klasy gracza, bez tutorialu, jeden ekran, grywalne Gornictwo" |
 | Working tree | **czysty** |
 
 Poprzednie punkty:
 
+- `84317f1` / `4dd5503` — dokumenty przekazania
 - `aeddb98` — cały vertical slice: sześć zakładek, stały pasek walki,
   wyczerpanie HP, turowy boss, Kronika
 - `0739c17` — checkpoint pracy, która leżała niezacommitowana: drzewka klas,
@@ -123,9 +141,11 @@ Poprzednie punkty:
 
 ## ACTIVE WORK
 
-Sesja z 17 sierpnia 2026 zbudowała cały vertical slice i **zatrzymała się zgodnie
-z poleceniem**: przed rozbudową Wypraw właściciel ma obejrzeć całość i wydać werdykt
-o kierunku UI/UX i gameplayu.
+Druga sesja 17 sierpnia 2026 wykonała **corrections pass** po pierwszym werdykcie
+właściciela: skasowany pseudo-poradnik i wybór klasy, układ jednoekranowy,
+responsywność na tablet, przebudowany Ekwipunek, grywalne Górnictwo oraz naprawa
+zakleszczenia niedokończonej walki turowej. **Zatrzymana zgodnie z poleceniem** —
+czeka na kolejny werdykt UI/UX.
 
 ---
 
@@ -137,11 +157,28 @@ Kiedy werdykt przyjdzie, pierwsza rzecz do zrobienia to **posadzenie sojusznikó
 i peta w walce**: silnik już przyjmuje pięć jednostek po stronie gracza
 (`createFight({ party: [...] })`, `PARTY_SLOTS` w `public/app.js`), a Przywołanie
 już produkuje obsadę do `ch.collection`. Brakuje wyłącznie sklejenia jednego
-z drugim i statystyk dla sojusznika.
+z drugim i statystyk dla sojusznika. To także miejsce, w którym **klasy wracają
+do gry** — tym razem po stronie Sojuszników, a `config.classes` i `config.tree.classes`
+mają na to gotowe, przetestowane liczby.
+
+Druga rzecz w kolejce, jeśli werdykt pójdzie w stronę profesji: **Kowalstwo**,
+żeby wykopana ruda miała gdzie trafić. Dziś surowce nie mają żadnego zastosowania.
 
 ---
 
 ## IMPORTANT DESIGN DECISIONS
+
+0. **Główna postać NIE MA KLASY i nigdy nie będzie miała.** Klasy dotyczą
+   Sojuszników. Gracz ma stały profil „Bohater" i buduje się atrybutami,
+   sprzętem i jednym uniwersalnym drzewkiem.
+0a. **Po herbie i imieniu wchodzi się prosto do gry.** Żadnego wieloekranowego
+   wprowadzenia. Informacje podaje się kontekstowo, w miejscu, gdzie są potrzebne.
+0b. **Ekrany gameplayowe projektuje się pod jeden ekran.** Przewijać wolno się
+   wyłącznie dużym zbiorom danych, i to wewnątrz własnego pudełka.
+0c. **Zwykły ekwipunek należy tylko do głównej postaci.** Sojusznicy i pety
+   nie noszą hełmów, napierśników ani broni. Docelowo Legendary Sojusznik
+   dostanie relikt, a Legendary pet własną broń — nic więcej.
+0d. **Górnictwo jest pierwszą grywalną profesją** i wzorem dla pozostałych.
 
 1. **HP nie wraca między falami.** To jest oś napięcia piętra. Pełne zdrowie oddaje
    wejście na nowe piętro albo porażka. Odwróciło to wcześniejszą decyzję
@@ -181,8 +218,13 @@ Bez wyraźnego polecenia nie ruszaj:
 - **Struktury pięciu slotów po stronie gracza** — to jest przygotowane miejsce
   na sojuszników i peta.
 - **Powrotu do liczenia atrybutów klas mieszanych po połowie** bez przeliczenia.
-- **Wprowadzenia opisującego rzeczy, których nie ma.** Zasada: `INTRO`
-  w `public/app.js` opisuje TYLKO to, co działa w tym buildzie.
+- **Nie przywracaj wieloekranowego wprowadzenia.** Zostało skasowane świadomie.
+  Jeśli coś wymaga wyjaśnienia, wyjaśnij to w miejscu, gdzie gracz tego używa.
+- **Nie przywracaj wyboru klasy dla gracza.** To decyzja trwała.
+- **Nie „naprawiaj" układu przez dodanie scrolla.** Jeśli ekran się nie mieści,
+  przemyśl układ: grupuj, dziel na kolumny, zwijaj w podpowiedzi.
+- **`.screens` nie przewija się jako strona.** Przewijają się `.scrollbox`,
+  `.invlist`, `.two-col`/`.three-col` na wąskich ekranach i log walki.
 
 ---
 
@@ -202,15 +244,36 @@ npm run apk <adres>             budowa APK
 node game/combat.js && node game/character.js
 ```
 
-**Smoke check ręczny (pełne przejście, ~3 minuty):**
+**Smoke check ręczny (pełne przejście, ~4 minuty):**
 
 1. Skasuj `raidfolk.db` albo wyczyść `localStorage` — dostaniesz świeżą postać.
-2. Ułóż herb, wpisz imię, przeklikaj wprowadzenie, wybierz klasę.
-3. Rozdaj dziesięć punktów atrybutów. **Bez tego nie przejdziesz pierwszego piętra.**
+2. Ułóż herb, wpisz imię, kliknij **Wejdź do wieży**. Masz wylądować od razu w grze —
+   bez wprowadzenia i bez wyboru klasy.
+3. Profil w nagłówku → rozdaj dziesięć punktów atrybutów.
+   **Bez tego nie przejdziesz pierwszego piętra.**
 4. Wyprawa → Wieża → Ruszaj. Przejdź na Ekwipunek — pasek u dołu ma dalej żyć.
-5. Zdobądź piętro, wejdź wyżej, zakładaj łup i dokupuj mikstury.
-6. Na piętrze 10 sprawdź, że przełącznik trybu zniknął, a walka jest turowa.
-7. Przywołaj sojusznika i peta, sprawdź, że widać ich w Drużynie i Kronice.
+5. **Ekwipunek:** kliknij slot na makiecie i przedmiot w plecaku. Panel po prawej
+   ma pokazać różnicę wobec noszonego. Przełącz kategorie plecaka.
+6. **Skille → Górnictwo → Miedź.** Pasek ma się wypełniać, ruda i exp przybywać,
+   kolejne cykle lecieć same. Po kilku poziomach ma się odblokować Cyna.
+   Sprawdź Ekwipunek → Surowce.
+7. Zdobądź piętro, wejdź wyżej, zakładaj łup i dokupuj mikstury.
+8. Na piętrze 10 sprawdź, że przełącznik trybu zniknął, a walka jest turowa.
+9. **Test zakleszczenia:** w trybie turowym zacznij walkę, wyjdź na inną zakładkę,
+   wróć. Ma być karta „Wróć do walki / Porzuć", a przycisk zmiany trybu w pasku
+   walki ma działać.
+10. Przywołaj sojusznika i peta, sprawdź, że widać ich w Drużynie i Kronice.
+
+**Smoke check układu (czy coś się nie przewija):**
+
+Otwórz konsolę na `localhost:8080` i po kolei na każdej zakładce:
+
+```bash
+node -e "console.log('w przegladarce: dokument.querySelector(#s-eq).scrollHeight vs clientHeight')"
+```
+
+Prościej: zmień rozmiar okna na 375×812, 768×1024 i 1280×720 i przeklikaj
+sześć zakładek. Żadna nie powinna dać paska przewijania całego ekranu.
 
 ---
 
@@ -218,7 +281,15 @@ node game/combat.js && node game/character.js
 
 - **Sojusznicy i pety nie wchodzą do walki.** Lądują w kolekcji i widać ich
   w Drużynie oraz Kronice, ale arena dalej pokazuje puste sloty.
-- **Skille zbierackie to makieta.** Klikanie niczego nie zmienia, poziomy stoją na 1.
+- **Wykopane surowce nie mają zastosowania.** Kowalstwo ich nie przetapia.
+- **Sześć profesji poza Górnictwem to makiety.** Klikanie niczego nie zmienia.
+- **Balans Górnictwa jest celowo szybki**, żeby dało się zobaczyć kilka
+  odblokowań w minutę. To nie są finalne liczby (`config.skills.gornictwo`).
+- **Ekran tworzenia herbu się przewija.** To jedyny ekran, który to robi —
+  trzydzieści symboli i pięć palet nie zmieści się inaczej. Nie jest ekranem
+  gameplayowym, więc zostawione świadomie.
+- **Górnictwo nie liczy się po zamknięciu gry.** Timer chodzi po stronie klienta;
+  postęp offline jest świadomie niezrobiony.
 - **Balans wieży jest luźno sprawdzony.** Bot, który rozdaje punkty, zakłada łup
   i dokupuje mikstury, przechodzi piętra 1–9 **bez ani jednej porażki**. Wyczerpanie
   jest więc widoczne, ale jeszcze nie groźne. Ktoś, kto nie rozda dziesięciu punktów

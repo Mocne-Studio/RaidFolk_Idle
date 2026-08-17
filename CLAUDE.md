@@ -19,8 +19,9 @@ nic wspólnego, nie jest jej trybem ani gałęzią. Nie sięgaj do niej po nic.
 | `makieta_ui.html` | klikalna makieta wszystkich ekranów, także tych niezaimplementowanych |
 | `README.md` | uruchomienie, strojenie, struktura |
 
-**Sekcja 17 dokumentu projektowego opisuje to, co faktycznie stoi w kodzie.** Gdzie
-reszta dokumentu mówi co innego, wygrywa sekcja 17.
+**Sekcje 17 i 18 dokumentu projektowego opisują to, co faktycznie stoi w kodzie.**
+Gdzie reszta dokumentu mówi co innego — a mówi, bo opisuje klasy gracza i Dusze —
+wygrywają sekcje 17 i 18.
 
 **Dokument projektowy wyprzedza implementację.** Opisuje docelową grę; kod ma na razie
 pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan na później.
@@ -48,17 +49,22 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
   - **umiejętności** z cooldownami: Okrzyk bojowy, Wir, Cios ogłuszający
   - **blok** — tylko z tarczą w drugiej ręce; 10% bazy + drzewko, zbija cios o połowę
   - leczenie miksturami, każda kolejna w walce o 10% słabsza
-- **Łup** — 7 rzadkości, afiksy skalowane z ilvl, bronie w trzech typach
-- **Ekwipunek** — 8 slotów, **jeden próg**: poziom postaci (= najwyższe piętro)
+- **Łup** — 7 rzadkości, afiksy skalowane z poziomem przedmiotu, bronie w trzech typach
+- **Ekwipunek** — 8 slotów, **jeden próg**: poziom postaci (= najwyższe piętro);
+  makieta postaci 3×3 z portretem, siatka statystyk, porównanie z noszonym,
+  kategorie plecaka
 - **Atrybuty** — start na zerze, **10 punktów do rozdania**, potem 3 za piętro;
-  obrażenia rosną tylko z atrybutu swojej klasy
+  obrażenia rosną z Siły, Intelektu i Zręczności naraz
+- **Górnictwo** — pełna pętla: kopiesz, dostajesz rudę i exp, wbijasz poziom,
+  odblokowujesz kolejny surowiec; cykle lecą same do „Przerwij"
 - **Generator herbu** — kształt, symbol, trzy kolory; SVG, nie plik graficzny
 - **Kod postaci** — pozwala wrócić do postaci z innego adresu lub urządzenia
-- **Ekran wprowadzenia** — cztery ekrany, z pominięciem; treść w `public/app.js`
-  (stała `INTRO`). Pokazuje się raz, tylko nowej postaci
-- **Wybór klasy** — sześć klas z opisem i skalowaniem, zaraz po wprowadzeniu
-- **Drzewka klas** — 3 gałęzie × 5 węzłów × 5 rang dla każdej klasy,
+- **Wejście do gry** — herb → imię → **od razu gra**. Nie ma wprowadzenia
+  ani wyboru klasy; jedno i drugie zostało skasowane
+- **Drzewko Bohatera** — jedno, uniwersalne: Siła / Hart / Tempo, 3 × 5 węzłów × 5 rang,
   węzeł `i` wymaga `i × 2` punktów w swojej gałęzi, reset za złoto
+- **Układ jednoekranowy** — żaden z sześciu ekranów nie przewija się jako strona;
+  responsywność 520 / 900 / 1180 px
 - **Kronika** — bestiariusz z licznikiem zabić i trofeami (4 na przeciwnika,
   odsłaniane na zawsze); obsada biomu Puszcza
 - **Przywołanie** — klucze (dawna „waluta specjalna"), osobne pule sojuszników i petów
@@ -67,33 +73,45 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 
 - **Drużyna** — struktura pięciu slotów stoi, przywołani lądują w kolekcji,
   ale **jeszcze nie wchodzą do walki**
-- **Skille zbierackie** — siedem profesji z drabinkami, ale to **sama makieta**:
-  poziomy stoją na 1, nic się nie zbiera, **nic się nie zapisuje**
+- **Skille zbierackie** — **Górnictwo gra naprawdę**; pozostałe sześć profesji
+  to makiety z drabinkami, poziomy stoją na 1
 - **Przywołanie** — brak prawdziwych szans, pity, duplikatów i gwiazdek
 - **Kronika** — Przedmioty i Osiągnięcia to karty opisujące zamiar
 
 ## Czego NIE MA
 
 Sojusznicy i pet w walce (sloty w arenie stoją puste, silnik gotowy) ·
-przepalanie i energia · kowal i afiksy · wyprawy · world boss · Kolos · Tytan ·
-rajdy · bank · pętla zbierania · offline · **Dusze** · **wiele postaci na koncie**.
+przepalanie i energia · kowal i przetapianie rudy · wyprawy · world boss ·
+Kolos · Tytan · rajdy · bank · sześć pozostałych profesji · offline ·
+**klasy gracza (skasowane na stałe)** · **wiele postaci na koncie**.
 
 ---
 
-## Model klas — wdrożony w połowie
+## Model klas — GRACZ NIE MA KLASY
 
-**Zrobione:** sześć klas z dokumentu (Wojownik, Paladyn, Łowca, Tropiciel, Mag, Tancerz
-Ostrzy), wybierane na ekranie po wprowadzeniu. Stary Wędrowiec i bonus +50% expa do
-skilla klasy **zniknęły**.
+**To jest decyzja trwała.** Główna postać nie wybiera klasy przy tworzeniu i nigdy
+jej nie dostanie. Ekran wyboru klasy i endpoint `/api/classes` zostały skasowane.
 
-Obrażenia skalują się z atrybutami klasy (`classes[x].dmgAttrs`), a nie z typu trzymanej
-broni. Warstwa uniwersalna została wspólna: Zręczność daje prędkość, kryt, celność i unik
-każdemu, Wytrzymałość daje HP i pancerz każdemu.
+Gracz ma stały profil **Bohater** (`config.classes.bohater`):
 
-**Klasy mieszane liczą oba atrybuty w pełni, a płacą wyższym dzielnikiem**
-(`dmgDivisor`: czyste 100/130, mieszane 115–125). Wersja z liczeniem po połowie była
-pierwsza i okazała się karą, nie wyborem — Paladyn dostawał 37% mniej obrażeń z tych
-samych punktów. Nie wracaj do niej bez policzenia.
+- obrażenia z **Siły, Intelektu i Zręczności naraz**, `dmgDivisor: 110`
+- Wytrzymałość dalej daje wyłącznie życie i pancerz
+- drzewko **jedno i uniwersalne**: Siła / Hart / Tempo
+
+Skutek uboczny, który jest zyskiem: **znika martwy drop**. Każdy afiks ofensywny
+coś daje, więc nie ma z góry bezużytecznych przedmiotów.
+
+**Klasy przeszły do Sojuszników.** Sześć klas (Wojownik, Paladyn, Łowca, Tropiciel,
+Mag, Tancerz Ostrzy) i ich drzewka **zostają w `game/config.js` nietknięte** —
+policzone, przetestowane, czekają na moment, w którym Sojusznicy wejdą do walki.
+Nie kasuj ich i nie „sprzątaj" jako martwego kodu.
+
+**Klasy mieszane liczyły oba atrybuty w pełni, a płaciły wyższym dzielnikiem.**
+Wersja z liczeniem po połowie zabierała Paladynowi 37% obrażeń z tych samych punktów.
+Gdy Sojusznicy wejdą — nie wracaj do niej bez policzenia.
+
+**Migracja:** każda postać z bazy staje się Bohaterem przy pierwszym wczytaniu,
+a punkty wydane w martwych węzłach wracają do puli (`migrate()` w `game/character.js`).
 
 **Skille bojowe skasowane.** Atak, Dystansowy, Magia, Obrona i Zdrowie zniknęły z gry.
 (Nie myl skasowanego **skilla** Obrona z **akcją tury** Obrona, która doszła później —
@@ -103,23 +121,15 @@ w `game/character.js`). Po skasowaniu skilla Zdrowie darmowy przyrost HP niesie 
 (`hpPerLevel` × piętro), inaczej wieża robiłaby się coraz ostrzejsza dla każdego,
 kto nie wsypał wszystkiego w Wytrzymałość.
 
-**Drzewka klas działają.** Trzy gałęzie po pięć węzłów dla każdej z sześciu klas,
-wszystko liczbami w `config.tree`. Opisy węzłów w UI generują się z tych liczb —
-nie ma drugiego miejsca do poprawiania po zmianie balansu.
+**Drzewko działa.** Wszystko liczbami w `config.tree`. Opisy węzłów w UI generują się
+z tych liczb — nie ma drugiego miejsca do poprawiania po zmianie balansu.
 
 Efekty węzłów to `dmgPct`, `hpPct`, `armorPct/armorFlat`, `critChance/critPower`,
 `speed`, `accuracy`, `evasion`, `block/blockCut`, `potionPct` oraz `attrWeight`.
-Ten ostatni podbija WAGĘ atrybutu w obrażeniach i tak wygląda „większe obrażenia
-od magii" w silniku, który nie zna typów obrażeń, tylko atrybuty klasy.
+Ten ostatni podbija WAGĘ atrybutu w obrażeniach.
 
-**Czego wciąż NIE MA z modelu klas:**
-
-- **Sześć osobnych postaci na koncie** — jedna postać, jedna klasa, na zawsze
-- **Dusze** — ekran wyboru klasy obiecuje je graczowi, ale nic za tym nie stoi
-- **Odblokowywanie klas przez bossów aktów** — wszystkie sześć dostępnych od startu
-- **Etykiety klas na przedmiotach** — martwy drop nadal istnieje
-
-To wciąż **duża przebudowa**. Nie „naprawiaj" reszty bez wyraźnego polecenia.
+**Dusze wypadły z projektu w dotychczasowej formie** — obiecywały granie kolejną
+klasą jako osobną postacią, a klas dla gracza już nie ma.
 
 ---
 
@@ -163,6 +173,21 @@ ani `name` ze wpisów logu; bez nazw klient rysował „undefined" pod każdym p
 **Zdrowie nie wraca między falami.** Wcześniej wracało i to jest odwrócona decyzja,
 nie błąd. `startFight` wchodzi w walkę z `stats.hp`, `resolveFight` zapisuje, ile
 zostało. Pełne HP oddaje tylko `doAdvance` i porażka. Nie „naprawiaj" tego z powrotem.
+
+**Ekran gry mieści się na ekranie.** `.screens` nie przewija się jako strona.
+Przewijają się `.scrollbox`, `.invlist`, `.two-col`/`.three-col` na wąskich ekranach
+i log walki. **Nie „naprawiaj" przeładowanego ekranu przez dodanie scrolla** —
+przemyśl układ: kolumny, grupowanie, zakładki, podpowiedzi zamiast akapitów.
+
+**Niedokończona walka turowa nie może być ślepym zaułkiem.** `/api/fight` WRACA
+do niej, `/api/mode` ją porzuca, `/api/abandon` kasuje ją wprost. Wcześniejsze
+„Walka już trwa" + „Najpierw dokończ walkę" zakleszczało postać na stałe.
+Porzucenie kosztuje tyle co przegrana, czyli nic poza powrotem na pierwszą falę.
+
+**Górnictwo: zegar trzyma klient, serwer wydaje jeden cykl.** `/api/minetick`
+sprawdza, czy minął czas, i przyznaje dokładnie jedno wydobycie. Tak wygląda brak
+postępu offline przy zachowaniu odporności na zmianę zakładki. Nie przerabiaj tego
+na pętlę serwerową bez decyzji o offline.
 
 **Automat rozgrywa całe piętro, nie jedną walkę.** Ciąg fal siedzi po stronie klienta
 (`AUTO` w `public/app.js`), bo na tym stoi stały pasek walki widoczny na innych zakładkach.
@@ -212,18 +237,22 @@ Baza to plik `raidfolk.db`. Skasowanie go czyści świat.
 
 ---
 
-## Ekran wprowadzenia — zasada na przyszłość
+## Wejście do gry — zasada na przyszłość
 
-Zrobiony: cztery ekrany po stworzeniu postaci (wieża bez końca → **zdrowie nie wraca
-między falami** → tryby, siły ciosu i turowy boss → pasek ultimate i atrybuty),
-przycisk dalej i pominięcie. Treść siedzi w stałej `INTRO` w `public/app.js`.
+**Ekran wprowadzenia został SKASOWANY.** Cztery strony `Dalej → Dalej → Dalej`
+poszły do kosza na polecenie autora. Ścieżka to **herb → imię → gra**, bez przystanków.
+Stała `INTRO` i funkcja `showIntro` już nie istnieją — nie przywracaj ich.
 
-**Ustalona zasada: wprowadzenie opisuje TYLKO to, co faktycznie działa w buildzie.**
-Nie opisuj klas, wypraw ani drzewka, dopóki ich nie ma — gracz zobaczyłby obietnice,
-których gra nie spełnia. Sekcje dopisuj w miarę, jak systemy wchodzą.
+**Ustalona zasada w zamian: wyjaśniaj kontekstowo, w miejscu użycia.** Podpowiedź
+przy statystyce, jedno zdanie na karcie, opis pod przyciskiem. Nigdy osobnym
+ekranem na wejściu.
 
-Świadomie pominięte, bo w kodzie tego nie ma: mana (Intelekt daje tylko obrażenia
-magiczne) i regeneracja. Jak wejdą — dopisz je do ekranu czwartego.
+Stara zasada zostaje w mocy tam, gdzie tekst jednak jest: **opisuj TYLKO to,
+co faktycznie działa w buildzie.** Nie obiecuj klas, wypraw ani offline’u,
+dopóki ich nie ma.
+
+Świadomie pominięte, bo w kodzie tego nie ma: mana (Intelekt daje tylko obrażenia)
+i regeneracja poza tą 2%/min między sesjami.
 
 ---
 
