@@ -417,10 +417,15 @@ export const CONFIG = {
       xpBase: 20,
       resources: [
         { id: 'miedz',   label: 'Miedź',   lvl: 1,  xp: 8,  ms: 3000 },
+        { id: 'esiskry', label: 'Esencja Iskry', lvl: 2, xp: 11, ms: 3400 },
         { id: 'cyna',    label: 'Cyna',    lvl: 3,  xp: 14, ms: 3800 },
+        { id: 'esognia', label: 'Esencja Ognia', lvl: 4, xp: 20, ms: 4200 },
         { id: 'zelazo',  label: 'Żelazo',  lvl: 5,  xp: 24, ms: 4600 },
+        { id: 'esmrozu', label: 'Esencja Mrozu', lvl: 7, xp: 33, ms: 5000 },
         { id: 'wegiel',  label: 'Węgiel',  lvl: 8,  xp: 38, ms: 5400 },
+        { id: 'esburzy', label: 'Esencja Burzy', lvl: 10, xp: 50, ms: 5900 },
         { id: 'mithril', label: 'Mithril', lvl: 12, xp: 60, ms: 6500 },
+        { id: 'esotchlani', label: 'Esencja Otchłani', lvl: 15, xp: 82, ms: 7200 },
       ],
     },
     // KOWALSTWO PRZETWARZA. Zjada rudę z Górnictwa i wypluwa sztaby,
@@ -494,19 +499,38 @@ export const CONFIG = {
         { id: 'mocnamikstura', label: 'Mocna mikstura', lvl: 9,  xp: 38, ms: 5200,
           koszt: { ziologorzk: 2, korzennocny: 1 },daje: { potion: 3 } },
         { id: 'eliksir',       label: 'Eliksir',        lvl: 14, xp: 60, ms: 6200,
-          koszt: { korzennocny: 2, kwiatciern: 1, runaiskry: 1 }, daje: { potion: 5 } },
+          koszt: { korzennocny: 2, kwiatciern: 1, mocyiskry: 1 }, daje: { potion: 5 } },
       ],
     },
+    // RUNY PRZETWARZAJĄ. Dwa stopnie:
+    //   1. runa zwykła = ESENCJA z Górnictwa + ruda
+    //   2. runa mocy   = runa zwykła + KRYSZTAŁ MAGII, który wypada tylko
+    //      z wypraw. Bez zejścia po kryształ runy zostają bezsilne.
     runy: {
-      label: 'Runy', ic: '✦', daje: 'runy dla magii', zasila: 'Magia',
-      grywalne: true,
+      label: 'Runy', ic: '✦', daje: 'runy i runy mocy', zasila: 'Magia',
+      grywalne: true, przetwarza: true,
       xpBase: 26,
       resources: [
-        { id: 'runaiskry',  label: 'Runa iskry',   lvl: 1,  xp: 9,  ms: 3600 },
-        { id: 'runaognia',  label: 'Runa ognia',   lvl: 3,  xp: 16, ms: 4400 },
-        { id: 'runamrozu',  label: 'Runa mrozu',   lvl: 6,  xp: 27, ms: 5200 },
-        { id: 'runaburzy',  label: 'Runa burzy',   lvl: 9,  xp: 43, ms: 6000 },
-        { id: 'runaotchlani',label:'Runa otchłani',lvl: 13, xp: 68, ms: 7000 },
+        { id: 'runaiskry',   label: 'Runa iskry',   lvl: 1,  xp: 9,  ms: 3600,
+          koszt: { esiskry: 2, miedz: 1 } },
+        { id: 'runaognia',   label: 'Runa ognia',   lvl: 4,  xp: 18, ms: 4400,
+          koszt: { esognia: 2, cyna: 1 } },
+        { id: 'runamrozu',   label: 'Runa mrozu',   lvl: 7,  xp: 30, ms: 5200,
+          koszt: { esmrozu: 2, zelazo: 1 } },
+        { id: 'runaburzy',   label: 'Runa burzy',   lvl: 10, xp: 47, ms: 6000,
+          koszt: { esburzy: 2, wegiel: 1 } },
+        { id: 'runaotchlani',label: 'Runa otchłani',lvl: 14, xp: 72, ms: 7000,
+          koszt: { esotchlani: 2, mithril: 1 } },
+
+        // ---- runy mocy: tu wchodzi kryształ z wyprawy ----
+        { id: 'mocyiskry',   label: 'Runa Mocy — Iskra', lvl: 3,  xp: 26, ms: 5000,
+          koszt: { runaiskry: 2, krysztalmagii: 1 } },
+        { id: 'mocyognia',   label: 'Runa Mocy — Ogień', lvl: 6,  xp: 40, ms: 5800,
+          koszt: { runaognia: 2, krysztalmagii: 1 } },
+        { id: 'mocymrozu',   label: 'Runa Mocy — Mróz',  lvl: 9,  xp: 58, ms: 6600,
+          koszt: { runamrozu: 2, krysztalmagii: 2 } },
+        { id: 'mocyburzy',   label: 'Runa Mocy — Burza', lvl: 12, xp: 80, ms: 7400,
+          koszt: { runaburzy: 2, krysztalmagii: 2 } },
       ],
     },
   },
@@ -587,6 +611,14 @@ export const CONFIG = {
     lockedSlots: [1, 2],
   },
 
+  // ---------- SUROWCE SPOZA PROFESJI ----------
+  // Nie da się ich zebrać ani wytworzyć — wypadają wyłącznie z wypraw.
+  // To one bramkują runy mocy: bez zejścia w teren runy zostają bezsilne.
+  materialy: {
+    krysztalmagii: { label: 'Kryształ Magii', ic: '💎',
+      opis: 'Wypada tylko z wypraw. Nadaje runom moc.' },
+  },
+
   // ---------- PRZYWOŁANIE ----------
   // Prototyp odczucia, nie ekonomia. Klucze to ta sama waluta, którą oddaje boss
   // aktu — nie zakładamy drugiego portfela, dopóki nie wiadomo, czy system zostaje.
@@ -649,6 +681,11 @@ export const CONFIG = {
         opis: 'Pierwszy las pod wieżą. Wilki, gobliny i coś, co mieszka w sztolni.',
         // Długość rośnie z poziomem — dalej w wieży, dłuższa droga i większy łup.
         dlugosc: [{ floor: 1, nodes: 8 }, { floor: 5, nodes: 10 }, { floor: 12, nodes: 12 }],
+        // Surowce z wyprawy. Kryształ Magii jest tu jedynym źródłem run mocy.
+        mats: [
+          { id: 'miedz',         szansa: 0.45, ile: [1, 3] },
+          { id: 'krysztalmagii', szansa: 0.14, ile: [1, 1] },
+        ],
         drops: [
           { base: 'Ostrze',      slot: 'bron',       wtype: 'mele',    hands: 1 },
           { base: 'Topór',       slot: 'bron',       wtype: 'mele',    hands: 2 },

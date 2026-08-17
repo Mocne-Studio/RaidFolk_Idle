@@ -107,6 +107,7 @@ function skillsView(ch) {
 function materialsView(ch) {
   const nazwy = {};
   for (const s of Object.values(C.skills)) for (const r of s.resources ?? []) nazwy[r.id] = r.label;
+  for (const [id, m] of Object.entries(C.materialy)) nazwy[id] = m.label;
   return Object.entries(ch.materials ?? {})
     .filter(([, n]) => n > 0)
     .map(([id, n]) => ({ id, label: nazwy[id] ?? id, count: n }));
@@ -218,8 +219,11 @@ function view(ch) {
     materials: materialsView(ch),
     // Nazwy WSZYSTKICH surowców, nie tylko posiadanych — inaczej koszt
     // ulepszenia pokazywał surowe id, gdy gracz nie miał ani jednej sztaby.
-    matNames: Object.fromEntries(Object.values(C.skills)
-      .flatMap(sk => sk.resources ?? []).map(r => [r.id, r.label])),
+    matNames: {
+      ...Object.fromEntries(Object.values(C.skills)
+        .flatMap(sk => sk.resources ?? []).map(r => [r.id, r.label])),
+      ...Object.fromEntries(Object.entries(C.materialy).map(([id, m]) => [id, m.label])),
+    },
     buff: ch.buff ?? null,
     upgrade: C.upgrade,
     activity: ch.activity ?? null,
@@ -639,11 +643,15 @@ function resolveFight(ch) {
       for (const d of drops) { giveId(d); X.sakwa.push(d); out.loot.push(d); }
 
       // Materiały też lecą do sakwy — i też przepadają razem z nią.
-      if (Math.random() < 0.5) {
-        const ile = 1 + Math.floor(Math.random() * 3);
-        X.mats.miedz = (X.mats.miedz ?? 0) + ile;
-        out.mats = { miedz: ile };
+      // Tabela jest w definicji wyprawy; Kryształ Magii jest tu jedynym źródłem.
+      out.mats = {};
+      for (const m of def.mats ?? []) {
+        if (Math.random() >= m.szansa * (1 + (mnoznik - 1) * 0.4)) continue;
+        const ile = m.ile[0] + Math.floor(Math.random() * (m.ile[1] - m.ile[0] + 1));
+        X.mats[m.id] = (X.mats[m.id] ?? 0) + ile;
+        out.mats[m.id] = ile;
       }
+      if (!Object.keys(out.mats).length) delete out.mats;
 
       X.gold += meta.gold;
       X.at++;

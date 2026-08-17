@@ -1662,8 +1662,8 @@ function sekcjaZbierackie() {
           <div class="t2">${!r.unlocked
             ? `otwiera się na poziomie ${r.lvl}`
             : `${r.xp} exp · ${(r.ms / 1000).toFixed(1)} s`}</div>
-          ${r.unlocked && kosztTxt
-            ? `<div class="t2" style="color:${staC ? 'var(--brass)' : '#D9736B'}">z: ${esc(kosztTxt)}</div>` : ''}
+          ${kosztTxt
+            ? `<div class="t2" style="color:${!r.unlocked ? 'var(--ink-mute)' : staC ? 'var(--brass)' : '#D9736B'}">z: ${esc(kosztTxt)}</div>` : ''}
           ${r.buff ? `<div class="t2" style="color:var(--heal)">${esc(buffTxt(r.buff))}</div>` : ''}
         </div>
         <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ROBISZ' : !r.unlocked ? `Lv.${r.lvl}` : staC ? 'START' : 'BRAK'}</span>
