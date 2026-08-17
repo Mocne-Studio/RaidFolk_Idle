@@ -210,6 +210,14 @@ function arenaHtml() {
     <div class="charge-n">${F.charge ?? 0} / ${S.chargeMax || 10}</div>
   </div>`;
 
+  // Mana pokazuje się tylko wtedy, gdy jest po co — bez zaklęć byłaby ozdobą.
+  if (F.maxMana) {
+    h += `<div class="charge-wrap mana">
+      <div class="charge"><i style="width:${Math.round((F.mana ?? 0) / F.maxMana * 100)}%"></i></div>
+      <div class="charge-n">${F.mana ?? 0} / ${F.maxMana} many</div>
+    </div>`;
+  }
+
   h += '<div class="side">';
   for (let i = 0; i < PARTY_SLOTS; i++) {
     h += unitBox(party[i], {
@@ -279,12 +287,14 @@ function actionMenu() {
 
   h += `<div class="sec">Umiejętności</div>`;
   for (const a of S.abilities) {
-    const left = cd[a.id] ?? 0;
-    h += `<button class="card row skillbtn" data-act="ability" data-id="${a.id}" ${left ? 'disabled' : ''}>
-      <div class="icon">${left ? left : '✦'}</div>
+    // Serwer mówi wprost, czemu nie da się rzucić — klient nie powtarza reguł.
+    const blok = F.blokady?.[a.id] ?? (cd[a.id] ? `odnowienie: ${cd[a.id]}` : null);
+    h += `<button class="card row skillbtn" data-act="ability" data-id="${a.id}" ${blok ? 'disabled' : ''}>
+      <div class="icon">${a.mana ? '✦' : '⚑'}</div>
       <div class="grow"><div class="t1">${esc(a.label)}</div>
-        <div class="t2">${esc(a.desc)}</div></div>
-      <span class="badge ${left ? '' : 'on'}">${left ? `${left} tur` : `CD ${a.cd}`}</span>
+        <div class="t2">${esc(a.desc)}</div>
+        ${blok ? `<div class="t2" style="color:#D9736B">${esc(blok)}</div>` : ''}</div>
+      <span class="badge ${blok ? '' : 'on'}">${a.mana ? `${a.mana} many` : `CD ${a.cd}`}</span>
     </button>`;
   }
 
@@ -345,7 +355,12 @@ function renderFightResult(f) {
       <button class="btn solid big wide" style="margin-top:10px" data-act="runagain">Jeszcze raz</button>
     </div>`;
   } else if (f.floorCleared) {
-    h += `<div class="card hi cleared"><div class="big-word">PIĘTRO ZDOBYTE</div></div>`;
+    h += `<div class="card hi cleared"><div class="big-word">PIĘTRO ZDOBYTE</div>
+      ${f.nagroda ? `
+        <div class="stat"><span class="k">Punkty atrybutów</span><span class="v up">+${f.nagroda.attr}</span></div>
+        <div class="stat"><span class="k">Klucze Przywołania</span><span class="v up">+${f.nagroda.currency}</span></div>`
+        : `<div class="t2" style="text-align:center">To piętro było już nagrodzone.</div>`}
+    </div>`;
   }
 
   h += `<div class="card">
@@ -405,6 +420,7 @@ function tickPlayback() {
   F.idx++;
 
   F.party = entry.party; F.enemies = entry.enemies; F.charge = entry.charge;
+  if (entry.mana !== undefined) F.mana = entry.mana;
   paintArena();
   appendLog(entry);
   paintCombatBar();          // pasek ma żyć także wtedy, gdy patrzysz na ekwipunek
@@ -421,7 +437,8 @@ function finishPlayback() {
   // dociągnij resztę logu bez animacji
   while (F.idx < F.log.length) { appendLog(F.log[F.idx]); F.idx++; }
   const last = F.log[F.log.length - 1];
-  if (last) { F.party = last.party; F.enemies = last.enemies; F.charge = last.charge; paintArena(); }
+  if (last) { F.party = last.party; F.enemies = last.enemies; F.charge = last.charge;
+              if (last.mana !== undefined) F.mana = last.mana; paintArena(); }
   F.result = F.pendingResult;
 
   // Ciąg fal: wygrana i piętro jeszcze niezdobyte — następna fala rusza sama.
@@ -462,7 +479,8 @@ function appendLog(entry) {
 function syncFightHp() {
   const F = FIGHT;
   const last = F.log[F.idx - 1];
-  if (last) { F.party = last.party; F.enemies = last.enemies; F.charge = last.charge; }
+  if (last) { F.party = last.party; F.enemies = last.enemies; F.charge = last.charge;
+              if (last.mana !== undefined) F.mana = last.mana; }
 }
 
 // Przerysowuje tylko menu akcji — arena i log zostają nietknięte,
@@ -864,9 +882,9 @@ function renderWieza() {
   if (done) {
     html += `<div class="card hi cleared">
       <div class="big-word">PIĘTRO ZDOBYTE</div>
-      <div class="stat"><span class="k">Punkty drzewka</span><span class="v up">+${S.isBoss ? 5 : 1}</span></div>
-      <div class="stat"><span class="k">Punkty atrybutów</span><span class="v up">+3</span></div>
-      <div class="stat"><span class="k">Klucze Przywołania</span><span class="v up">+${S.isBoss ? 3 : 1}</span></div>
+      <div class="t2" style="text-align:center">Nagrody już wpłynęły — punkty czekają w Skillach.</div>
+      <div class="stat"><span class="k">Punkty atrybutów</span><span class="v up">${S.unspentAttr} do rozdania</span></div>
+      <div class="stat"><span class="k">Klucze Przywołania</span><span class="v up">${S.keys ?? 0}</span></div>
       <div class="stat"><span class="k">Zdrowie</span><span class="v up">pełne na nowym piętrze</span></div>
       <button class="btn solid big wide" style="margin-top:10px" data-act="advance">Wejdź na piętro ${S.floor + 1}</button>
     </div></div></div>`;
@@ -1971,7 +1989,34 @@ function paintCombatBar() {
     </div>`;
 }
 
+// Przerysowanie ekranu podmienia innerHTML, więc każde przewijane pudełko
+// wraca na górę. Przy kopaniu render leci co cykl i wyrzucało gracza na początek
+// listy w połowie klikania. Zapamiętujemy pozycje i odtwarzamy je po renderze.
+const PRZEWIJANE = '.scrollbox, .invlist, .two-col, .three-col, .three-col > .col, .two-col > .col, .log';
+
+function zapiszScroll() {
+  const mapa = new Map();
+  for (const el of $$(PRZEWIJANE)) {
+    if (!el.scrollTop) continue;
+    const ekran = el.closest('.screen')?.id ?? '';
+    const idx = [...$$(PRZEWIJANE)].indexOf(el);
+    mapa.set(`${ekran}#${idx}`, el.scrollTop);
+  }
+  return mapa;
+}
+
+function odtworzScroll(mapa) {
+  if (!mapa.size) return;
+  const lista = $$(PRZEWIJANE);
+  lista.forEach((el, idx) => {
+    const ekran = el.closest('.screen')?.id ?? '';
+    const y = mapa.get(`${ekran}#${idx}`);
+    if (y) el.scrollTop = y;
+  });
+}
+
 function render() {
+  const scroll = zapiszScroll();
   header();
   // Odśwież listę tego, co jadalne — definicje przychodzą z serwera.
   JEDZENIE.clear();
@@ -1989,6 +2034,7 @@ function render() {
   $('#s-kronika').innerHTML = renderKronika();
   $('#s-postac').innerHTML  = renderPostac();
   paintCombatBar();
+  odtworzScroll(scroll);
 }
 
 // ---------------------------------------------------------------- akcje
@@ -2005,6 +2051,7 @@ async function startWave() {
     party: [{ name: S.name, hp: S.stats.hp, maxHp: S.stats.maxHp, alive: true }],
     enemies: [{ name: S.nextEnemy.name, hp: S.nextEnemy.maxHp, maxHp: S.nextEnemy.maxHp, alive: true }],
     charge: 0, cooldowns: {},
+    mana: S.stats.maxMana, maxMana: S.stats.maxMana, blokady: {},
     log: [], idx: 0, playing: false, result: null,
   };
   if (d.awaiting) {
@@ -2142,6 +2189,8 @@ document.addEventListener('click', async (ev) => {
         for (let i = from; i < FIGHT.log.length; i++) appendLog(FIGHT.log[i]);
         FIGHT.idx = FIGHT.log.length;
         FIGHT.cooldowns = d.fight.cooldowns;
+        FIGHT.mana = d.fight.mana; FIGHT.maxMana = d.fight.maxMana;
+        FIGHT.blokady = d.fight.blokady;
         syncFightHp(); paintArena();
         drawActionMenu();
       } else {

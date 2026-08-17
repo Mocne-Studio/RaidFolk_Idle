@@ -75,6 +75,7 @@ export function migrate(ch) {
     if (b) ch.discovered[b] = true;
   }
   ch.unlocked ??= {};
+  ch.nagrodzone ??= {};
   ch.expedition ??= null;
   // Zaklęcia nie siedzą w ch.abilities — biorą się z podpiętej runy.
   // Postacie sprzed tej zmiany zrzucają je bez śladu.
@@ -147,6 +148,7 @@ export function newCharacter(name, crest = null) {
     // Kto stoi w drużynie. Liczby to indeksy w collection.companions / .pets.
     team: { allies: [null, null, null], pet: null },
     unlocked: {},          // co już zostało odblokowane (sojusznik, pet)
+    nagrodzone: {},        // piętra, za które wypłacono już punkty
     expedition: null,      // trwająca wyprawa albo null
     // Skille bojowe. Rosną z tego, czym bijesz. Dają bonusy, NIE bramkują sprzętu.
     cskills: freshCombatSkills(),
@@ -318,10 +320,17 @@ export function computeStats(ch) {
   // a cena za elastyczność siedzi w dzielniku (config.classes[x].dmgDivisor).
   const cls = classOf(ch.klasa);
   const divisor = cls.dmgDivisor ?? cc.strDamageDivisor;
-  // Drzewko podbija WAGĘ atrybutu w obrażeniach — tak wygląda "większe obrażenia
-  // od magii" w silniku, który nie zna typów obrażeń, tylko atrybuty klasy.
-  const mainAttr = (cls.dmgAttrs ?? ['sila'])
-    .reduce((sum, attr) => sum + (a[attr] ?? 0) * (1 + (T.attrWeight[attr] ?? 0)), 0);
+
+  // BROŃ decyduje, który atrybut niesie obrażenia: biała → Siła,
+  // dystans → Zręczność, różdżka → Intelekt (i wtedy autoatak jest MAGICZNY).
+  // Pozostałe atrybuty liczą się słabiej (offAttrWeight), żeby nie wrócił
+  // martwy drop — pierścień z Intelektem dalej coś daje wojownikowi.
+  const wtype = ch.equipped?.bron?.wtype ?? 'mele';
+  const glowny = cc.weaponAttr[wtype] ?? 'sila';
+  const mainAttr = (cls.dmgAttrs ?? ['sila']).reduce((sum, attr) => {
+    const waga = attr === glowny ? 1 : cc.offAttrWeight;
+    return sum + (a[attr] ?? 0) * waga * (1 + (T.attrWeight[attr] ?? 0));
+  }, 0);
 
   const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor)
     * (1 + T.dmgPct + K.dmgPct + (B.dmgPct ?? 0)));
@@ -337,8 +346,14 @@ export function computeStats(ch) {
     ? Math.min(C.combat.blockChanceMax, C.combat.blockChanceShield + T.block + K.block)
     : 0;
 
+  // Mana pod zaklęcia. Rośnie z Intelektu, więc mag opłaca ją tym samym
+  // atrybutem, którym bije — a wojownik po prostu jej nie potrzebuje.
+  const maxMana = Math.round(cc.manaBase + a.intelekt * cc.manaPerInt);
+
   return {
     maxHp,
+    maxMana,
+    manaRegen: cc.manaRegenPerTurn,
     hp: Math.max(1, maxHp - (ch.hpLost ?? 0)),
     damage: Math.max(1, damage),
     speed: Math.max(20, speed),
@@ -551,10 +566,30 @@ export function demo() {
   console.assert(dmg({ intelekt: 30 }) > dmg(), 'Intelekt daje obrazenia');
   console.assert(dmg({ zrecznosc: 30 }) > dmg(), 'Zrecznosc daje obrazenia');
 
-  // ...i liczy je tak samo, więc podział punktów między nie nic nie zmienia
-  const razem = dmg({ sila: 300, intelekt: 300, zrecznosc: 300 }, true) - dmg({}, true);
-  const wJedno = dmg({ sila: 900 }, true) - dmg({}, true);
-  console.assert(razem === wJedno, `podzial punktow ofensywnych bez znaczenia (${razem} vs ${wJedno})`);
+  // BRON decyduje, ktory atrybut niesie obrazenia. Startowa bron to topor (mele),
+  // wiec Sila liczy sie w pelni, a reszta slabiej — ale nadal cos daje.
+  const zSily = dmg({ sila: 900 }, true) - dmg({}, true);
+  const zIntelektu = dmg({ intelekt: 900 }, true) - dmg({}, true);
+  console.assert(zSily > zIntelektu, `z toporem Sila bije mocniej niz Intelekt (${zSily} vs ${zIntelektu})`);
+  console.assert(zIntelektu > 0, 'atrybut poboczny NIE jest martwy — nie ma martwego dropu');
+
+  // ...a rozdzka odwraca uklad: wtedy to Intelekt niesie obrazenia
+  const zRozdzka = (add) => {
+    const ch2 = newCharacter('T');
+    ch2.equipped = { bron: { slot: 'bron', wtype: 'magia', hands: 1, affixes: [], damage: 10, armor: 0 } };
+    for (const [k, v] of Object.entries(add)) ch2.attrs[k] += v;
+    return computeStats(ch2).damage;
+  };
+  const magIntelekt = zRozdzka({ intelekt: 900 }) - zRozdzka({});
+  const magSila = zRozdzka({ sila: 900 }) - zRozdzka({});
+  console.assert(magIntelekt > magSila, `z rozdzka Intelekt bije mocniej niz Sila (${magIntelekt} vs ${magSila})`);
+
+  // Mana rosnie z Intelektu i tylko z niego
+  const bezInt = computeStats(newCharacter('T')).maxMana;
+  const zInt = newCharacter('T'); zInt.attrs.intelekt = 20;
+  console.assert(computeStats(zInt).maxMana > bezInt, 'Intelekt daje mane');
+  const zSila = newCharacter('T'); zSila.attrs.sila = 20;
+  console.assert(computeStats(zSila).maxMana === bezInt, 'Sila many nie daje');
 
   // Wytrzymałość nie jest osią obrażeń
   console.assert(dmg({ wytrzymalosc: 30 }) === dmg(), 'Wytrzymalosc nie daje obrazen');

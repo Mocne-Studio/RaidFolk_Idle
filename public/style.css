@@ -171,6 +171,9 @@ button.card:active{background:#26211B}
 .charge>i{display:block;height:100%;transition:width .25s;
   background:linear-gradient(90deg,var(--copper),#E8C35A)}
 .charge-n{font-family:var(--mono);font-size:9.5px;color:var(--ink-mute);flex:none}
+/* mana — osobny zasób od paska ultimate, więc i osobny kolor */
+.charge-wrap.mana{margin:-4px 0 10px}
+.charge-wrap.mana .charge>i{background:linear-gradient(90deg,#2F5567,#5FA8D3)}
 
 .btn.ult{display:flex;flex-direction:column;gap:3px;padding:11px;margin-bottom:4px;
   text-transform:none;letter-spacing:0;border-color:var(--edge);color:var(--ink-mute)}

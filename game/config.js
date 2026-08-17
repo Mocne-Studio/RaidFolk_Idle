@@ -58,37 +58,37 @@ export const CONFIG = {
     // Dlatego pierwszy czar to Fireball na poziomie 1 — wystarczy podpiąć
     // Esencję Ognia. Reszta przychodzi z expem w Magii.
     fireball: {
-      label: 'Fireball', cd: 3, charge: 2, target: 'one',
+      label: 'Fireball', cd: 3, charge: 0, mana: 8, target: 'one',
       czar: { runa: 'runaognia', magia: 1 },
       desc: '210% obrażeń w jeden cel. Ignoruje jedną trzecią pancerza.',
       dmgMult: 2.10, armorPierce: 0.33,
     },
     pozoga: {
-      label: 'Pożoga', cd: 5, charge: 3, target: 'all',
+      label: 'Pożoga', cd: 5, charge: 0, mana: 18, target: 'all',
       czar: { runa: 'runaognia', magia: 8 },
       desc: 'Trzy uderzenia po 130% we wszystkich przeciwników.',
       hits: 3, dmgMult: 1.30,
     },
     falachlodu: {
-      label: 'Fala Chłodu', cd: 5, charge: 2, target: 'self',
+      label: 'Fala Chłodu', cd: 5, charge: 0, mana: 12, target: 'self',
       czar: { runa: 'runamrozu', magia: 1 },
       desc: 'Leczy 25% zdrowia i zbija otrzymywane obrażenia o 15% na 3 tury.',
       heal: 0.25, buff: { id: 'falachlodu', turns: 3, takenMult: 0.85 },
     },
     kamiennaskora: {
-      label: 'Kamienna Skóra', cd: 5, charge: 1, target: 'self',
+      label: 'Kamienna Skóra', cd: 5, charge: 0, mana: 10, target: 'self',
       czar: { runa: 'runaziemi', magia: 1 },
       desc: 'Pancerz +60% przez 4 tury.',
       buff: { id: 'kamiennaskora', turns: 4, armorMult: 1.60 },
     },
     podmuch: {
-      label: 'Podmuch', cd: 4, charge: 2, target: 'all',
+      label: 'Podmuch', cd: 4, charge: 0, mana: 14, target: 'all',
       czar: { runa: 'runawichru', magia: 1 },
       desc: 'Cztery uderzenia po 70% obrażeń we wszystkich.',
       hits: 4, dmgMult: 0.70,
     },
     burzazywiolow: {
-      label: 'Burza Żywiołów', cd: 6, charge: 3, target: 'all',
+      label: 'Burza Żywiołów', cd: 6, charge: 0, mana: 26, target: 'all',
       czar: { runa: 'runapradawna', magia: 5 },
       desc: 'Trzy uderzenia po 210% we wszystkich. Wymaga Runy Pradawnej.',
       hits: 3, dmgMult: 2.10,
@@ -145,6 +145,24 @@ export const CONFIG = {
     agiSpeedDivisor: 200,
     agiCritDivisor: 500,      // +0.2% kryta za punkt
     staArmorPerPoint: 2,
+    // ---- SKALOWANIE OD BRONI ----
+    // Broń decyduje, KTÓRY atrybut niesie obrażenia:
+    //   biała → Siła · dystans → Zręczność · magia → Intelekt
+    // Autoatak różdżką zadaje obrażenia MAGICZNE i rośnie z Intelektu.
+    //
+    // Pozostałe atrybuty liczą się nadal, tylko słabiej (offAttrWeight).
+    // To pokrętło pilnuje, żeby nie wrócił martwy drop: przy 0 dostajemy czyste
+    // skalowanie od broni i pierścień z Intelektem staje się śmieciem dla wojownika.
+    weaponAttr: { mele: 'sila', dystans: 'zrecznosc', magia: 'intelekt' },
+    offAttrWeight: 0.35,
+
+    // ---- MANA ----
+    // Zaklęcia kosztują manę, nie ładunki paska. Pasek zostaje dla umiejętności
+    // zwykłych i ultimate — dwa zasoby, dwie osie decyzji.
+    manaBase: 20,
+    manaPerInt: 3,
+    manaRegenPerTurn: 2,      // ile many wraca na każdą Twoją turę
+
     accuracyBase: 0.70,       // celność bazowa
     accuracyPerAgi: 0.004,    // +0.4 punktu procentowego za punkt Zręczności
     evasionPerAgi: 0.002,     // unik: szansa, że wróg spudłuje

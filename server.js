@@ -562,6 +562,8 @@ function startFight(ch) {
       : Math.min(ch.potions, C.healing.carryTower),
     wtype: st.wtype,
     abilities: bojowe(ch),
+    maxMana: st.maxMana,
+    manaRegen: st.manaRegen,
   }, seed, fightMode(ch));
   F.enemyMeta = { variant: enemy.variant,
                   gold: wrogowie.reduce((s, w) => s + w.gold, 0),
@@ -672,7 +674,25 @@ function resolveFight(ch) {
       if (meta.wezel === 'boss') expFinish(ch, out);
     } else {
       ch.fight++;
-      if (ch.fight >= info.fights) out.floorCleared = true;
+      if (ch.fight >= info.fights) {
+        out.floorCleared = true;
+        // Nagroda leci OD RAZU po ostatnim mobie, nie przy wejściu wyżej.
+        // ch.nagrodzone pilnuje, żeby powtórne czyszczenie piętra nie płaciło
+        // drugi raz — inaczej dałoby się farmić punkty na jednym piętrze.
+        ch.nagrodzone ??= {};
+        if (!ch.nagrodzone[meta.floor]) {
+          ch.nagrodzone[meta.floor] = true;
+          const g = {
+            tree: info.isBoss ? C.tower.treePointsPerBoss : C.tower.treePointsPerFloor,
+            attr: C.character.attrPointsPerFloor,
+            currency: info.isBoss ? C.summon.keysPerBoss : C.summon.keysPerFloor,
+          };
+          ch.treePoints += g.tree;
+          ch.unspentAttr += g.attr;
+          ch.currency += g.currency;
+          out.nagroda = g;
+        }
+      }
     }
   } else if (meta.wyprawa) {
     // Śmierć na wyprawie zabiera CAŁĄ sakwę — przedmioty i surowce zdobyte
@@ -712,19 +732,12 @@ function doAdvance(ch) {
   const info = floorInfo(ch.floor);
   if (ch.fight < info.fights) return { error: 'Piętro jeszcze niezdobyte' };
 
-  const gained = { tree: info.isBoss ? C.tower.treePointsPerBoss : C.tower.treePointsPerFloor,
-                   attr: C.character.attrPointsPerFloor,
-                   currency: info.isBoss ? C.summon.keysPerBoss : C.summon.keysPerFloor };
-
-  ch.treePoints += gained.tree;
-  ch.unspentAttr += gained.attr;
-  ch.currency += gained.currency;
-
+  // Nagrody NIE lecą tutaj — wypłaca je resolveFight, zaraz po ostatnim mobie.
   ch.floor++;
   ch.fight = 0;
   ch.hpLost = 0;              // nowe piętro to czysta karta — wyczerpanie liczy się w obrębie piętra
   ch.maxFloor = Math.max(ch.maxFloor, ch.floor);
-  return { ok: true, gained, floor: ch.floor };
+  return { ok: true, floor: ch.floor };
 }
 
 // Skok na zdobyte piętro. Wieża jest liniowa tylko w górę — w dół można wracać,

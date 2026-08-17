@@ -64,9 +64,13 @@ const mkUnit = (u, side, idx) => ({
   alive: true,
 });
 
-export function createFight({ party, enemies, potions = 0, wtype = 'mele', abilities = [] }, seed, mode = 'auto') {
+export function createFight({ party, enemies, potions = 0, wtype = 'mele', abilities = [],
+                              maxMana = 0, manaRegen = 0 }, seed, mode = 'auto') {
   return {
     mode, seed, rng: seed >>> 0, t: 0, turn: 0, wtype,
+    // Mana pod zaklęcia. Osobny zasób od paska ultimate: pasek ładuje się
+    // biciem, mana wraca sama co turę. Dwa zasoby, dwie osie decyzji.
+    mana: maxMana, maxMana, manaRegen,
     party: party.map((u, i) => mkUnit(u, 'gracz', i)),
     enemies: enemies.map((u, i) => mkUnit({ ...u, kind: 'wrog' }, 'wrog', i)),
     potions, potionsStart: potions, healUses: 0,
@@ -113,6 +117,7 @@ function snapshot(F) {
     party: F.party.map(u2),
     enemies: F.enemies.map(u2),
     charge: F.charge,
+    mana: F.mana,
   };
 }
 
@@ -218,19 +223,45 @@ function playerBasic(F, u, strength) {
   }
 }
 
+// Czy zaklęcie da się w tej chwili rzucić. Powód odmowy wraca tekstem,
+// żeby klient nie musiał znać reguł.
+export function abilityBlock(F, id) {
+  const A = ABILITIES[id];
+  if (!A) return 'nieznana umiejętność';
+  if ((F.cooldowns?.[id] ?? 0) > 0) return `odnowienie: ${F.cooldowns[id]}`;
+  // UWAGA: `charge` przy umiejętności to ile ona ŁADUJE pasek, nie ile kosztuje.
+  // Jedynym kosztem jest mana i płacą ją wyłącznie zaklęcia.
+  if (A.mana && F.mana < A.mana) return `brak many (${F.mana}/${A.mana})`;
+  return null;
+}
+
 function useAbility(F, u, id) {
   const A = ABILITIES[id];
-  if (!A) { push(F, 'info', 'nieznana umiejętność'); return; }
-  if ((F.cooldowns[id] ?? 0) > 0) { push(F, 'info', `${A.label}: jeszcze ${F.cooldowns[id]} tur`); return; }
+  const blok = abilityBlock(F, id);
+  if (blok) { push(F, 'info', `${A?.label ?? id}: ${blok}`); return; }
 
+  // Zaklęcia płacą maną, zwykłe umiejętności ładują pasek. Nigdy jedno i drugie.
+  if (A.mana) {
+    F.mana -= A.mana;
+    push(F, 'buff', `${u.name} · ${A.label} (−${A.mana} many)`);
+  } else {
+    addCharge(F, A.charge ?? 1);
+  }
   F.cooldowns[id] = A.cd;
-  addCharge(F, A.charge ?? 1);
+
+  // Zaklęcia leczące — Fala Chłodu i podobne.
+  if (A.heal) {
+    const ile = Math.round(u.maxHp * A.heal);
+    u.hp = Math.min(u.maxHp, u.hp + ile);
+    push(F, 'heal', `${u.name} · ${A.label}: +${ile}`);
+  }
 
   if (A.buff) {
     addEffect(u, A.buff);
-    push(F, 'buff', `${u.name} · ${A.label}`);
+    if (!A.mana) push(F, 'buff', `${u.name} · ${A.label}`);
     return;
   }
+  if (A.heal) return;
 
   const targets = A.target === 'all' ? livingEnemies(F) : reachable(u, F.enemies).slice(0, 1);
   if (!targets.length) return;
@@ -307,7 +338,13 @@ function unitTurn(F, u, action) {
     else advance(F, u, F.party);
   } else if (action == null) {
     autoPotion(F, u);
-    playerBasic(F, u, 'srednio');
+    // Automat rzuca zaklęcie, gdy stać go na najdroższe dostępne — inaczej
+    // mana stałaby pełna, a magia byłaby wyłącznie zabawką trybu turowego.
+    const czar = u.idx === 0 ? (F.abilities ?? [])
+      .filter(id => ABILITIES[id]?.mana && !abilityBlock(F, id))
+      .sort((x, y) => ABILITIES[y].mana - ABILITIES[x].mana)[0] : null;
+    if (czar) useAbility(F, u, czar);
+    else playerBasic(F, u, 'srednio');
   } else {
     switch (action.type) {
       case 'potion':   drinkPotion(F, u); break;
@@ -321,6 +358,9 @@ function unitTurn(F, u, action) {
   u.next += interval(u.speed);
   if (u.side === 'gracz' && u.idx === 0) {
     for (const k of Object.keys(F.cooldowns)) if (F.cooldowns[k] > 0) F.cooldowns[k]--;
+    // Mana wraca sama co Twoją turę — inaczej długa walka kończyłaby się
+    // biciem kijem, a magia byłaby jednorazowa.
+    if (F.maxMana) F.mana = Math.min(F.maxMana, F.mana + (F.manaRegen ?? 0));
   }
 }
 
@@ -385,7 +425,10 @@ export function summary(F) {
     party: F.party.map(u => ({ name: u.name, kind: u.kind, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
     enemies: F.enemies.map(u => ({ name: u.name, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
     charge: F.charge, chargeMax: F.chargeMax,
+    mana: F.mana, maxMana: F.maxMana,
     cooldowns: F.cooldowns,
+    // Co da się teraz rzucić i dlaczego nie — klient nie musi znać reguł.
+    blokady: Object.fromEntries((F.abilities ?? []).map(id => [id, abilityBlock(F, id)])),
     potionsLeft: F.potions, potionsUsed: F.potionsStart - F.potions,
   };
 }
@@ -471,6 +514,37 @@ export function demo() {
               { ...E, name: 'Mag', row: 2, hp: 100, maxHp: 100 }],
     potions: 0, wtype: 'dystans', abilities: [] }, 99, 'turowa');
   console.assert(target1(F4.party[0], F4.enemies).name === 'Obronca', 'cel to zawsze najblizszy rzad');
+
+  // MANA: zaklecie kosztuje mane, a nie ladunki paska.
+  const magik = createFight(
+    { party: [{ ...P, accuracy: 5 }], enemies: [{ ...E, hp: 9999, maxHp: 9999 }],
+      potions: 0, wtype: 'magia', abilities: ['fireball'], maxMana: 20, manaRegen: 0 },
+    2024, 'turowa');
+  beginTurn(magik);
+  console.assert(magik.mana === 20, 'walka startuje z pelna mana');
+  console.assert(!abilityBlock(magik, 'fireball'), 'przy pelnej manie czar przechodzi');
+  const hpPrzedCzarem = magik.enemies[0].hp;
+  step(magik, { type: 'ability', id: 'fireball' });
+  console.assert(magik.mana === 12, `fireball zabiera 8 many (${magik.mana})`);
+  console.assert(magik.enemies[0].hp < hpPrzedCzarem, 'fireball zadaje obrazenia');
+  console.assert(magik.charge === 0, 'zaklecie NIE laduje paska ultimate');
+
+  // brak many blokuje czar i mowi dlaczego (cooldown zdjety, zeby nie zaslanial)
+  magik.mana = 3; magik.cooldowns.fireball = 0;
+  console.assert(/brak many/.test(abilityBlock(magik, 'fireball') ?? ''), 'brak many blokuje czar');
+
+  // mana wraca co ture i nie przekracza maksimum
+  const regen = createFight(
+    { party: [{ ...P, accuracy: 5 }], enemies: [{ ...E, hp: 9999, maxHp: 9999 }],
+      potions: 0, wtype: 'magia', abilities: ['fireball'], maxMana: 20, manaRegen: 3 },
+    77, 'turowa');
+  beginTurn(regen);
+  step(regen, { type: 'ability', id: 'fireball' });   // 20 - 8 = 12, potem +3
+  const poCzarze = regen.mana;
+  console.assert(poCzarze < 20, `czar zabral mane (${poCzarze})`);
+  step(regen, { type: 'attack', strength: 'lekki' });
+  console.assert(regen.mana > poCzarze, `mana regeneruje sie (${poCzarze} -> ${regen.mana})`);
+  console.assert(regen.mana <= regen.maxMana, 'mana nie przekracza maksimum');
 
   // Obrona: ten sam wrogi cios boli mniej, gdy gracz stanal w obronie.
   // Oba przebiegi maja to samo ziarno, wiec roznica bierze sie wylacznie z akcji.
