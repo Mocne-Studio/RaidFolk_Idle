@@ -394,8 +394,10 @@ function resolveFight(ch) {
       enemy: F.enemies[0].name,
       at: Date.now(),
     };
+    // ZDROWIE NIE WRACA PO PORAŻCE. Wcześniej wracało, żeby nie dało się utknąć —
+    // teraz utknięcie jest właśnie tym, co ma boleć. Wyjścia są dwa: mikstury
+    // (docelowo z Alchemii) albo czekanie na regenerację 2%/min.
     ch.fight = 0;
-    ch.hpLost = 0;
   }
 
   return out;

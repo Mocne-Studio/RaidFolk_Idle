@@ -497,7 +497,7 @@ const TRYBY = [
 const STAN_BADGE = { on: 'OTWARTE', soon: 'WKRÓTCE', lock: 'ZAMKNIĘTE' };
 
 function renderHub() {
-  let h = `<div class="scr-head">Wyprawa <span>PIĘTRO ${S.maxFloor}</span></div>`;
+  let h = `<div class="scr-head">Przygody <span>PIĘTRO ${S.maxFloor}</span></div>`;
   h += `<div class="modes">`;
   for (const t of TRYBY) {
     const czynny = t.stan === 'on';
@@ -530,7 +530,7 @@ function renderWyprawaTryb() {
   const E = S.expedition;
 
   let h = `<div class="scr-head">
-    <button class="lnk" data-act="hub">‹ Wyprawa</button>
+    <button class="lnk" data-act="hub">‹ Przygody</button>
     <span>${E ? 'W DRODZE' : 'WYBIERZ RYZYKO'}</span></div>`;
 
   if (!E) {
@@ -619,7 +619,7 @@ function renderWieza() {
   const hpPct = Math.round(st.hp / st.maxHp * 100);
 
   let html = `<div class="scr-head">
-    <button class="lnk" data-act="hub">‹ Wyprawa</button>
+    <button class="lnk" data-act="hub">‹ Przygody</button>
     <span>${esc(S.actName.toUpperCase())} · PIĘTRO ${S.floor}</span></div>`;
 
   html += `<div class="two-col">`;
@@ -772,7 +772,7 @@ const ATTR_DESC = {
 function renderPostac() {
   const st = S.stats;
   let h = `<div class="scr-head">
-    <button class="lnk" data-act="tab" data-tab="wyprawa">‹ Wyprawa</button>
+    <button class="lnk" data-act="tab" data-tab="wyprawa">‹ Przygody</button>
     <span>${esc(S.name.toUpperCase())} · POZIOM ${S.poziom}</span></div>`;
 
   h += `<div class="two-col">`;
