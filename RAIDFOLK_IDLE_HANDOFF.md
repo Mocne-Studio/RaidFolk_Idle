@@ -102,9 +102,8 @@ herb → imię → OD RAZU gra
 
 - **Drużyna** — bohater + jeden sojusznik + pet walczą. **Sloty 2 i 3 zamknięte**
   świadomie (`config.allies.lockedSlots`), więc pełna piątka jeszcze nie istnieje.
-- **Skille zbierackie** — trzy z siedmiu grają (Górnictwo, Rybołówstwo, Runy).
-  Kowalstwo, Rolnictwo, Gotowanie i Alchemia to makiety z drabinkami.
-  **Surowce nie mają zastosowania** — nic ich nie przetapia ani nie gotuje.
+- **Profesje** — wszystkie siedem gra. Łańcuch domknięty: ruda→sztaby→ulepszenia,
+  ryby+zboże→jedzenie→buff, zioła→mikstury. Liczby są testowe.
 - **Przywołanie** — szanse są jawne, ale brak pity, duplikatów i gwiazdek.
 - **Kronika** — Przedmioty i Osiągnięcia to na razie karty wyjaśniające zamiar.
 - **Klasy Sojuszników** — nadają rząd w szyku, ale nie dają jeszcze umiejętności
@@ -124,7 +123,7 @@ umiejętności Sojuszników · **klasy gracza (skasowane na stałe)** ·
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `7872f37` — „Wybor wyprawy, tabela dropow, modyfikatory" |
+| HEAD | `112372a` — „Wszystkie siedem profesji gra" |
 | Working tree | **czysty** |
 
 Poprzednie punkty:
@@ -178,7 +177,12 @@ dwóch przeciwników od piętra 3.** Wszystko zamknięte i zacommitowane.
 
 ## NEXT STEP
 
-**ALCHEMIA — wytwarzanie mikstur.** Ustalone z autorem tuż przed przerwą:
+**Werdykt właściciela**, potem zapowiedziane **umiejętności**.
+
+Dalej w kolejce: sloty drużyny 2–3, druga wyprawa (Mokradła Szeptu — definicja
+już stoi w `config.expedition.lista`, brakuje jej tabeli dropów).
+
+~~ALCHEMIA~~ — ZROBIONA. Poniżej zostaje kontekst decyzji: Ustalone z autorem tuż przed przerwą:
 
 - Kupowanie mikstur zostało **skasowane**. Jedynym źródłem ma być Alchemia.
 - To zamyka realną dziurę: porażka nie leczy, więc bez mikstur da się utknąć

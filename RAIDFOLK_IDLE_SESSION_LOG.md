@@ -297,3 +297,40 @@ Autor zabrał laptopa. Repo czyste, nic nie wisi.
 ### NEXT
 
 **Alchemia** — patrz NEXT STEP w HANDOFF. Potem umiejętności.
+
+---
+
+## 2026-08-17 (szósta sesja) — wszystkie profesje
+
+**START HEAD:** `e886af0`
+**END HEAD:** `112372a`
+
+### DONE
+
+- **Alchemia** — zioła na mikstury. Jedyne źródło mikstur w grze.
+- **Rolnictwo** — zbiera zioła i zboże, karmi Alchemię i Gotowanie.
+- **Kowalstwo** — ruda na sztaby, sztaby na **ulepszanie sprzętu** (+8% za plus, do +10).
+- **Gotowanie** — ryby i zboże na jedzenie, jedzenie na **buff liczony w walkach**.
+- Mechanika przetwarzania jest uogólnieniem pętli zbierania: `koszt` w definicji
+  surowca zjada materiały, `daje.potion` omija plecak i idzie prosto w mikstury.
+- **Poprawka:** wyprawka startowa powstawała z `id: null`, więc ulepszanie
+  odbijało się o „nie ma takiego przedmiotu". Migracja nadaje id każdemu
+  przedmiotowi, który go nie ma.
+- UI: koszt wsadu na karcie, blokada przy braku, aktywny buff z licznikiem walk,
+  przycisk „Zjedz", ulepszanie w panelu przedmiotu, nazwy surowców z serwera.
+- Ekwipunek na telefonie: makieta i panel szczegółu w jednym przewijanym pudełku,
+  żeby ekran dalej mieścił się na jednym ekranie.
+
+### TESTS
+
+`combat.js`, `character.js`, `expedition.test.js` — przechodzą.
+Ręcznie przeszedł cały łańcuch:
+Rolnictwo 4 zioła → Alchemia zjadła 2 → +1 mikstura ·
+Górnictwo 7 miedzi → Kowalstwo 2 sztaby → broń +1 (14→15 obrażeń) ·
+Rolnictwo zboże → Gotowanie placek → zjedzony → +6% zdrowia na 5 walk (132→140).
+Na 375×812 żaden ekran nie przewija się jako strona.
+
+### NEXT
+
+Werdykt właściciela. Potem: umiejętności (zapowiedziane), sloty drużyny 2–3,
+Mokradła Szeptu jako druga wyprawa.

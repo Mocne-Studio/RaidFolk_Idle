@@ -1303,3 +1303,54 @@ czekanie. Do rozstrzygnięcia razem z Alchemią.
 Modyfikatory trudności i ich odblokowania (sekcje 17–18 promptu) — odłożone,
 dopóki nie wiadomo, czy bazowy run jest dobry. Reszta promptu buduje odczucie;
 modyfikatory tylko je skalują.
+
+---
+
+## 21. PROFESJE — ŁAŃCUCH DOMKNIĘTY (17 sierpnia 2026)
+
+Wszystkie siedem profesji gra. **Nic już nie produkuje surowca, którego nic
+nie konsumuje** — to była największa dziura poprzednich sesji.
+
+### 21.1 Podział na zbierające i przetwarzające
+
+```
+ZBIERAJĄ                        PRZETWARZAJĄ
+Górnictwo    ruda        ───►   Kowalstwo    sztaby ──► ulepszanie sprzętu
+Rybołówstwo  ryby        ───►   Gotowanie    jedzenie ─► buff na kilka walk
+Rolnictwo    zioła/zboże ─┬─►   Alchemia     MIKSTURY
+                          └─►   Gotowanie
+Runy         runy        ───►   Alchemia (Eliksir)
+```
+
+Profesja przetwarzająca **zjada wsad**. Koszt jest widoczny na karcie
+(„Zioło polne 8/2"), a brak wsadu **zatrzymuje pracę** — to nie błąd,
+tylko koniec zapasów.
+
+### 21.2 Alchemia jest jedynym źródłem mikstur
+
+Kupowanie mikstur zostało skasowane. Złoto nie może być skrótem omijającym
+profesję.
+
+To domyka dziurę z sekcji 20.7: porażka nie leczy, ale **zbieranie nie wymaga
+walki**. Gracz z 9 HP i zerem złota idzie po zioła, robi mikstury i wstaje.
+Ściana znika bez ruszania regeneracji ani cen.
+
+### 21.3 Kowalstwo ulepsza sprzęt
+
+Sztaby idą na ulepszenia: **+8% obrażeń albo pancerza za plus, do +10**.
+Koszt rośnie liniowo z każdym plusem.
+
+**Świadomie bez ryzyka spalenia.** Hazard z niszczeniem przedmiotu dojdzie
+dopiero wtedy, gdy będzie z czego odtwarzać stratę — dziś sprzęt idzie
+wyłącznie z Wypraw i utrata ulepszonej broni byłaby karą bez wyjścia.
+
+### 21.4 Gotowanie liczy się w WALKACH, nie w czasie
+
+Buff z jedzenia zużywa się co walkę, nie co minutę. Gra jest idle —
+buff liczony czasem uciekałby graczowi, który odłożył telefon.
+
+### 21.5 Liczby są testowe
+
+Progi poziomów, czasy cykli, koszty wsadu i siła buffów są dobrane pod
+obejrzenie pętli, nie pod finalny balans. Wszystkie siedzą w `config.skills`
+i `config.upgrade`.
