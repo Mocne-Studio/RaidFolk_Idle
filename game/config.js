@@ -75,6 +75,11 @@ export const CONFIG = {
     autoThreshold: 0.30,      // automat leczy poniżej 30% HP
     startingPotions: 5,
     potionHealPct: 0.35,      // mikstura leczy 35% max HP
+    // Ile mikstur wolno ZABRAĆ ze sobą. Wieża jest wypadem na chwilę, wyprawa
+    // wyjściem na długo — stąd różnica. Leczyć się poza walką możesz bez limitu,
+    // limit dotyczy tego, co masz przy sobie w trakcie.
+    carryTower: 3,
+    carryExpedition: 10,
   },
 
   // ---------- POSTAĆ ----------
@@ -562,7 +567,11 @@ export const CONFIG = {
   // Wyprawa ma prawdziwą stawkę: łup zbiera się do sakwy i wpada do plecaka
   // DOPIERO po ukończeniu. Śmierć po drodze zabiera wszystko, co uzbierałeś.
   expedition: {
-    fights: 8,                 // ile walk ma wyprawa
+    // ZDROWIE NIE WRACA NA WEJŚCIU. Wchodzisz z tym, co masz — leczysz się
+    // PRZED wyjściem, miksturami. Dlatego wyprawa nie jest darmowym resetem HP.
+    potionCap: 10,             // tyle mikstur wolno zużyć na całą wyprawę
+    goldMult: 1.4,
+
     // Poziomy ryzyka. mob to mnożnik statystyk przeciwnika, loot mnożnik szans.
     risks: {
       niskie:  { label: 'Niskie ryzyko',  mob: 0.85, lootMult: 1.0, floorOffset: -2,
@@ -572,9 +581,73 @@ export const CONFIG = {
       wysokie: { label: 'Wysokie ryzyko', mob: 1.30, lootMult: 2.6, floorOffset: 3,
                  desc: 'Mocniejsi, niż powinieneś unieść. Sakwa puchnie, śmierć boli.' },
     },
-    // HP nie wraca między walkami wyprawy — tak samo jak w wieży.
-    // Wyprawa zaczyna się jednak od PEŁNEGO zdrowia, bo to osobne wyjście.
-    goldMult: 1.4,
+
+    // Szkielet runu. Generowany z ziarna, więc ten sam seed daje ten sam run —
+    // da się go powtórzyć przy szukaniu błędu.
+    //
+    // 'walka'     zwykły encounter
+    // 'rozdroze'  STOP — run czeka na decyzję gracza
+    // 'event'     jednorazowe zdarzenie z wyborem
+    // 'safepoint' jedyne miejsce, gdzie da się cokolwiek wynieść przed bossem
+    // 'elita'     mocniejszy przeciwnik
+    // 'boss'      koniec runu; dopiero jego śmierć oddaje sakwę
+    szkielet: ['walka', 'walka', 'rozdroze', 'walka', 'event',
+               'safepoint', 'walka', 'rozdroze', 'elita', 'boss'],
+
+    elitaMult: 1.6,            // statystyki elity
+    bossMult: 2.4,             // statystyki bossa wyprawy
+
+    // SAFEPOINT: wynosisz JEDEN przedmiot i JEDEN rodzaj surowca (cały stos).
+    // Reszta sakwy dalej wisi na szali aż do bossa. To jedyne wcześniejsze
+    // wyjście dla łupu i celowo jest wąskie.
+    safepoint: { items: 1, matTypes: 1 },
+
+    // Rozdroża. Każde ma dwie ścieżki i realne konsekwencje — nie ma tu
+    // wyborów pozornych.
+    rozdroza: [
+      { id: 'jaskinia', pytanie: 'Ścieżka rozwidla się przy wejściu do jaskini.',
+        opcje: [
+          { id: 'jaskinia', label: 'Ciemna jaskinia', desc: 'Elita zamiast zwykłej walki.',
+            skutek: { nastepny: 'elita', lootMult: 1.4 } },
+          { id: 'obejscie', label: 'Obejście po grani', desc: 'Zwykła walka, mniejszy łup.',
+            skutek: { nastepny: 'walka', lootMult: 0.85 } },
+        ] },
+      { id: 'obozowisko', pytanie: 'Widać dym z obozowiska i ślady zwierza.',
+        opcje: [
+          { id: 'oboz', label: 'Odpocznij w obozie', desc: 'Odzyskujesz 20% zdrowia. Bez łupu.',
+            skutek: { heal: 0.20, nastepny: 'walka', lootMult: 0.7 } },
+          { id: 'trop', label: 'Idź po tropie', desc: 'Mocniejszy przeciwnik, lepszy łup.',
+            skutek: { nastepny: 'elita', lootMult: 1.3 } },
+        ] },
+      { id: 'sztolnia', pytanie: 'Zawalona sztolnia. Da się wejść, ale coś tam mieszka.',
+        opcje: [
+          { id: 'kop', label: 'Przekop się', desc: 'Garść rudy do sakwy, potem walka.',
+            skutek: { material: 'miedz', ile: [3, 8], nastepny: 'walka' } },
+          { id: 'omin', label: 'Omiń sztolnię', desc: 'Bezpieczniej, ale nic z tego nie masz.',
+            skutek: { nastepny: 'walka', lootMult: 0.9 } },
+        ] },
+    ],
+
+    // Zdarzenia. Jedno wystąpienie na run, wybrane ziarnem.
+    eventy: [
+      { id: 'skrzynia', pytanie: 'Przeklęta skrzynia. Zamek ustępuje pod palcami.',
+        opcje: [
+          { id: 'otworz', label: 'Otwórz', desc: 'Lepszy łup do końca runu, ale wrogowie biją +15%.',
+            skutek: { klatwa: { id: 'skrzynia', label: 'Klątwa skrzyni', mobDmg: 1.15 }, lootMult: 1.35 } },
+          { id: 'zostaw', label: 'Zostaw', desc: 'Idziesz dalej bez zmian.', skutek: {} },
+        ] },
+      { id: 'wedrowiec', pytanie: 'Ranny wędrowiec prosi o miksturę.',
+        opcje: [
+          { id: 'pomoz', label: 'Pomóż', desc: 'Tracisz miksturę, dostajesz błogosławieństwo (+10% łupu).',
+            skutek: { potion: -1, blogo: { id: 'wedrowiec', label: 'Wdzięczność', lootMult: 1.10 } } },
+          { id: 'mijaj', label: 'Mijaj', desc: 'Nic nie tracisz i nic nie zyskujesz.', skutek: {} },
+        ] },
+      { id: 'zrodlo', pytanie: 'Źródło pod korzeniami. Woda pachnie ziołami.',
+        opcje: [
+          { id: 'pij', label: 'Napij się', desc: 'Odzyskujesz 25% zdrowia.', skutek: { heal: 0.25 } },
+          { id: 'napelnij', label: 'Napełnij bukłak', desc: 'Dostajesz miksturę.', skutek: { potion: 1 } },
+        ] },
+    ],
   },
 
   // ---------- ŁUP ----------

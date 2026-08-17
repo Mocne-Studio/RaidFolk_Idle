@@ -112,6 +112,36 @@ function materialsView(ch) {
     .map(([id, n]) => ({ id, label: nazwy[id] ?? id, count: n }));
 }
 
+// Widok wyprawy: gdzie stoisz, co masz w sakwie, czy run czeka na decyzję.
+function expView(ch) {
+  const X = ch.expedition;
+  const w = expNode(ch);
+  const pula = w?.typ === 'rozdroze' ? C.expedition.rozdroza
+             : w?.typ === 'event' ? C.expedition.eventy : null;
+  const def = pula?.find(x => x.id === w.ref) ?? null;
+
+  return {
+    risk: X.risk,
+    riskLabel: C.expedition.risks[X.risk]?.label,
+    at: X.at,
+    total: X.nodes.length,
+    // Ścieżka runu do narysowania paska postępu.
+    nodes: X.nodes.map((n, i) => ({ typ: n.typ, done: i < X.at, here: i === X.at })),
+    node: w ? { typ: w.typ } : null,
+    // Czekamy na gracza? Wtedy nic samo nie ruszy.
+    decyzja: def ? { pytanie: def.pytanie, opcje: def.opcje.map(o => ({ id: o.id, label: o.label, desc: o.desc })) } : null,
+    safepoint: w?.typ === 'safepoint' && !X.safepointDone,
+    sakwa: X.sakwa,
+    sakwaCount: X.sakwa.length,
+    mats: Object.entries(X.mats).map(([id, n]) => ({ id, count: n })),
+    gold: X.gold,
+    efekty: X.efekty,
+    lootMult: Math.round(X.lootMult * 100) / 100,
+    potionsLeft: Math.max(0, C.expedition.potionCap - X.potionsUsed),
+    enemy: ['walka', 'elita', 'boss'].includes(w?.typ) ? expEnemy(ch) : null,
+  };
+}
+
 function view(ch) {
   const st = computeStats(ch);
   const info = floorInfo(ch.floor);
@@ -139,14 +169,11 @@ function view(ch) {
     unlockAt: C.allies.unlock,
     formation: C.formation,
     // Wyprawa — jedyne źródło przedmiotów.
-    expedition: ch.expedition
-      ? { ...ch.expedition, sakwaCount: ch.expedition.sakwa.length,
-          riskLabel: C.expedition.risks[ch.expedition.risk]?.label,
-          enemy: makeEnemy(Math.max(1, ch.maxFloor + (C.expedition.risks[ch.expedition.risk]?.floorOffset ?? 0)),
-                           ch.expedition.fight) }
-      : null,
+    expedition: ch.expedition ? expView(ch) : null,
     expRisks: Object.entries(C.expedition.risks).map(([id, r]) => ({ id, ...r })),
-    expFights: C.expedition.fights,
+    expFights: C.expedition.szkielet.length,
+    potionCarry: { wieza: C.healing.carryTower, wyprawa: C.expedition.potionCap },
+    alwaysAuto: !!ch.alwaysAuto,
     summonOdds: C.summon.weights,
     lastDefeat: ch.lastDefeat ?? null,
     // Skille bojowe policzone dla klienta: poziom, exp, próg i aktualny udział
@@ -198,55 +225,180 @@ function view(ch) {
 // Osobne wyjście poza wieżę i JEDYNE źródło przedmiotów. Łup zbiera się
 // do sakwy i wpada do plecaka dopiero po ukończeniu — śmierć zabiera wszystko.
 
+// Węzeł, na którym stoi run. Rozdroże i event ZATRZYMUJĄ postęp — dopóki gracz
+// nie zdecyduje, nic się nie dzieje. Automat nie wybiera drogi za niego.
+const expNode = (ch) => ch.expedition?.nodes?.[ch.expedition.at] ?? null;
+
 function expEnemy(ch) {
   const E = C.expedition;
-  const r = E.risks[ch.expedition.risk] ?? E.risks.rowne;
+  const X = ch.expedition;
+  const r = E.risks[X.risk] ?? E.risks.rowne;
+  const wezel = expNode(ch);
   const pietro = Math.max(1, ch.maxFloor + r.floorOffset);
-  const e = makeEnemy(pietro, ch.expedition.fight);
-  e.hp = Math.round(e.hp * r.mob); e.maxHp = e.hp;
-  e.damage = Math.round(e.damage * r.mob);
+  const e = makeEnemy(pietro, X.at);
+
+  let m = r.mob;
+  if (wezel?.typ === 'elita') m *= E.elitaMult;
+  if (wezel?.typ === 'boss') m *= E.bossMult;
+  // Klątwy z eventów podbijają obrażenia wroga na resztę runu.
+  const klatwaDmg = (X.efekty ?? []).reduce((a, e2) => a * (e2.mobDmg ?? 1), 1);
+
+  e.hp = Math.max(1, Math.round(e.hp * m)); e.maxHp = e.hp;
+  e.damage = Math.max(1, Math.round(e.damage * m * klatwaDmg));
   e.gold = Math.round(e.gold * E.goldMult);
   e.expFloor = pietro;
+  if (wezel?.typ === 'elita') e.name = `${e.name} — Elita`;
+  if (wezel?.typ === 'boss') { e.name = `Pan ${actForFloor(pietro).name}`; e.variant = 'boss'; }
   return e;
+}
+
+// Buduje węzły runu z szkieletu i ziarna. Ten sam seed = ten sam run.
+function expNodes(seed) {
+  const rng = mulberry32(seed);
+  const E = C.expedition;
+  return E.szkielet.map((typ, i) => {
+    if (typ === 'rozdroze') {
+      const r = E.rozdroza[Math.floor(rng() * E.rozdroza.length)];
+      return { typ, i, ref: r.id };
+    }
+    if (typ === 'event') {
+      const ev = E.eventy[Math.floor(rng() * E.eventy.length)];
+      return { typ, i, ref: ev.id };
+    }
+    return { typ, i };
+  });
 }
 
 function doExpStart(ch, risk) {
   if (ch.activeFight && !ch.activeFight.over) return { error: 'Najpierw dokończ albo porzuć walkę' };
   if (ch.expedition) return { error: 'Wyprawa już trwa' };
   if (!C.expedition.risks[risk]) return { error: 'Nieznane ryzyko' };
-  ch.expedition = { risk, fight: 0, fights: C.expedition.fights, sakwa: [], gold: 0 };
-  ch.hpLost = 0;                 // wyprawa zaczyna się od pełnego zdrowia
+
+  const seed = (Date.now() ^ (ch.maxFloor * 7919) ^ Math.floor(Math.random() * 1e9)) >>> 0;
+  ch.expedition = {
+    risk, seed, nodes: expNodes(seed), at: 0,
+    sakwa: [], mats: {}, gold: 0,
+    efekty: [],            // klątwy i błogosławieństwa na ten run
+    lootMult: 1,           // narastający mnożnik z rozdroży i eventów
+    potionsUsed: 0,
+    safepointDone: false,
+    // ZDROWIE NIE WRACA. Wchodzisz z tym, co masz — lecz się przed wyjściem.
+  };
   return { ok: true };
 }
 
-// Porzucenie wyprawy w trakcie: sakwa przepada, tak samo jak przy śmierci.
+// Porzucenie wyprawy: sakwa przepada, tak samo jak przy śmierci.
+// To NIE jest darmowa ekstrakcja i nie leczy.
 function doExpLeave(ch) {
   if (!ch.expedition) return { error: 'Nie jesteś na wyprawie' };
   const stracone = ch.expedition.sakwa.length;
+  const matStracone = Object.values(ch.expedition.mats).reduce((a, b) => a + b, 0);
   ch.expedition = null;
   ch.activeFight = null;
-  ch.hpLost = 0;
-  return { ok: true, stracone };
+  return { ok: true, stracone, matStracone };
 }
 
-// Ukończona wyprawa oddaje sakwę do plecaka.
+// Decyzja na rozdrożu albo w evencie. Dopiero ona przesuwa run dalej.
+function doExpChoose(ch, opcjaId) {
+  const X = ch.expedition;
+  if (!X) return { error: 'Nie jesteś na wyprawie' };
+  const w = expNode(ch);
+  if (!w || (w.typ !== 'rozdroze' && w.typ !== 'event')) return { error: 'Nie ma teraz wyboru' };
+
+  const pula = w.typ === 'rozdroze' ? C.expedition.rozdroza : C.expedition.eventy;
+  const def = pula.find(x => x.id === w.ref);
+  const opcja = def?.opcje.find(o => o.id === opcjaId);
+  if (!opcja) return { error: 'Nie ma takiej opcji' };
+
+  const s = opcja.skutek ?? {};
+  const out = { ok: true, wybor: opcja.label, efekty: [] };
+
+  if (s.heal) {
+    const st = computeStats(ch);
+    const ile = Math.round(st.maxHp * s.heal);
+    ch.hpLost = Math.max(0, (ch.hpLost ?? 0) - ile);
+    out.efekty.push(`+${ile} zdrowia`);
+  }
+  if (s.potion) {
+    ch.potions = Math.max(0, ch.potions + s.potion);
+    out.efekty.push(s.potion > 0 ? '+1 mikstura' : '−1 mikstura');
+  }
+  if (s.material) {
+    const rng = mulberry32((X.seed ^ (X.at * 7919)) >>> 0);
+    const ile = s.ile[0] + Math.floor(rng() * (s.ile[1] - s.ile[0] + 1));
+    X.mats[s.material] = (X.mats[s.material] ?? 0) + ile;
+    out.efekty.push(`+${ile} surowca do sakwy`);
+  }
+  if (s.lootMult) { X.lootMult *= s.lootMult; out.efekty.push(`łup ×${s.lootMult}`); }
+  if (s.klatwa) { X.efekty.push(s.klatwa); out.efekty.push(s.klatwa.label); }
+  if (s.blogo) {
+    X.efekty.push(s.blogo);
+    if (s.blogo.lootMult) X.lootMult *= s.blogo.lootMult;
+    out.efekty.push(s.blogo.label);
+  }
+  // Rozdroże może narzucić, czym jest NASTĘPNY węzeł.
+  if (s.nastepny && X.nodes[X.at + 1]) X.nodes[X.at + 1].typ = s.nastepny;
+
+  X.at++;
+  return out;
+}
+
+// SAFEPOINT — jedyne wcześniejsze wyjście dla łupu i celowo wąskie:
+// jeden przedmiot i jeden rodzaj surowca (cały stos).
+function doExpSafepoint(ch, itemId, matId) {
+  const X = ch.expedition;
+  if (!X) return { error: 'Nie jesteś na wyprawie' };
+  if (expNode(ch)?.typ !== 'safepoint') return { error: 'Nie stoisz w bezpiecznym miejscu' };
+  if (X.safepointDone) return { error: 'Ten postój już wykorzystany' };
+
+  const out = { ok: true, wyniesione: [] };
+
+  if (itemId) {
+    const i = X.sakwa.findIndex(x => x.id === String(itemId));
+    if (i < 0) return { error: 'Nie ma tego w sakwie' };
+    if (ch.backpack.length >= C.gear.backpackSize) return { error: 'Plecak pełny' };
+    const it = X.sakwa.splice(i, 1)[0];
+    ch.backpack.push(it);
+    out.wyniesione.push(it.name);
+  }
+  if (matId) {
+    const ile = X.mats[matId] ?? 0;
+    if (!ile) return { error: 'Nie masz tego surowca' };
+    ch.materials[matId] = (ch.materials[matId] ?? 0) + ile;
+    delete X.mats[matId];
+    out.wyniesione.push(`${matId} ×${ile}`);
+  }
+
+  X.safepointDone = true;
+  X.at++;
+  return out;
+}
+
+// Ukończona wyprawa oddaje sakwę i surowce do plecaka.
 function expFinish(ch, out) {
-  const sakwa = ch.expedition.sakwa;
+  const X = ch.expedition;
   out.expDone = true;
   out.expLoot = [];
-  for (const d of sakwa) {
+  out.expMats = { ...X.mats };
+  for (const d of X.sakwa) {
     if (ch.backpack.length >= C.gear.backpackSize) { out.backpackFull = true; break; }
     ch.backpack.push(d); out.expLoot.push(d);
   }
+  for (const [k, v] of Object.entries(X.mats)) ch.materials[k] = (ch.materials[k] ?? 0) + v;
+  ch.gold += X.gold;
+  out.expGold = X.gold;
   ch.expedition = null;
-  ch.hpLost = 0;
   return out;
 }
 
 // Boss aktu zawsze idzie turowo — to jest cały eksperyment: zwykłe fale grają się
 // same, ważna walka wraca w ręce gracza. Przełącznik trybu bossa nie dotyczy.
 function fightMode(ch) {
-  return floorInfo(ch.floor).isBoss ? 'turowa' : (ch.mode ?? 'auto');
+  // Gracz może w ustawieniach wymusić, żeby WSZYSTKO grało się samo.
+  if (ch.alwaysAuto) return 'auto';
+  const bossWiezy = !ch.expedition && floorInfo(ch.floor).isBoss;
+  const bossWyprawy = expNode(ch)?.typ === 'boss';
+  return (bossWiezy || bossWyprawy) ? 'turowa' : (ch.mode ?? 'auto');
 }
 
 // Rozpoczyna walkę. W trybie auto od razu ją rozgrywa,
@@ -255,7 +407,14 @@ function startFight(ch) {
   const naWyprawie = !!ch.expedition;
   const info = floorInfo(ch.floor);
   if (!naWyprawie && ch.fight >= info.fights) return { error: 'Piętro zdobyte — idź wyżej' };
-  if (naWyprawie && ch.expedition.fight >= ch.expedition.fights) return { error: 'Wyprawa skończona' };
+  if (naWyprawie) {
+    const w = expNode(ch);
+    if (!w) return { error: 'Wyprawa skończona' };
+    // Rozdroże i postój zatrzymują run. Automat nie decyduje za gracza.
+    if (w.typ === 'rozdroze') return { error: 'Najpierw wybierz drogę' };
+    if (w.typ === 'event') return { error: 'Najpierw zdecyduj' };
+    if (w.typ === 'safepoint') return { error: 'Najpierw rozstrzygnij postój' };
+  }
 
   // Niedokończona walka turowa nie może być ślepym zaułkiem. Wcześniej zwracała
   // „Walka już trwa" i gracz zostawał z nią na zawsze, bo ekran jej nie pokazywał.
@@ -288,17 +447,22 @@ function startFight(ch) {
     // Ich HP nie przenosi się między falami — wyczerpanie dotyczy gracza.
     ...teamUnits(ch, st)],
     enemies: wrogowie,
-    potions: ch.potions,
+    // Ile mikstur masz PRZY SOBIE. Wieża to wypad na chwilę (3), wyprawa
+    // wyjście na długo (10 na cały run, nie na walkę).
+    potions: naWyprawie
+      ? Math.min(ch.potions, Math.max(0, C.expedition.potionCap - ch.expedition.potionsUsed))
+      : Math.min(ch.potions, C.healing.carryTower),
     wtype: st.wtype,
     abilities: ch.abilities ?? Object.keys(ABILITIES),
   }, seed, fightMode(ch));
   F.enemyMeta = { variant: enemy.variant,
                   gold: wrogowie.reduce((s, w) => s + w.gold, 0),
                   floor: naWyprawie ? enemy.expFloor : ch.floor,
-                  fightIdx: naWyprawie ? ch.expedition.fight : ch.fight,
+                  fightIdx: naWyprawie ? ch.expedition.at : ch.fight,
                   family: enemy.family,
                   families: wrogowie.map(w => w.family),
-                  wyprawa: naWyprawie };
+                  wyprawa: naWyprawie,
+                  wezel: naWyprawie ? expNode(ch).typ : null };
   ch.activeFight = F;
 
   if ((naWyprawie ? (ch.mode ?? 'auto') : fightMode(ch)) === 'auto') { runToEnd(F); return resolveFight(ch); }
@@ -324,7 +488,10 @@ function resolveFight(ch) {
   const meta = F.enemyMeta;
   const info = floorInfo(ch.floor);
 
-  ch.potions = res.potionsLeft;
+  // Zużyte mikstury schodzą ze stanu; na wyprawie liczy się też limit noszenia.
+  const wypite = res.potionsUsed ?? 0;
+  ch.potions = Math.max(0, ch.potions - wypite);
+  if (ch.expedition) ch.expedition.potionsUsed += wypite;
   ch.activeFight = null;
 
   const out = { ...res, enemy: F.enemies[0], loot: [], gold: 0,
@@ -356,29 +523,46 @@ function resolveFight(ch) {
     // ŁUP TYLKO Z WYPRAWY. Wieża daje złoto, exp skilli i wpisy w Kronice,
     // ale przedmiotów nie daje — to są dwie różne decyzje, nie jedna pętla.
     if (meta.wyprawa) {
-      const r = C.expedition.risks[ch.expedition.risk] ?? C.expedition.risks.rowne;
-      const ile = Math.random() < (C.loot.dropChance * r.lootMult) ? 1 : 0;
-      const drops = ile
-        ? rollDrops((F.seed ^ 31337) >>> 0, { floor: meta.floor, variant: 'plus' })
+      const X = ch.expedition;
+      const r = C.expedition.risks[X.risk] ?? C.expedition.risks.rowne;
+      const mnoznik = r.lootMult * X.lootMult
+        * (meta.wezel === 'elita' ? 1.6 : meta.wezel === 'boss' ? 3 : 1);
+      const szansa = Math.min(0.95, C.loot.dropChance * mnoznik);
+      const drops = Math.random() < szansa
+        ? rollDrops((F.seed ^ 31337) >>> 0,
+            { floor: meta.floor, variant: meta.wezel === 'boss' ? 'boss' : 'plus' })
         : [];
-      for (const d of drops) { giveId(d); ch.expedition.sakwa.push(d); out.loot.push(d); }
-      ch.expedition.gold += meta.gold;
-      ch.expedition.fight++;
-      out.expWave = ch.expedition.fight;
-      out.expWaves = ch.expedition.fights;
-      out.sakwa = ch.expedition.sakwa.length;
-      if (ch.expedition.fight >= ch.expedition.fights) expFinish(ch, out);
+      for (const d of drops) { giveId(d); X.sakwa.push(d); out.loot.push(d); }
+
+      // Materiały też lecą do sakwy — i też przepadają razem z nią.
+      if (Math.random() < 0.5) {
+        const ile = 1 + Math.floor(Math.random() * 3);
+        X.mats.miedz = (X.mats.miedz ?? 0) + ile;
+        out.mats = { miedz: ile };
+      }
+
+      X.gold += meta.gold;
+      X.at++;
+      out.expWave = X.at;
+      out.expWaves = X.nodes.length;
+      out.sakwa = X.sakwa.length;
+      out.sakwaMats = Object.values(X.mats).reduce((a, b) => a + b, 0);
+      // Dopiero BOSS oddaje sakwę. Wcześniej nie ma wyjścia poza safepointem.
+      if (meta.wezel === 'boss') expFinish(ch, out);
     } else {
       ch.fight++;
       if (ch.fight >= info.fights) out.floorCleared = true;
     }
   } else if (meta.wyprawa) {
-    // Śmierć na wyprawie zabiera CAŁĄ sakwę. To jest ta prawdziwa stawka,
-    // której wieża nie ma.
-    out.expLost = ch.expedition.sakwa.length;
+    // Śmierć na wyprawie zabiera CAŁĄ sakwę — przedmioty i surowce zdobyte
+    // w tym runie. Twój noszony sprzęt i plecak sprzed wyprawy są nietknięte.
     out.expFailed = true;
+    out.expLost = ch.expedition.sakwa.map(i => i.name);
+    out.expLostMats = { ...ch.expedition.mats };
+    out.expReached = ch.expedition.at;
+    out.expTotal = ch.expedition.nodes.length;
     ch.expedition = null;
-    ch.hpLost = 0;
+    // Zdrowie NIE wraca. Lecz się miksturami przed kolejnym wyjściem.
   } else {
     // Porażka cofa na początek piętra i oddaje pełne HP. Bez tego wyczerpanie
     // zamyka gracza w pętli, z której nie da się wyjść — a nic nie tracisz
@@ -604,8 +788,15 @@ const server = http.createServer(async (req, res) => {
         case '/api/minestop':result = doMineStop(ch); break;
         case '/api/minetick':result = doMineTick(ch); break;
         case '/api/team':    result = doTeam(ch, body.slot, body.idx); break;
-        case '/api/expstart':result = doExpStart(ch, String(body.risk)); break;
-        case '/api/expleave':result = doExpLeave(ch); break;
+        case '/api/expstart':  result = doExpStart(ch, String(body.risk)); break;
+        case '/api/expleave':  result = doExpLeave(ch); break;
+        case '/api/expchoose': result = doExpChoose(ch, String(body.opcja)); break;
+        case '/api/expsafe':   result = doExpSafepoint(ch, body.itemId ?? null, body.matId ?? null); break;
+        case '/api/autoboss': {
+          ch.alwaysAuto = !!body.on;
+          result = { ok: true, alwaysAuto: ch.alwaysAuto };
+          break;
+        }
         case '/api/equip':   result = equip(ch, String(body.itemId)); break;
         case '/api/potion': {
           if (ch.potions <= 0) { result = { error: 'Brak mikstur' }; break; }

@@ -310,19 +310,34 @@ function renderFightResult(f) {
   if (!f.win) {
     h += `<div class="card bad cleared">
       <div class="big-word bad">${f.expFailed ? 'WYPRAWA PRZEPADŁA' : 'PORAŻKA'}</div>
-      <div class="t2" style="text-align:center">${esc(f.enemy.name)} był za mocny.
-        ${f.expFailed
-          ? `Sakwa została w lesie — <b>${f.expLost} przedmiotów przepadło</b>. Zdrowie wraca pełne.`
-          : 'Wracasz na pierwszą falę tego piętra z pełnym zdrowiem — nie tracisz nic poza czasem i wypitymi miksturami.'}</div>
+      <div class="t2" style="text-align:center">${esc(f.enemy.name)} był za mocny.</div>
+      ${f.expFailed ? `
+        <div class="stat"><span class="k">Doszedłeś do</span><span class="v">${f.expReached} z ${f.expTotal}</span></div>
+        <div class="stat"><span class="k">Boss</span><span class="v down">nie osiągnięty</span></div>
+        ${(f.expLost ?? []).length ? `<div class="sec">Przepadło</div>
+          ${f.expLost.map(n => `<div class="stat"><span class="k">${esc(n)}</span><span class="v down">×</span></div>`).join('')}` : ''}
+        ${Object.entries(f.expLostMats ?? {}).filter(([, v]) => v).map(([k, v]) =>
+          `<div class="stat"><span class="k">${esc(k)}</span><span class="v down">−${v}</span></div>`).join('')}
+        <div class="t2" style="margin-top:8px"><b>Twój noszony sprzęt i plecak są nietknięte.</b>
+          Zdrowie nie wraca — wylecz się przed kolejnym wyjściem.</div>`
+        : `<div class="t2" style="text-align:center">Wracasz na pierwszą falę tego piętra.
+           Zdrowie nie wraca — mikstury albo czekanie.</div>`}
       <button class="btn solid big wide" style="margin-top:12px" data-act="closefight">
-        ${f.expFailed ? 'Wróć do huba' : 'Spróbuj jeszcze raz'}</button>
+        ${f.expFailed ? 'Wróć do Przygód' : 'Spróbuj jeszcze raz'}</button>
     </div>`;
     return h;
   }
 
   if (f.expDone) {
+    const mats = Object.entries(f.expMats ?? {}).filter(([, v]) => v);
     h += `<div class="card hi cleared"><div class="big-word">WYPRAWA UKOŃCZONA</div>
-      <div class="t2" style="text-align:center">Sakwa wpadła do plecaka.</div></div>`;
+      <div class="t2" style="text-align:center">Boss padł — sakwa jest Twoja.</div>
+      <div class="stat"><span class="k">Przedmioty</span><span class="v up">+${(f.expLoot ?? []).length}</span></div>
+      ${mats.length ? `<div class="stat"><span class="k">Surowce</span>
+        <span class="v up">${mats.map(([k, v]) => `${k} ×${v}`).join(', ')}</span></div>` : ''}
+      <div class="stat"><span class="k">Złoto z wyprawy</span><span class="v up">+${nf(f.expGold ?? 0)}</span></div>
+      <button class="btn solid big wide" style="margin-top:10px" data-act="runagain">Jeszcze raz</button>
+    </div>`;
   } else if (f.floorCleared) {
     h += `<div class="card hi cleared"><div class="big-word">PIĘTRO ZDOBYTE</div></div>`;
   }
@@ -524,65 +539,174 @@ function renderHub() {
 // Jedyne źródło przedmiotów. Osiem walk, HP nie wraca, sakwa wpada do plecaka
 // dopiero po ukończeniu — śmierć zabiera wszystko.
 
+const NODE_IC = { walka: '●', rozdroze: '◆', event: '?', safepoint: '⛺', elita: '★', boss: '☠' };
+const NODE_NAZWA = { walka: 'Walka', rozdroze: 'Rozdroże', event: 'Zdarzenie',
+                     safepoint: 'Postój', elita: 'Elita', boss: 'Boss wyprawy' };
+
+// Pasek trasy: gdzie jestem w runie. Jedna linijka, mieści się na telefonie.
+function trasaHtml(E) {
+  return `<div class="trasa">${E.nodes.map(n =>
+    `<span class="tw ${n.done ? 'done' : ''} ${n.here ? 'here' : ''} t-${n.typ}"
+      title="${NODE_NAZWA[n.typ] ?? n.typ}">${NODE_IC[n.typ] ?? '●'}</span>`).join('')}</div>`;
+}
+
+function sakwaHtml(E) {
+  const mats = E.mats ?? [];
+  return `<div class="card ${E.sakwaCount || mats.length ? 'hi' : ''}">
+    <div class="row">
+      <div class="grow"><div class="t1">Sakwa wyprawy</div>
+        <div class="t2">${E.sakwaCount} przedmiotów${mats.length
+          ? ` · ${mats.map(m => `${m.id} ×${m.count}`).join(', ')}` : ''}</div></div>
+      <span class="badge ${E.sakwaCount ? 'on' : ''}">×${E.lootMult} łupu</span>
+    </div>
+    ${E.sakwa.length ? `<div class="sakwa-lista">${E.sakwa.map(it =>
+      `<div class="sk-row" style="color:${rarityColor(it.rarity)}">${esc(it.name)}</div>`).join('')}</div>` : ''}
+    <div class="t2" style="margin-top:6px">Wpada do plecaka <b>dopiero po bossie</b>.
+      Padniesz albo zawrócisz — przepada.</div>
+  </div>`;
+}
+
 function renderWyprawaTryb() {
   const st = S.stats;
   const hpPct = Math.round(st.hp / st.maxHp * 100);
   const E = S.expedition;
 
-  let h = `<div class="scr-head">
-    <button class="lnk" data-act="hub">‹ Przygody</button>
-    <span>${E ? 'W DRODZE' : 'WYBIERZ RYZYKO'}</span></div>`;
-
+  // ---------------- ekran startowy ----------------
   if (!E) {
-    h += `<div class="card"><div class="t2">Wieża daje złoto i exp, ale <b>nie daje przedmiotów</b>.
-      Sprzęt zdobywa się tutaj. Osiem walk pod rząd, zdrowie nie wraca między nimi,
-      a <b>sakwa wpada do plecaka dopiero na końcu</b>. Padniesz po drodze — tracisz wszystko,
-      co uzbierałeś.</div></div>`;
-    h += `<div class="scrollbox">`;
+    let h = `<div class="scr-head">
+      <button class="lnk" data-act="hub">‹ Przygody</button>
+      <span>PUSZCZA · WYPRAWA</span></div>`;
+
+    h += `<div class="two-col"><div class="col">
+      <div class="card hi">
+        <div class="t1">Jedyne źródło sprzętu</div>
+        <div class="t2">Dziesięć etapów: walki, rozdroża, zdarzenia, postój i boss.
+          <b>Zdrowie nie wraca</b> — wchodzisz z tym, co masz. Łup ląduje w sakwie
+          i wpada do plecaka <b>dopiero po pokonaniu bossa</b>.</div>
+      </div>
+      <div class="card ${hpPct < 50 ? 'bad' : ''}">
+        <div class="row" style="margin-bottom:6px">
+          <div class="grow"><div class="t1">Zdrowie ${nf(st.hp)} / ${nf(st.maxHp)}</div>
+            <div class="t2">Lecz się TERAZ — w drodze nie ma odwrotu</div></div>
+          <span class="num" style="font-size:17px;color:${hpPct < 50 ? 'var(--blood)' : 'var(--brass)'}">${hpPct}%</span>
+        </div>
+        <div class="bar hp big"><i style="width:${hpPct}%"></i></div>
+        <div class="actions">
+          <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij</button>
+          <button class="btn ghost" data-act="buypotion">Kup za ${nf(40 + S.maxFloor * 6)}</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat"><span class="k">Twoja moc</span><span class="v" style="color:var(--brass)">${nf(st.power)}</span></div>
+        <div class="stat"><span class="k">Mikstury przy sobie</span>
+          <span class="v">${Math.min(S.potions, S.potionCarry?.wyprawa ?? 10)} z ${S.potionCarry?.wyprawa ?? 10}</span></div>
+        <div class="stat"><span class="k">Drużyna</span><span class="v">${1
+          + (S.teamStats?.allies.filter(Boolean).length ?? 0)
+          + (S.teamStats?.pet ? 1 : 0)} jednostek</span></div>
+      </div>
+    </div><div class="col">
+      <div class="sec">Wybierz ryzyko</div>`;
     for (const r of S.expRisks ?? []) {
       h += `<button class="card row res-row" data-act="expstart" data-r="${r.id}">
         <div class="icon">${r.id === 'wysokie' ? '🔥' : r.id === 'niskie' ? '🌿' : '⚖'}</div>
         <div class="grow"><div class="t1">${esc(r.label)}</div>
           <div class="t2">${esc(r.desc)}</div></div>
-        <span class="badge on">×${r.lootMult.toFixed(1)} łup</span>
+        <span class="badge on">×${r.lootMult.toFixed(1)}</span>
       </button>`;
     }
+    h += `</div></div>`;
+    return h;
+  }
+
+  // ---------------- run w toku ----------------
+  let h = `<div class="scr-head">
+    <button class="lnk" data-act="hub">‹ Przygody</button>
+    <span>${esc(E.riskLabel ?? '')} · ${E.at + 1} z ${E.total}</span></div>`;
+
+  h += trasaHtml(E);
+
+  // DECYZJA — run stoi, dopóki gracz nie wybierze.
+  if (E.decyzja) {
+    h += `<div class="card hi decyzja" style="margin-top:8px">
+      <div class="big-word">DECYZJA</div>
+      <div class="t2" style="text-align:center;margin-bottom:10px">${esc(E.decyzja.pytanie)}</div>
+      ${E.decyzja.opcje.map(o => `<button class="card row res-row" data-act="expchoose" data-o="${o.id}">
+        <div class="grow"><div class="t1">${esc(o.label)}</div>
+          <div class="t2">${esc(o.desc)}</div></div>
+        <span class="badge on">WYBIERZ</span>
+      </button>`).join('')}
+    </div>`;
+    h += sakwaHtml(E);
+    return h;
+  }
+
+  // POSTÓJ — jedyne wcześniejsze wyjście dla łupu, i to wąskie.
+  if (E.safepoint) {
+    h += `<div class="card hi" style="margin-top:8px">
+      <div class="big-word">POSTÓJ</div>
+      <div class="t2" style="text-align:center">Możesz odesłać do plecaka <b>jeden przedmiot</b>
+        i <b>jeden rodzaj surowca</b> (cały stos). Reszta sakwy zostaje na szali.</div>
+    </div>`;
+    h += `<div class="scrollbox">`;
+    h += `<div class="sec">Przedmiot</div>`;
+    h += E.sakwa.length
+      ? E.sakwa.map(it => `<button class="card row compact" data-act="expsafe" data-item="${it.id}">
+          <div class="icon" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+          <div class="grow"><div class="t1" style="color:${rarityColor(it.rarity)}">${esc(it.name)}</div>
+            <div class="t2">${esc(S.rarities[it.rarity]?.label ?? '')}</div></div>
+          <span class="badge on">ODEŚLIJ</span></button>`).join('')
+      : `<div class="card"><div class="t2">Nic jeszcze nie wypadło.</div></div>`;
+    h += `<div class="sec">Surowiec</div>`;
+    h += (E.mats ?? []).length
+      ? E.mats.map(m => `<button class="card row compact" data-act="expsafe" data-mat="${m.id}">
+          <div class="icon">🪨</div>
+          <div class="grow"><div class="t1">${esc(m.id)}</div>
+            <div class="t2">cały stos: ${m.count}</div></div>
+          <span class="badge on">ODEŚLIJ</span></button>`).join('')
+      : `<div class="card"><div class="t2">Brak surowców w sakwie.</div></div>`;
+    h += `<button class="btn ghost wide" style="margin-top:8px" data-act="expsafe">Idź dalej bez odsyłania</button>`;
     h += `</div>`;
     return h;
   }
 
+  // WALKA
   const e = E.enemy;
-  h += `<div class="two-col"><div class="col">
-    <div class="card hi">
-      <div class="row" style="margin-bottom:7px">
-        <div class="grow"><div class="t1">${esc(E.riskLabel ?? 'Wyprawa')}</div>
-          <div class="t2">Walka ${E.fight + 1} z ${E.fights}</div></div>
-        <span class="badge on">SAKWA ${E.sakwaCount}</span>
-      </div>
-      <div class="waves">${Array.from({ length: E.fights }, (_, i) =>
-        `<i class="${i < E.fight ? 'done' : i === E.fight ? 'now' : ''}"></i>`).join('')}</div>
-    </div>
+  const boss = E.node?.typ === 'boss';
+  const elita = E.node?.typ === 'elita';
 
+  h += `<div class="two-col" style="margin-top:8px"><div class="col">
     <div class="card ${hpPct < 40 ? 'bad' : ''}">
       <div class="row" style="margin-bottom:6px">
         <div class="grow"><div class="t1">Zdrowie ${nf(st.hp)} / ${nf(st.maxHp)}</div>
-          <div class="t2">Mikstury: ${S.potions}</div></div>
+          <div class="t2">Mikstury w drodze: ${E.potionsLeft} · masz ${S.potions}</div></div>
         <span class="num" style="font-size:17px;color:${hpPct < 40 ? 'var(--blood)' : 'var(--brass)'}">${hpPct}%</span>
       </div>
       <div class="bar hp big"><i style="width:${hpPct}%"></i></div>
       <div class="actions">
         <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij</button>
-        <button class="btn ghost" data-act="expleave">Zawróć</button>
+        <button class="btn ghost" data-act="expleave">Porzuć</button>
       </div>
-      <div class="t2" style="margin-top:6px">Zawrócenie też zabiera sakwę.</div>
     </div>
+    ${(E.efekty ?? []).length ? `<div class="card">
+      <div class="sec" style="margin-top:0">Działa na Ciebie</div>
+      ${E.efekty.map(x => `<div class="stat"><span class="k">${esc(x.label)}</span>
+        <span class="v ${x.mobDmg ? 'down' : 'up'}">${x.mobDmg ? `wrogowie +${Math.round((x.mobDmg - 1) * 100)}%` : 'korzystnie'}</span></div>`).join('')}
+    </div>` : ''}
+    ${sakwaHtml(E)}
   </div><div class="col">
+    <div class="card ${boss ? 'hi' : ''}">
+      <div class="row"><div class="grow">
+        <div class="t1">${boss ? 'BOSS WYPRAWY' : elita ? 'ELITA' : `Etap ${E.at + 1}`}</div>
+        <div class="t2">${boss ? 'Jego śmierć oddaje sakwę. Walka turowa.'
+          : elita ? 'Mocniejszy niż reszta, lepszy łup.' : 'Zwykły przeciwnik.'}</div>
+      </div><span class="badge on">${NODE_NAZWA[E.node?.typ] ?? ''}</span></div>
+    </div>
     <div class="units">
       <div class="unit me"><div class="png">${heroCrest(38)}</div>
         <div class="nm">${esc(S.name)}</div>
         <div class="bar hp"><i style="width:${hpPct}%"></i></div>
         <div class="hpn">${nf(st.hp)}</div></div>
-      <div class="unit"><div class="png">👹</div>
+      <div class="unit"><div class="png">${boss ? '👑' : elita ? '⚔' : '👹'}</div>
         <div class="nm">${esc(e?.name ?? '—')}</div>
         <div class="bar foe"><i style="width:100%"></i></div>
         <div class="hpn">${nf(e?.maxHp ?? 0)}</div></div>
@@ -592,7 +716,7 @@ function renderWyprawaTryb() {
       <div class="stat"><span class="k">Obrona</span><span class="v">${st.armor} vs ${e?.armor ?? 0}</span></div>
     </div>
     <button class="btn solid big wide" style="margin-top:8px" data-act="fight">
-      ${S.mode === 'auto' ? 'Ruszaj — walki lecą same' : 'Walcz'}</button>
+      ${boss ? 'Stań do bossa' : S.mode === 'auto' && !S.alwaysAuto === false ? 'Walcz' : 'Ruszaj'}</button>
   </div></div>`;
   return h;
 }
@@ -1612,9 +1736,24 @@ function paintCombatBar() {
   const bar = $('#combatbar');
   if (!bar || !S) return;
 
+  // Pasek żyje także wtedy, gdy run stoi i CZEKA NA DECYZJĘ — inaczej gracz
+  // siedzi w Ekwipunku, a wyprawa stoi i on o tym nie wie.
+  const czeka = S.expedition && (S.expedition.decyzja || S.expedition.safepoint);
   const trwa = FIGHT && (FIGHT.playing || AUTO || (FIGHT.mode === 'turowa' && !FIGHT.result));
-  if (!trwa) { bar.hidden = true; return; }
+  if (!trwa && !czeka) { bar.hidden = true; return; }
   bar.hidden = false;
+
+  if (!trwa && czeka) {
+    const E = S.expedition;
+    bar.innerHTML = `
+      <div class="cb-head"><span>WYPRAWA — ETAP ${E.at + 1} / ${E.total}</span>
+        <span>SAKWA ${E.sakwaCount}</span></div>
+      <div class="cb-decyzja">${E.safepoint ? 'POSTÓJ — WYBIERZ, CO ODESŁAĆ' : 'DECYZJA — WYBIERZ DROGĘ'}</div>
+      <div class="cb-act">
+        <button class="cbtn go" data-act="tab" data-tab="wyprawa">ROZSTRZYGNIJ</button>
+      </div>`;
+    return;
+  }
 
   // Wpisy logu niosą tylko HP — nazwa wroga siedzi w FIGHT.foeName, ustawiona przy starcie fali.
   const me = FIGHT.party?.[0];
@@ -1719,10 +1858,28 @@ document.addEventListener('click', async (ev) => {
       if (!d.error) { advView = 'exp'; render(); }
 
     } else if (act === 'expleave') {
-      if (!confirm('Zawrócić z wyprawy?\n\nSakwa przepada — wszystko, co uzbierałeś, zostaje w lesie.')) return;
+      const E = S.expedition;
+      if (!confirm(`PORZUCIĆ WYPRAWĘ?\n\nZ sakwy przepadnie: ${E?.sakwaCount ?? 0} przedmiotów`
+        + `${(E?.mats ?? []).length ? ` i ${E.mats.map(m => `${m.id} ×${m.count}`).join(', ')}` : ''}.`
+        + `\n\nTwój noszony sprzęt i plecak zostają nietknięte.`)) return;
       stopPlayback();
       const d = await api('expleave', {});
-      if (!d.error) { advView = 'hub'; toast(d.stracone ? `Przepadło ${d.stracone} przedmiotów` : 'Zawróciłeś'); render(); }
+      if (!d.error) { advView = 'hub'; toast(d.stracone ? `Przepadło ${d.stracone} przedmiotów` : 'Porzucone'); render(); }
+
+    } else if (act === 'expchoose') {
+      const d = await api('expchoose', { opcja: btn.dataset.o });
+      if (!d.error) { if (d.efekty?.length) toast(d.efekty.join(' · ')); render(); }
+
+    } else if (act === 'expsafe') {
+      const d = await api('expsafe', { itemId: btn.dataset.item ?? null, matId: btn.dataset.mat ?? null });
+      if (!d.error) {
+        toast(d.wyniesione.length ? `Odesłane: ${d.wyniesione.join(', ')}` : 'Idziesz dalej');
+        render();
+      }
+
+    } else if (act === 'autoboss') {
+      const d = await api('autoboss', { on: !S.alwaysAuto });
+      if (!d.error) render();
 
     } else if (act === 'goto') {
       const d = await api('goto', { floor: Number(btn.dataset.f) });
@@ -1786,6 +1943,12 @@ document.addEventListener('click', async (ev) => {
 
     } else if (act === 'skipplay') {
       finishPlayback();
+
+    } else if (act === 'runagain') {
+      FIGHT = null; AUTO = false;
+      advView = 'exp';
+      openTab('wyprawa');
+      render();
 
     } else if (act === 'closefight') {
       const byloWyprawa = FIGHT?.result?.expDone || FIGHT?.result?.expFailed;

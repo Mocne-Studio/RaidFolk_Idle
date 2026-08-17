@@ -298,6 +298,29 @@ button.card:active{background:#26211B}
 .cskill .bar{height:6px}
 .card.off{opacity:.45}
 
+/* ---------- wyprawa ---------- */
+.trasa{display:flex;align-items:center;justify-content:space-between;gap:2px;
+  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
+  padding:8px 9px;flex:none}
+.trasa .tw{font-family:var(--mono);font-size:13px;color:var(--ink-mute);opacity:.5;
+  width:100%;text-align:center}
+.trasa .tw.done{color:var(--brass);opacity:.85}
+.trasa .tw.here{color:var(--ink);opacity:1;text-shadow:0 0 10px rgba(200,154,74,.9);transform:scale(1.35)}
+.trasa .t-boss{color:var(--blood)}
+.trasa .t-elita{color:var(--copper)}
+.trasa .t-safepoint{color:var(--heal)}
+
+.decyzja .res-row{margin-bottom:5px}
+.sakwa-lista{margin-top:7px;max-height:96px;overflow-y:auto;
+  border-top:1px solid var(--edge-soft);padding-top:5px}
+.sk-row{font-size:11px;padding:2px 0}
+
+.cb-decyzja{font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+  color:var(--brass);text-align:center;padding:6px 0;
+  border:1px dashed var(--brass);border-radius:3px;margin-top:2px;
+  animation:mig 1.4s ease-in-out infinite}
+@keyframes mig{50%{opacity:.45}}
+
 /* szanse przywołania */
 .odds{background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;padding:7px 9px}
 .oddrow{display:flex;align-items:center;gap:8px;padding:3px 0}
