@@ -106,11 +106,12 @@ etykiety klas na przedmiotach.
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `15e0390` — „Dokumenty po corrections pass" |
+| HEAD | `34f2dc0` — „Szyk, Wyprawa jako zrodlo lupu, dwa potwory od pietra 3" |
 | Working tree | **czysty** |
 
 Poprzednie punkty:
 
+- `fc8e60b` — sojusznicy w walce, skille broni, typy obrazen, przebudowa EQ
 - `0b4ac30` — corrections pass: bez klasy gracza, bez tutorialu, jeden ekran,
   grywalne Górnictwo, naprawa zakleszczenia walki turowej
 - `84317f1` / `4dd5503` — dokumenty przekazania
@@ -281,8 +282,9 @@ sześć zakładek. Żadna nie powinna dać paska przewijania całego ekranu.
 
 ## KNOWN ISSUES
 
-- **Sojusznicy i pety nie wchodzą do walki.** Lądują w kolekcji i widać ich
-  w Drużynie oraz Kronice, ale arena dalej pokazuje puste sloty.
+- **Sojusznicy i pety WALCZĄ.** Sloty 2 i 3 są jednak zamknięte świadomie,
+  więc w drużynie mieści się dziś bohater + jeden sojusznik + pet.
+- **Surowce nie mają zastosowania** — Kowalstwo ich nie przetapia.
 - **Wykopane surowce nie mają zastosowania.** Kowalstwo ich nie przetapia.
 - **Sześć profesji poza Górnictwem to makiety.** Klikanie niczego nie zmienia.
 - **Balans Górnictwa jest celowo szybki**, żeby dało się zobaczyć kilka

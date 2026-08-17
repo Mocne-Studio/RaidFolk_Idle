@@ -1125,3 +1125,106 @@ Teraz:
 
 Porzucenie kosztuje tyle co przegrana, czyli powrót na pierwszą falę piętra —
 a więc nic poza czasem.
+
+---
+
+## 19. DECYZJE Z SESJI SZYKU I WYPRAWY (17 sierpnia 2026, trzecia sesja)
+
+Jak 17 i 18: **decyzje trwałe, wdrożone w kodzie.** Gdzie wcześniejsze rozdziały
+mówią co innego, wygrywa ta sekcja.
+
+### 19.1 Wieża nie daje przedmiotów. Daje je tylko Wyprawa
+
+To rozdziela dwie rzeczy, które wcześniej były jedną pętlą:
+
+- **Wieża** — postęp, złoto, exp skilli, Kronika. Żadnego łupu.
+- **Wyprawa** — osiem walk, trzy poziomy ryzyka, **jedyne źródło sprzętu**.
+
+Łup zbiera się do **sakwy** i wpada do plecaka **dopiero po ukończeniu**.
+Śmierć albo zawrócenie zabiera całą sakwę. To jest ta prawdziwa stawka,
+której wieża nie ma i mieć nie będzie.
+
+### 19.2 Szyk — trzy rzędy, klasa decyduje
+
+| Rząd | Kto |
+|---|---|
+| 1. przód | Wojownik, Paladyn, Tancerz Ostrzy, pet, bohater |
+| 2. środek | Mag |
+| 3. tył | Łowca, Tropiciel |
+
+**Zasięg zależy od broni:** broń biała dosięga tylko pierwszego rzędu, dystans
+i magia biją w każdy. Żeby dobrać się bronią białą do łucznika z tyłu, trzeba
+**podejść**, a każde podejście kosztuje turę.
+
+Cel to **zawsze najbliższy żywy rząd** — nie da się przeskoczyć obrońcy i uderzyć
+w maga za nim. Przeciwnicy mają klasy na tych samych zasadach.
+
+To jest cały powód, dla którego tylny sojusznik jest wart ochrony, a broń biała
+płaci za swoje obrażenia czasem.
+
+### 19.3 Dwóch przeciwników od piętra 3
+
+Wcześniej szyk nie ma sensu, bo nie ma kogo zasłaniać. Drugi przeciwnik jest
+o 35% słabszy — dwóch pełnych podwajało trudność z piętra na piętro.
+
+### 19.4 Drużyna otwiera się progami, nie prezentami
+
+- **Piętro 3** — otwiera się pierwszy slot i **przywoływanie sojuszników**
+- **Piętro 10** (walka przed bossem) — otwiera się **przywoływanie petów**
+- **Sloty 2 i 3 zostają zamknięte**, dopóki nie będzie wiadomo, czym je wypełnić
+
+To są progi na **dostęp**, nie darmowi towarzysze. Sojusznika trzeba sobie
+wylosować kluczem.
+
+### 19.5 Sojusznicy są ułamkiem bohatera
+
+Statystyki liczą się z jego statystyk (`config.allies`), więc nie ma osobnej
+krzywej do strojenia, towarzysz nigdy nie zostaje w tyle i nigdy nie przerasta
+gracza. Rzadkość jest jedyną osią rozwoju — ekwipunku nie noszą.
+
+Mikstury należą do bohatera. Sojusznik ich nie tyka.
+
+### 19.6 Skille bojowe wracają — jako bonusy, nie bramki
+
+Poprzednio bramkowały sprzęt i to był powód ich skasowania. Teraz dają
+**wyłącznie bonusy**; jedyną bramką na sprzęt zostaje poziom postaci.
+
+Pięć skilli: **Broń biała, Łuk, Różdżka, Obrona, Witalność.**
+
+Exp dzieli się według **rąk**:
+
+| Co trzymasz | Podział |
+|---|---|
+| dwuręczna | 100% do jej skilla |
+| jednoręczna + tarcza | 50% broń / 50% Obrona |
+| dwie jednoręczne | po 50% do skilla każdej |
+| jednoręczna sama | 100% do jej skilla |
+
+**Witalność rośnie zawsze**, z samego udziału w walce.
+
+Bronie mają liczbę rąk. **Dwuręczne biją mocniej (×1.35)** i blokują drugą rękę —
+to ich cała przewaga nad tarczą. Skille broni liczą się tylko dla trzymanej broni.
+
+**Drzewko punktowe zeszło z UI.** Liczby, reguły i respec zostają w kodzie —
+może wrócić, może nie.
+
+### 19.7 Rodzaj obrażeń widać w logu
+
+Fizyczne bordowe ze znakiem miecza, magiczne niebieskie ze znakiem gwiazdki.
+Bierze się z typu broni. Silnik nic z tego nie liczy — to jest informacja
+dla gracza, nie mechanika.
+
+### 19.8 Gra zapamiętuje, gdzie Cię rozłożyło
+
+Po porażce zostaje wpis: piętro, fala i przeciwnik. Widać go po powrocie.
+To jedyna informacja, która mówi graczowi, ile jeszcze brakuje.
+
+### 19.9 Wszystko, co się rozwija, siedzi w zakładce Skille
+
+Trzy sekcje: **Zbierackie · Bojowe · Atrybuty.** Drużyna jest podglądem składu
+i ustawianiem slotów — niczym więcej.
+
+### 19.10 Priorytet: telefon
+
+Funkcjonalność i czytelność na telefonie przed wszystkim innym. Żaden ekran
+gameplayowy nie przewija się jako strona na 375×812.

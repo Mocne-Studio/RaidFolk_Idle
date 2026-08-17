@@ -157,3 +157,60 @@ co się działo, bez czytania całego diffa.
 - **Werdykt właściciela.** Scope zatrzymany.
 - Potem: Sojusznicy w walce (i klasy wracają po ich stronie), następnie Kowalstwo,
   żeby ruda miała gdzie trafić.
+
+---
+
+## 2026-08-17 (trzecia sesja) — szyk, Wyprawa, sojusznicy w walce
+
+**START HEAD:** `1650a64`
+**END HEAD:** `34f2dc0`
+
+### DONE
+
+- **Sojusznicy i pet naprawdę walczą.** Statystyki liczą się z bohatera, mikstury
+  zostają jego. Drużyna przebudowana na skład + panel wybranego.
+- **Szyk trzech rzędów.** Klasa daje rząd, broń daje zasięg, broń biała musi
+  podejść do tylnego rzędu. Przeciwnicy grają na tych samych zasadach.
+- **Wyprawa uruchomiona** jako jedyne źródło przedmiotów. Osiem walk, trzy ryzyka,
+  sakwa wpada do plecaka dopiero po ukończeniu.
+- **Łup wycięty z wieży.** Zostaje złoto, exp skilli i Kronika.
+- **Dwóch przeciwników od piętra 3**, drugi słabszy o 35%.
+- **Skille bojowe wróciły** jako bonusy: Broń biała, Łuk, Różdżka, Obrona,
+  Witalność. Exp dzieli się według rąk. Bronie mają liczbę rąk, dwuręczne biją
+  mocniej i blokują drugą rękę.
+- **Drzewko punktowe schowane z UI**, liczby zostają w kodzie.
+- **Rodzaj obrażeń w logu** — fizyczne bordowe, magiczne niebieskie.
+- **Pamięć porażki** — piętro, fala i przeciwnik, który rozłożył.
+- **Odblokowania drużyny progami**: piętro 3 przywoływanie sojuszników,
+  piętro 10 petów, sloty 2 i 3 zamknięte.
+- **Skille to jedno miejsce na rozwój**: Zbierackie, Bojowe, Atrybuty.
+- **Rybołówstwo i Runy grywalne** obok Górnictwa.
+- **Jawne szanse Przywołania** — 62 / 25 / 9 / 3.2 / 0.8%.
+- **Ekwipunek**: portret znikł ze środka makiety, jest tam napierśnik, buty pod
+  nim, wolna komórka niesie Moc. Doszło porównanie „nosisz kontra bierzesz".
+
+### POPRAWKI
+
+- pętla kopania miała zaszyte `gornictwo` — Rybołówstwo i Runy wywalały się
+  na drugim cyklu
+- niedokończona walka turowa była ślepym zaułkiem (patrz sekcja 18.10 DESIGN)
+
+### RESET
+
+Konta **Lol** (7 postaci) i **Cuckamcy** zresetowane do piętra 1, obsada drużyny
+wyczyszczona. Ekwipunek i złoto zostały.
+
+### TESTS
+
+- `node game/combat.js` — przechodzą, w tym testy szyku: broń biała nie dosięga
+  trzeciego rzędu, potrzebuje dwóch podejść, dystans bije od razu, przód zasłania tył
+- `node game/character.js` — przechodzą, w tym podział expa według rąk
+  i dwuręczna zdejmująca tarczę
+- Zmierzone na **375×812**: żadna z sześciu zakładek ani żadna podzakładka Skilli
+  nie przewija się jako strona, brak poziomego scrolla
+- Ręcznie: wyprawa od startu do ukończenia, dwa przedmioty do plecaka;
+  wieża bez łupu; sojusznik i pet zadający obrażenia w logu
+
+### NEXT
+
+- Werdykt właściciela. Potem: Kowalstwo (ruda nie ma gdzie trafiać) i sloty 2–3.
