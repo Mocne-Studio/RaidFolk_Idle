@@ -1,4 +1,4 @@
-# Uruchamia serwer gry i tunel jedną komendą.
+﻿# Uruchamia serwer gry i tunel jedną komendą.
 #
 #   .\start.ps1                      tunel losowy (trycloudflare)
 #   .\start.ps1 -Named raidfolk      nazwany tunel Cloudflare (wymaga domeny)
@@ -44,8 +44,16 @@ if (-not $NoTunnel) {
   $cf = "C:\Program Files (x86)\cloudflared\cloudflared.exe"
   if (-not (Test-Path $cf)) { $cf = (Get-Command cloudflared -ErrorAction SilentlyContinue).Source }
 
+  # ngrok z wingeta nie trafia od razu do PATH biezacej konsoli
+  $ng = (Get-Command ngrok -ErrorAction SilentlyContinue).Source
+  if (-not $ng) {
+    $ng = (Get-ChildItem "$env:LOCALAPPDATA\Microsoft\WinGet" -Recurse -Filter ngrok.exe -ErrorAction SilentlyContinue |
+           Select-Object -First 1).FullName
+  }
+
   if ($Ngrok) {
-    $tunnel = Start-Process ngrok -ArgumentList "http","--url=$Ngrok","$Port" -PassThru -WindowStyle Hidden
+    if (-not $ng) { Write-Host "  Nie znalazlem ngrok.exe" -ForegroundColor Red; exit 1 }
+    $tunnel = Start-Process $ng -ArgumentList "http","--url=$Ngrok","$Port" -PassThru -WindowStyle Hidden
     Write-Host "  PUBLICZNY   https://$Ngrok" -ForegroundColor Green
   }
   elseif ($Named) {

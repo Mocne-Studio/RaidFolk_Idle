@@ -73,6 +73,19 @@ async function boot() {
     if (d.token) { TOKEN = d.token; localStorage.setItem('rf_token', TOKEN); enterGame(); }
   };
   $('#name').addEventListener('keydown', e => { if (e.key === 'Enter') $('#create').click(); });
+
+  // Wczytanie postaci kodem — ratuje przed utratą postaci przy zmianie adresu serwera.
+  const restore = async () => {
+    const code = $('#code').value.trim();
+    if (!code) return toast('Wklej kod', true);
+    const d = await fetch('/api/state?token=' + encodeURIComponent(code)).then(r => r.json()).catch(() => ({}));
+    if (!d.state) return toast('Nie znaleziono takiej postaci', true);
+    TOKEN = code; localStorage.setItem('rf_token', TOKEN); S = d.state;
+    toast(`Wczytano: ${S.name}`);
+    enterGame();
+  };
+  $('#restore').onclick = restore;
+  $('#code').addEventListener('keydown', e => { if (e.key === 'Enter') restore(); });
 }
 
 function enterGame() {
@@ -520,6 +533,16 @@ function renderPostac() {
     <div class="stat"><span class="k mut">Drzewko dojdzie w kolejnym kawałku</span><span class="v mut">—</span></div>
   </div>`;
 
+  h += `<div class="sec">Kod postaci</div>
+    <div class="card">
+      <div class="t2" style="margin-bottom:8px">Zapisz go sobie. Pozwala wrócić do tej postaci
+      z innego urządzenia albo gdy zmieni się adres serwera. Kto ma ten kod, ma Twoją postać.</div>
+      <div class="code-box" id="mycode">${esc(TOKEN ?? '')}</div>
+      <div class="actions">
+        <button class="btn" data-act="copycode">Kopiuj kod</button>
+      </div>
+    </div>`;
+
   return h;
 }
 
@@ -651,6 +674,9 @@ document.addEventListener('click', async (ev) => {
       await api('attr', { attr: btn.dataset.attr }); render();
     } else if (act === 'potion') {
       await api('potion', {}); render();
+    } else if (act === 'copycode') {
+      try { await navigator.clipboard.writeText(TOKEN); toast('Kod skopiowany'); }
+      catch { toast('Zaznacz i skopiuj ręcznie', true); }
     } else if (act === 'buypotion') {
       const d = await api('buypotion', {});
       if (!d.error) toast('Kupiono miksturę');
