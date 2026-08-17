@@ -182,13 +182,13 @@ button.card:active{background:#26211B}
 .big-num small{display:block;font-size:9px;color:var(--ink-mute);letter-spacing:.1em;margin-top:3px}
 
 /* ---------- zakładki ---------- */
-.tabs{flex:none;display:grid;grid-template-columns:repeat(3,1fr);
+.tabs{flex:none;display:grid;grid-template-columns:repeat(4,1fr);
   background:var(--stone-hi);border-top:1px solid var(--edge);
   padding-bottom:env(safe-area-inset-bottom)}
 .tabs button{background:none;border:0;cursor:pointer;padding:10px 2px 12px;color:var(--ink-mute);
   display:flex;flex-direction:column;align-items:center;gap:3px;border-top:2px solid transparent}
 .tabs button .ic{font-size:16px;line-height:1}
-.tabs button .tx{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em}
+.tabs button .tx{font-family:var(--mono);font-size:8px;letter-spacing:.03em;white-space:nowrap}
 .tabs button[aria-selected="true"]{color:var(--brass);border-top-color:var(--brass)}
 
 /* ---------- start ---------- */
@@ -213,6 +213,39 @@ button.card:active{background:#26211B}
 .picker button.on .glyph{color:var(--brass)}
 .picker.colors button i{display:block;width:26px;height:26px;border-radius:50%}
 
+/* wprowadzenie — resztę stylu bierze z .start */
+.intro h1{font-size:27px;margin-bottom:16px}
+.intro-body p{font-size:14.5px;line-height:1.55;color:var(--ink-dim);margin:0 0 13px}
+.intro-body b{color:var(--ink);font-weight:600}
+
+/* wybór klasy */
+.cp-lead{font-size:13.5px;line-height:1.5;color:var(--ink-dim);margin:0 0 16px}
+.cp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.cp-item{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;
+  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
+  padding:10px;cursor:pointer;color:var(--ink);font:inherit}
+.cp-item b{font-family:var(--display);font-size:15px;font-weight:400}
+.cp-item span{font-family:var(--mono);font-size:9px;line-height:1.35;color:var(--ink-mute)}
+.cp-item.on{border-color:var(--brass);background:rgba(200,154,74,.12)}
+.cp-item.on span{color:var(--brass)}
+.cp-line{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-top:5px}
+.cp-line span{color:var(--ink-mute);flex:none}
+.cp-line b{color:var(--ink);font-weight:600;text-align:right}
+.cp-opis{font-size:13px;line-height:1.5;color:var(--ink-dim);margin:10px 0 0}
+
+/* makieta postaci — sloty ekwipunku */
+.doll{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 auto 9px;max-width:270px}
+.doll-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  aspect-ratio:1;background:var(--stone-hi);border:1px solid var(--edge);border-radius:4px;
+  color:var(--ink);font:inherit;cursor:pointer;padding:4px}
+.doll-cell .ic{font-size:24px;line-height:1}
+.doll-cell .lb{font-family:var(--mono);font-size:8px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-mute);text-align:center;line-height:1.2}
+.doll-cell.empty{background:var(--stone);border-style:dashed;border-color:var(--edge-soft)}
+.doll-cell.empty .ic{opacity:.28}
+.doll-cell.on{box-shadow:inset 0 0 0 1px var(--brass)}
+.doll-cell.blank{border:none;background:none;cursor:default}
+
 .hdr-crest{flex:none;width:30px;height:30px;line-height:0}
 .hdr-crest svg{display:block}
 .unit .png svg{display:block}
@@ -233,3 +266,6 @@ input[type=text]:focus{outline:none;border-color:var(--brass)}
 
 :focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* drzewko klasy — węzeł zablokowany zostaje widoczny, ale przygaszony */
+.card.locked{opacity:.55}

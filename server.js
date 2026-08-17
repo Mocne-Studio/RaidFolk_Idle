@@ -13,8 +13,9 @@ import { createFight, step, beginTurn, runToEnd, summary, hitChance,
          STRENGTHS, ABILITIES, ULTIMATES } from './game/combat.js';
 import * as DB from './game/db.js';
 import {
-  newCharacter, computeStats, awardFightExp, equip, canEquip,
-  expSplit, skillExpToNext,
+  newCharacter, computeStats, equip, canEquip,
+  classOf, migrate, poziom,
+  treeOf, nodeState, spendTreePoint, resetTree, respecCost,
 } from './game/character.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,23 +43,33 @@ function applyRegen(ch) {
 let nextItemId = Date.now();
 const giveId = (it) => { it.id = String(nextItemId++); return it; };
 
+// Drzewko wysyłamy policzone: klient nie musi znać reguł odblokowania,
+// bo i tak sprawdza je serwer przy wydawaniu punktu.
+function treeView(ch) {
+  return treeOf(ch.klasa).map(branch => ({
+    id: branch.id, label: branch.label,
+    spent: branch.nodes.reduce((s, n) => s + (ch.tree?.[n.id] ?? 0), 0),
+    nodes: branch.nodes.map((n, i) => {
+      const st = nodeState(ch, branch, i);
+      return { id: n.id, label: n.label, eff: n.eff, rank: st.rank, max: st.max,
+               need: st.need, unlocked: st.unlocked, canRaise: st.canRaise };
+    }),
+  }));
+}
+
 function view(ch) {
   const st = computeStats(ch);
   const info = floorInfo(ch.floor);
   const act = actForFloor(ch.floor);
-  const { main, isShield } = expSplit(ch);
-
-  const skills = {};
-  for (const [k, v] of Object.entries(ch.skills)) {
-    skills[k] = { level: v.level, exp: v.exp, next: skillExpToNext(v.level) };
-  }
+  const isShield = ch.equipped.offhand?.wtype === 'tarcza';
 
   return {
-    name: ch.name, klasa: ch.klasa, klasaLabel: C.classes[ch.klasa].label, crest: ch.crest,
+    name: ch.name, klasa: ch.klasa, klasaLabel: classOf(ch.klasa).label, crest: ch.crest,
     floor: ch.floor, maxFloor: ch.maxFloor, fight: ch.fight,
     fightsOnFloor: info.fights, isBoss: info.isBoss, isPlus: info.isPlus,
     actName: act.name, actId: act.id, bossName: info.bossName,
-    stats: st, skills, mainSkill: main, shield: isShield,
+    stats: st, poziom: poziom(ch), shield: isShield,
+    tree: treeView(ch), treeRespec: respecCost(ch),
     attrs: ch.attrs, unspentAttr: ch.unspentAttr, treePoints: ch.treePoints,
     gold: ch.gold, currency: ch.currency, potions: ch.potions,
     equipped: ch.equipped, backpack: ch.backpack,
@@ -97,6 +108,7 @@ function startFight(ch) {
       name: ch.name, kind: 'gracz', hp: st.maxHp, maxHp: st.maxHp,
       damage: st.damage, speed: st.speed, armor: st.armor,
       crit: st.crit, critMult: st.critMult, accuracy: st.accuracy, evasion: st.evasion,
+      block: st.block, blockCut: st.blockCut, potionPct: st.potionPct,
     }],
     // TODO: tu wejdą sojusznicy i pet — układ jest już na to gotowy
     enemies: [enemy],
@@ -134,11 +146,10 @@ function resolveFight(ch) {
   ch.hpLost = 0;
   ch.activeFight = null;
 
-  const out = { ...res, enemy: F.enemies[0], loot: [], levelUps: [], gold: 0,
+  const out = { ...res, enemy: F.enemies[0], loot: [], gold: 0,
                 floorCleared: false, awaiting: false };
 
   if (res.win) {
-    out.levelUps = awardFightExp(ch, ch.floor);
     out.gold = meta.gold;
     ch.gold += meta.gold;
 
@@ -209,7 +220,9 @@ const server = http.createServer(async (req, res) => {
       if (path === '/api/classes') {
         return json(res, 200, {
           classes: Object.entries(C.classes).map(([id, c]) => ({
-            id, label: c.label, skill: c.skill, expBonus: c.expBonus, attrs: c.attrs,
+            id, label: c.label, dmgAttrs: c.dmgAttrs, attrs: c.attrs,
+            bronie: c.bronie, opis: c.opis,
+            startWeapon: c.startWeapon, startOffhand: c.startOffhand,
           })),
           acts: ACTS.map(a => ({ id: a.id, name: a.name, families: a.families })),
         });
@@ -218,7 +231,7 @@ const server = http.createServer(async (req, res) => {
       if (path === '/api/new') {
         const name = String(body.name ?? '').trim().slice(0, 20);
         if (!name) return json(res, 400, { error: 'Podaj imię' });
-        const klasa = C.classes[body.klasa] ? body.klasa : 'wedrowiec';
+        const klasa = C.classes[body.klasa] ? body.klasa : 'wojownik';
         const cr = body.crest && typeof body.crest === 'object'
           ? { shape: String(body.crest.shape ?? 'tarcza').slice(0, 20),
               symbol: String(body.crest.symbol ?? 'miecz').slice(0, 20),
@@ -235,6 +248,7 @@ const server = http.createServer(async (req, res) => {
       // dalej wymagany token
       const ch = token ? DB.load(token) : null;
       if (!ch) return json(res, 401, { error: 'Nie znaleziono postaci' });
+      migrate(ch);   // stara klasa i skasowane sloty doprowadzone do obecnej gry
       applyRegen(ch);
 
       let result = {};
@@ -255,7 +269,7 @@ const server = http.createServer(async (req, res) => {
           if (ch.potions <= 0) { result = { error: 'Brak mikstur' }; break; }
           const st = computeStats(ch);
           ch.potions--;
-          ch.hpLost = Math.max(0, ch.hpLost - Math.round(st.maxHp * C.healing.potionHealPct));
+          ch.hpLost = Math.max(0, ch.hpLost - Math.round(st.maxHp * C.healing.potionHealPct * (1 + st.potionPct)));
           result = { ok: true };
           break;
         }
@@ -272,6 +286,16 @@ const server = http.createServer(async (req, res) => {
           if (ch.unspentAttr <= 0) { result = { error: 'Brak punktów' }; break; }
           ch.attrs[a]++; ch.unspentAttr--;
           result = { ok: true };
+          break;
+        }
+        case '/api/tree': {
+          const r = spendTreePoint(ch, String(body.node));
+          result = r.ok ? { ok: true, rank: r.rank } : { error: r.reason };
+          break;
+        }
+        case '/api/treereset': {
+          const r = resetTree(ch);
+          result = r.ok ? { ok: true, cost: r.cost, punkty: r.punkty } : { error: r.reason };
           break;
         }
         case '/api/sell': {

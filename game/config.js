@@ -24,6 +24,11 @@ export const CONFIG = {
     accuracyMin: 0.10,        // nigdy nie jest beznadziejnie
     accuracyMax: 0.97,        // i nigdy pewnie
 
+    // Blok — wymaga tarczy w drugiej ręce. Szansę podnosi drzewko klasy.
+    blockChanceShield: 0.10,  // sama tarcza daje tyle
+    blockCut: 0.50,           // zablokowany cios traci połowę obrażeń
+    blockChanceMax: 0.60,
+
     // Pasek ultimate. Lekki cios ładuje 1, średni 2, mocny 3.
     chargeMax: 10,
   },
@@ -75,7 +80,10 @@ export const CONFIG = {
     hpPerStamina: 16,
     hpPerLevel: 12,
     attrPointsPerFloor: 3,
-    startingAttrs: { sila: 5, intelekt: 5, zrecznosc: 5, wytrzymalosc: 5 },
+    // Postać startuje z pustymi atrybutami i workiem punktów — pierwsza decyzja
+    // gracza to jego build, a nie cudza rozpiska.
+    startingAttrs: { sila: 0, intelekt: 0, zrecznosc: 0, wytrzymalosc: 0 },
+    startingAttrPoints: 10,
     // mnożniki: (1 + atrybut / dzielnik)
     strDamageDivisor: 100,    // Siła → obrażenia bronią mele
     intMagicDivisor: 100,     // Intelekt → obrażenia magiczne
@@ -91,33 +99,226 @@ export const CONFIG = {
   },
 
   // ---------- KLASY ----------
+  // Sześć klas z dokumentu projektowego. Obrażenia skalują się z atrybutami KLASY
+  // (wagi w dmgAttrs), nie z typu trzymanej broni — inaczej trzy klasy mieszane
+  // nie mają jak istnieć, bo silnik zna tylko jeden atrybut na styl walki.
+  //
+  // Warstwa uniwersalna zostaje wspólna: Zręczność daje prędkość, kryt, celność
+  // i unik KAŻDEMU, Wytrzymałość daje HP i pancerz KAŻDEMU. Klasa decyduje wyłącznie
+  // o tym, z czego rosną obrażenia.
+  //
+  // dmgAttrs: atrybuty, z których rosną obrażenia. Każdy liczy się W PEŁNI —
+  // klasa mieszana nie musi rozwijać obu, tylko może wybrać ten, który jej wypadł
+  // ze sprzętu. Liczenie po połowie robiło z mieszanych klasy gorsze o 37% przy
+  // tej samej liczbie punktów, co jest karą, nie wyborem.
+  //
+  // dmgDivisor: cena za tę elastyczność — mnożnik: (1 + suma atrybutów / dzielnik).
+  // Czysta Siła i czysty Intelekt mają 100, czysta Zręczność 130 (bo daje przy okazji
+  // prędkość, kryt i unik), mieszane siedzą pomiędzy plus podatek za dwie ścieżki.
   classes: {
-    // Startowa, neutralna. Klasę właściwą gracz wybiera dopiero w grze —
-    // wtedy, gdy machał już bronią i wie, czego nie chce.
-    wedrowiec: { label: 'Wędrowiec', skill: 'atak',     expBonus: 0,   attrs: {},
-                 startWeapon: 'Zardzewiały Miecz', startWtype: 'mele' },
-    wojownik: { label: 'Wojownik', skill: 'atak',       expBonus: 0.5, attrs: { sila: 3 },
-                startWeapon: 'Wyszczerbiony Topór', startWtype: 'mele' },
-    lucznik:  { label: 'Łucznik',  skill: 'dystansowy', expBonus: 0.5, attrs: { zrecznosc: 3 },
-                startWeapon: 'Nadwątlony Łuk', startWtype: 'dystans' },
-    mag:      { label: 'Mag',      skill: 'magia',      expBonus: 0.5, attrs: { intelekt: 3 },
-                startWeapon: 'Pęknięta Różdżka', startWtype: 'magia' },
-    obronca:  { label: 'Obrońca',  skill: 'obrona',     expBonus: 0.5, attrs: { wytrzymalosc: 3 },
-                startWeapon: 'Stępiony Miecz', startWtype: 'mele', startOffhand: 'Drewniana Tarcza' },
+    wojownik: {
+      label: 'Wojownik', dmgAttrs: ['sila'], dmgDivisor: 100,
+      bronie: 'miecz, młot, topór — dwuręczne',
+      opis: 'Najprostsza droga w górę wieży. Cała Siła idzie w obrażenia, nic nie dzieli mu uwagi. Wytrzymałość dokłada HP i pancerz, więc znosi więcej błędów niż ktokolwiek inny.',
+      startWeapon: 'Wyszczerbiony Topór', startWtype: 'mele',
+    },
+    paladyn: {
+      label: 'Paladyn', dmgAttrs: ['sila', 'intelekt'], dmgDivisor: 115,
+      bronie: 'jednoręczna broń i tarcza',
+      opis: 'Obrażenia rosną mu i z Siły, i z Intelektu, więc nosi sprzęt, który czysta klasa by wyrzuciła. Płaci za to niższym zyskiem z pojedynczego punktu. Tarcza w drugiej ręce dokłada pancerz zamiast obrażeń.',
+      startWeapon: 'Stępiony Miecz', startWtype: 'mele',
+      startOffhand: 'Drewniana Tarcza', startOffWtype: 'tarcza',
+    },
+    lowca: {
+      label: 'Łowca', dmgAttrs: ['zrecznosc'], dmgDivisor: 130,
+      bronie: 'łuk, kusza, oszczep',
+      opis: 'Jedyna klasa, której główny atrybut robi wszystko naraz: Zręczność daje mu obrażenia, prędkość ciosu, celność i unik. Płaci za to niższym mnożnikiem obrażeń z punktu.',
+      startWeapon: 'Nadwątlony Łuk', startWtype: 'dystans',
+    },
+    tropiciel: {
+      label: 'Tropiciel', dmgAttrs: ['zrecznosc', 'intelekt'], dmgDivisor: 125,
+      bronie: 'broń dwuczłonowa — nośnik i żywioł',
+      opis: 'Dystans podszyty żywiołem: obrażenia rosną i ze Zręczności, i z Intelektu. Zręczność dokłada mu przy okazji prędkość, celność i unik, więc rzadko bywa zmarnowana.',
+      startWeapon: 'Okuty Oszczep', startWtype: 'dystans',
+    },
+    mag: {
+      label: 'Mag', dmgAttrs: ['intelekt'], dmgDivisor: 100,
+      bronie: 'różdżka, orb, księga',
+      opis: 'Najwięcej obrażeń z jednego punktu atrybutu. Intelekt nie daje jednak ani HP, ani uniku, ani celności — Mag, który wsypał wszystko w obrażenia, umiera od dwóch ciosów.',
+      startWeapon: 'Pęknięta Różdżka', startWtype: 'magia',
+    },
+    tancerz: {
+      label: 'Tancerz Ostrzy', dmgAttrs: ['zrecznosc', 'sila'], dmgDivisor: 125,
+      bronie: 'dwie bronie jednoręczne',
+      opis: 'Liczy się i Zręczność, i Siła, a druga broń dokłada własne obrażenia zamiast pancerza tarczy. Szybki i celny, ale bez tarczy obrywa wszystko, czego nie zdąży uniknąć.',
+      startWeapon: 'Szczerbaty Kordelas', startWtype: 'mele',
+      startOffhand: 'Krótkie Ostrze', startOffWtype: 'mele',
+    },
   },
 
-  // ---------- SKILLE BOJOWE ----------
-  skills: {
-    list: ['atak', 'dystansowy', 'magia', 'obrona', 'zdrowie'],
-    expBase: 30,              // exp potrzebny na poziom 1→2
-    expGrowth: 1.14,          // każdy kolejny poziom ×1.14
-    expPerFight: 12,          // bazowy exp z walki na poziomie mob=skill
-    // moby dają mniej expa, gdy skill przerósł poziom moba
-    expFalloffPerLevel: 0.06, // -6% za każdy poziom różnicy
-    expFalloffMin: 0.05,      // ale nigdy poniżej 5%
-    shieldSplit: 0.5,         // tarcza: 50% do broni, 50% do obrony
-    zdrowieShare: 0.33,       // Zdrowie zawsze dostaje 33% expa z walki
+  // ---------- DRZEWKA KLAS ----------
+  // Trzy gałęzie na klasę, pięć węzłów w gałęzi, każdy węzeł do rangi 5.
+  // Węzeł numer i wymaga i*2 punktów włożonych w TĘ gałąź — wyższe węzły są
+  // nagrodą za wybranie ścieżki, a nie za posiadanie punktów.
+  //
+  // eff to wartość ZA JEDNĄ RANGĘ. Klucze:
+  //   dmgPct/hpPct/armorPct  ułamek (0.03 = +3%)
+  //   attrWeight             o ile mocniej liczy się ten atrybut w obrażeniach
+  //   critChance/accuracy/evasion/block/blockCut   ułamek prawdopodobieństwa
+  //   critPower/potionPct    ułamek
+  //   speed/armorFlat        płaskie liczby
+  // Opisy w UI generują się z tych liczb — nie ma drugiego miejsca do aktualizacji.
+  tree: {
+    nodeStep: 2,              // węzeł i wymaga i * nodeStep punktów w gałęzi
+    rankMax: 5,
+    respecBase: 150,          // reset drzewka: respecBase + respecPerLevel * poziom
+    respecPerLevel: 25,
+    classes: {
+      wojownik: [
+        { id: 'rzeznia', label: 'Rzeźnia', nodes: [
+          { id: 'ostrze',    label: 'Ostrze',        eff: { dmgPct: 0.03 } },
+          { id: 'silacios',  label: 'Siła Ciosu',    eff: { attrWeight: { sila: 0.04 } } },
+          { id: 'rozmach',   label: 'Rozmach',       eff: { critPower: 0.06 } },
+          { id: 'bezlitosci',label: 'Bez Litości',   eff: { dmgPct: 0.04 } },
+          { id: 'egzekucja', label: 'Egzekucja',     eff: { critChance: 0.015 } },
+        ] },
+        { id: 'wal', label: 'Wał', nodes: [
+          { id: 'skora',     label: 'Twarda Skóra',  eff: { armorPct: 0.05 } },
+          { id: 'krzepa',    label: 'Krzepa',        eff: { hpPct: 0.04 } },
+          { id: 'postawa',   label: 'Postawa',       eff: { armorFlat: 4 } },
+          { id: 'zaparcie',  label: 'Zaparcie',      eff: { hpPct: 0.05 } },
+          { id: 'murciala',  label: 'Mur Ciała',     eff: { evasion: 0.010 } },
+        ] },
+        { id: 'furia', label: 'Furia', nodes: [
+          { id: 'tempo',     label: 'Tempo',         eff: { speed: 3 } },
+          { id: 'zamach',    label: 'Zamach',        eff: { critChance: 0.010 } },
+          { id: 'wprawa',    label: 'Wprawa',        eff: { accuracy: 0.015 } },
+          { id: 'szal',      label: 'Szał',          eff: { speed: 4 } },
+          { id: 'nawyk',     label: 'Nawyk',         eff: { critPower: 0.08 } },
+        ] },
+      ],
+      paladyn: [
+        { id: 'swiatlo', label: 'Światło', nodes: [
+          { id: 'iskrawiary',label: 'Iskra Wiary',   eff: { attrWeight: { intelekt: 0.05 } } },
+          { id: 'namasz',    label: 'Namaszczenie',  eff: { potionPct: 0.08 } },
+          { id: 'blask',     label: 'Blask',         eff: { dmgPct: 0.03 } },
+          { id: 'modlitwa',  label: 'Modlitwa',      eff: { hpPct: 0.04 } },
+          { id: 'objawienie',label: 'Objawienie',    eff: { attrWeight: { intelekt: 0.06 } } },
+        ] },
+        { id: 'zelazo', label: 'Żelazo', nodes: [
+          { id: 'twardareka',label: 'Twarda Ręka',   eff: { attrWeight: { sila: 0.05 } } },
+          { id: 'kuty',      label: 'Kuty Pancerz',  eff: { armorPct: 0.06 } },
+          { id: 'ciezar',    label: 'Ciężar',        eff: { dmgPct: 0.03 } },
+          { id: 'hart',      label: 'Hart',          eff: { hpPct: 0.04 } },
+          { id: 'mlot',      label: 'Młot Sprawiedliwości', eff: { critPower: 0.07 } },
+        ] },
+        { id: 'mur', label: 'Mur', nodes: [
+          { id: 'wprawnat',  label: 'Wprawna Tarcza',eff: { block: 0.025 } },
+          { id: 'postobron', label: 'Postawa Obronna',eff: { blockCut: 0.03 } },
+          { id: 'nieustep',  label: 'Nieustępliwość',eff: { block: 0.020 } },
+          { id: 'odbicie',   label: 'Odbicie',       eff: { armorFlat: 5 } },
+          { id: 'opoka',     label: 'Opoka',         eff: { block: 0.025 } },
+        ] },
+      ],
+      lowca: [
+        { id: 'lowy', label: 'Łowy', nodes: [
+          { id: 'naciag',    label: 'Naciąg',        eff: { attrWeight: { zrecznosc: 0.05 } } },
+          { id: 'grot',      label: 'Grot',          eff: { dmgPct: 0.035 } },
+          { id: 'skupienie', label: 'Skupienie',     eff: { accuracy: 0.020 } },
+          { id: 'smiertelny',label: 'Śmiertelny Strzał', eff: { critPower: 0.08 } },
+          { id: 'seria',     label: 'Seria',         eff: { dmgPct: 0.04 } },
+        ] },
+        { id: 'trop', label: 'Trop', nodes: [
+          { id: 'oko',       label: 'Sokole Oko',    eff: { critChance: 0.015 } },
+          { id: 'cierpl',    label: 'Cierpliwość',   eff: { accuracy: 0.020 } },
+          { id: 'znaczenie', label: 'Znaczenie',     eff: { critChance: 0.012 } },
+          { id: 'slabypkt',  label: 'Słaby Punkt',   eff: { critPower: 0.06 } },
+          { id: 'pewnareka', label: 'Pewna Ręka',    eff: { accuracy: 0.025 } },
+        ] },
+        { id: 'cien', label: 'Cień', nodes: [
+          { id: 'krok',      label: 'Cichy Krok',    eff: { evasion: 0.012 } },
+          { id: 'zwinnosc',  label: 'Zwinność',      eff: { speed: 4 } },
+          { id: 'zmylka',    label: 'Zmyłka',        eff: { evasion: 0.010 } },
+          { id: 'bieg',      label: 'Bieg',          eff: { speed: 5 } },
+          { id: 'nieuchw',   label: 'Nieuchwytność', eff: { evasion: 0.012 } },
+        ] },
+      ],
+      tropiciel: [
+        { id: 'zywiol', label: 'Żywioł', nodes: [
+          { id: 'iskra',     label: 'Iskra',         eff: { attrWeight: { intelekt: 0.05 } } },
+          { id: 'zar',       label: 'Żar',           eff: { dmgPct: 0.035 } },
+          { id: 'kaskada',   label: 'Kaskada',       eff: { attrWeight: { intelekt: 0.05 } } },
+          { id: 'burza',     label: 'Burza',         eff: { critPower: 0.07 } },
+          { id: 'nawalnica', label: 'Nawałnica',     eff: { dmgPct: 0.04 } },
+        ] },
+        { id: 'pulapki', label: 'Pułapki', nodes: [
+          { id: 'sidla',     label: 'Sidła',         eff: { critChance: 0.014 } },
+          { id: 'zasadzka',  label: 'Zasadzka',      eff: { dmgPct: 0.03 } },
+          { id: 'kolce',     label: 'Kolce',         eff: { armorFlat: 4 } },
+          { id: 'wnyki',     label: 'Wnyki',         eff: { critChance: 0.012 } },
+          { id: 'potrzask',  label: 'Potrzask',      eff: { critPower: 0.07 } },
+        ] },
+        { id: 'puszcza', label: 'Puszcza', nodes: [
+          { id: 'wytrwalosc',label: 'Wytrwałość',    eff: { hpPct: 0.045 } },
+          { id: 'kora',      label: 'Kora',          eff: { armorPct: 0.05 } },
+          { id: 'czujnosc',  label: 'Czujność',      eff: { evasion: 0.010 } },
+          { id: 'sciezka',   label: 'Ścieżka',       eff: { speed: 3 } },
+          { id: 'instynkt',  label: 'Instynkt',      eff: { accuracy: 0.020 } },
+        ] },
+      ],
+      mag: [
+        { id: 'ogien', label: 'Ogień', nodes: [
+          { id: 'plomien',   label: 'Płomień',       eff: { attrWeight: { intelekt: 0.05 } } },
+          { id: 'podpalenie',label: 'Podpalenie',    eff: { dmgPct: 0.04 } },
+          { id: 'wybuch',    label: 'Wybuch',        eff: { critPower: 0.08 } },
+          { id: 'pozoga',    label: 'Pożoga',        eff: { dmgPct: 0.045 } },
+          { id: 'kataklizm', label: 'Kataklizm',     eff: { attrWeight: { intelekt: 0.06 } } },
+        ] },
+        { id: 'lod', label: 'Lód', nodes: [
+          { id: 'tafla',     label: 'Tafla',         eff: { armorPct: 0.06 } },
+          { id: 'zimnakrew', label: 'Zimna Krew',    eff: { hpPct: 0.05 } },
+          { id: 'szron',     label: 'Szron',         eff: { evasion: 0.012 } },
+          { id: 'lodowaskora',label: 'Lodowa Skóra', eff: { armorFlat: 5 } },
+          { id: 'zamiec',    label: 'Zamieć',        eff: { hpPct: 0.05 } },
+        ] },
+        { id: 'arkana', label: 'Arkana', nodes: [
+          { id: 'precyzja',  label: 'Precyzja',      eff: { accuracy: 0.020 } },
+          { id: 'ognisko',   label: 'Ognisko Mocy',  eff: { critChance: 0.015 } },
+          { id: 'kanal',     label: 'Kanał',         eff: { potionPct: 0.10 } },
+          { id: 'rezonans',  label: 'Rezonans',      eff: { speed: 3 } },
+          { id: 'splot',     label: 'Splot',         eff: { critPower: 0.07 } },
+        ] },
+      ],
+      tancerz: [
+        { id: 'taniec', label: 'Taniec', nodes: [
+          { id: 'krokwbok',  label: 'Krok w Bok',    eff: { speed: 4 } },
+          { id: 'rytm',      label: 'Rytm',          eff: { speed: 4 } },
+          { id: 'wirowanie', label: 'Wirowanie',     eff: { critChance: 0.012 } },
+          { id: 'plynnosc',  label: 'Płynność',      eff: { accuracy: 0.020 } },
+          { id: 'final',     label: 'Finał',         eff: { speed: 5 } },
+        ] },
+        { id: 'ostrza', label: 'Ostrza', nodes: [
+          { id: 'podwojne',  label: 'Podwójne Cięcie', eff: { dmgPct: 0.04 } },
+          { id: 'zrecznareka',label: 'Zręczna Ręka', eff: { attrWeight: { zrecznosc: 0.05 } } },
+          { id: 'nadgarstek',label: 'Siła Nadgarstka', eff: { attrWeight: { sila: 0.05 } } },
+          { id: 'rozciecie', label: 'Rozcięcie',     eff: { critPower: 0.07 } },
+          { id: 'krwawy',    label: 'Krwawy Taniec', eff: { dmgPct: 0.04 } },
+        ] },
+        { id: 'unik', label: 'Unik', nodes: [
+          { id: 'piruet',    label: 'Piruet',        eff: { evasion: 0.013 } },
+          { id: 'lekkosc',   label: 'Lekkość',       eff: { evasion: 0.012 } },
+          { id: 'refleks',   label: 'Refleks',       eff: { critChance: 0.012 } },
+          { id: 'cienostrza',label: 'Cień Ostrza',   eff: { armorPct: 0.04 } },
+          { id: 'nietykalny',label: 'Nietykalny',    eff: { evasion: 0.013 } },
+        ] },
+      ],
+    },
   },
+
+  // SKILLE BOJOWE SKASOWANE. Atak, Dystansowy, Magia, Obrona i Zdrowie zniknęły —
+  // sprzęt bramkuje sam poziom postaci (= najwyższe zdobyte piętro), a specjalizację
+  // przejmuje drzewko klasy. Nie przywracaj ich bez potrzeby: były drugą bramką
+  // na ten sam sprzęt i drugim paskiem expa obok pięter.
 
   // ---------- WIEŻA ----------
   tower: {
@@ -155,8 +356,9 @@ export const CONFIG = {
     // Wagi slotów. Broń niesie prawie całe obrażenia i dzieli się na 3 typy,
     // więc bez podbicia wagi mag trafiał swoją broń raz na 30 dropów.
     slotWeights: {
-      bron: 26, offhand: 11, helm: 8, napiersnik: 9, spodnie: 8,
-      buty: 7, rekawice: 7, pas: 7, pierscien: 9, amulet: 8,
+      // wagi po skasowaniu Pasa i Spodni rozeszły się na resztę pancerza
+      bron: 26, offhand: 11, helm: 12, napiersnik: 13,
+      buty: 10, rekawice: 10, pierscien: 10, amulet: 8,
     },
   },
 
@@ -173,23 +375,20 @@ export const CONFIG = {
 
   // ---------- EKWIPUNEK ----------
   gear: {
-    // slot -> { skill bramkujący, typ bazy, mnożnik bazy }
+    // slot -> { typ bazy, mnożnik bazy }. Bramka jest jedna: poziom postaci.
     slots: {
-      bron:       { label: 'Broń',       gate: 'weapon',  base: 'damage', mult: 1.00 },
-      offhand:    { label: 'Druga ręka', gate: 'offhand', base: 'mixed',  mult: 0.55 },
-      helm:       { label: 'Hełm',       gate: 'obrona',  base: 'armor',  mult: 0.60 },
-      napiersnik: { label: 'Napierśnik', gate: 'obrona',  base: 'armor',  mult: 1.00 },
-      spodnie:    { label: 'Spodnie',    gate: 'obrona',  base: 'armor',  mult: 0.75 },
-      buty:       { label: 'Buty',       gate: 'obrona',  base: 'armor',  mult: 0.45 },
-      rekawice:   { label: 'Rękawice',   gate: 'obrona',  base: 'armor',  mult: 0.45 },
-      pas:        { label: 'Pas',        gate: 'obrona',  base: 'armor',  mult: 0.40 },
-      pierscien:  { label: 'Pierścień',  gate: 'any',     base: 'none',   mult: 0.00 },
-      amulet:     { label: 'Amulet',     gate: 'any',     base: 'none',   mult: 0.00 },
+      bron:       { label: 'Broń',       base: 'damage', mult: 1.00 },
+      offhand:    { label: 'Druga ręka', base: 'mixed',  mult: 0.55 },
+      helm:       { label: 'Hełm',       base: 'armor',  mult: 0.60 },
+      napiersnik: { label: 'Napierśnik', base: 'armor',  mult: 1.00 },
+      buty:       { label: 'Buty',       base: 'armor',  mult: 0.45 },
+      rekawice:   { label: 'Rękawice',   base: 'armor',  mult: 0.45 },
+      pierscien:  { label: 'Pierścień',  base: 'none',   mult: 0.00 },
+      amulet:     { label: 'Naszyjnik',  base: 'none',   mult: 0.00 },
     },
     weaponDamageBase: 10, weaponDamagePerIlvl: 4.2,
     armorBase: 6, armorPerIlvl: 3.1,
-    // próg poziomu postaci = ilvl; próg skilla = ilvl * skillGateRatio
-    skillGateRatio: 0.9,
+    // próg założenia = ilvl przedmiotu wobec poziomu postaci
     backpackSize: 120,
   },
 

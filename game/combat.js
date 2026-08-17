@@ -45,6 +45,10 @@ const mkUnit = (u, side, idx) => ({
   damage: u.damage, speed: u.speed, armor: u.armor ?? 0,
   crit: u.crit ?? 0, critMult: u.critMult ?? 1.5,
   accuracy: u.accuracy ?? 0.8, evasion: u.evasion ?? 0,
+  // blok: szansa, że cios zostanie przyjęty tarczą. Bez tarczy jest zerowa,
+  // więc tarcza ma wreszcie własną roblotę, a nie tylko kawałek pancerza.
+  block: u.block ?? 0, blockCut: u.blockCut ?? C.combat.blockCut,
+  potionPct: u.potionPct ?? 0,
   next: interval(u.speed),
   effects: [],           // [{ id, turns, dmgMult, armorMult, stun, critTakenMult }]
   alive: true,
@@ -122,6 +126,10 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0, la
   let dmg = attacker.damage * effMult(attacker, 'dmgMult') * mult * (0.9 + rand(F) * 0.2);
   if (isCrit) dmg *= attacker.critMult;
 
+  // Blok idzie po krytyku i przed pancerzem — zablokowany krytyk boli jak zwykły cios.
+  const blocked = target.block > 0 && rand(F) < target.block;
+  if (blocked) dmg *= (1 - Math.min(0.9, target.blockCut));
+
   const armor = target.armor * effMult(target, 'armorMult') * (1 - pierce);
   dmg = Math.max(1, Math.round(reduce(dmg, armor)));
   target.hp -= dmg;
@@ -129,7 +137,8 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0, la
 
   const who = label ? `${attacker.name} · ${label}` : attacker.name;
   push(F, isCrit ? 'crit' : (attacker.side === 'wrog' ? 'enemy' : 'hit'),
-       `${who} → ${target.name}: ${dmg}${isCrit ? ' KRYT' : ''}`, { dmg });
+       `${who} → ${target.name}: ${dmg}${isCrit ? ' KRYT' : ''}${blocked ? ' BLOK' : ''}`,
+       { dmg, blocked });
 
   if (!target.alive) push(F, target.side === 'wrog' ? 'kill' : 'down', `${target.name} pada`);
   return dmg;
@@ -207,7 +216,7 @@ function useUltimate(F, u) {
 function drinkPotion(F, u) {
   if (F.potions <= 0) { push(F, 'info', 'brak mikstur'); return; }
   const eff = healEffect(F.healUses);
-  const heal = Math.round(u.maxHp * C.healing.potionHealPct * eff);
+  const heal = Math.round(u.maxHp * C.healing.potionHealPct * eff * (1 + (u.potionPct ?? 0)));
   u.hp = Math.min(u.maxHp, u.hp + heal);
   F.potions--; F.healUses++;
   push(F, 'heal', `${u.name}: mikstura +${heal} (×${eff.toFixed(2)})`, { heal });
@@ -412,6 +421,14 @@ export function demo() {
 
   // leczenie slabnie
   console.assert(healEffect(0) === 1 && Math.abs(healEffect(1) - 0.9) < 1e-9, 'leczenie slabnie o 10%');
+
+  // blok zbija obrazenia; bez bloku ten sam seed bije mocniej
+  const bity = (block) => summary(runToEnd(createFight(
+    { party: [{ ...P, hp: 100000, maxHp: 100000, block, blockCut: 0.5, evasion: 0 }],
+      enemies: [{ ...E, hp: 99999, maxHp: 99999, damage: 60 }],
+      potions: 0, wtype: 'mele', abilities: [] }, 777))).party[0].hp;
+  console.assert(bity(1) > bity(0), 'blok zmniejsza obrazenia');
+  console.assert(bity(0.5) >= bity(0), 'polowiczny blok tez pomaga');
 
   console.log('combat.js — wszystkie testy przeszly');
 }

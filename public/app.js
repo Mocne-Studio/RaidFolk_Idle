@@ -93,11 +93,19 @@ async function boot() {
   });
   $('#roll').onclick = () => { crest = randomCrest(); buildPickers(); paintMaker(); };
 
-  $('#create').onclick = async () => {
+  // Kolejność: herb → wprowadzenie → wybór klasy → dopiero teraz postać powstaje
+  // na serwerze, bo klasa jest jej częścią i nie da się jej potem podmienić.
+  $('#create').onclick = () => {
     const name = $('#name').value.trim();
     if (!name) return toast('Podaj imię', true);
-    const d = await api('new', { name, crest });
-    if (d.token) { TOKEN = d.token; localStorage.setItem('rf_token', TOKEN); enterGame(); }
+    showIntro(() => showClasses(async (klasa) => {
+      const d = await api('new', { name, crest, klasa });
+      if (d.token) {
+        TOKEN = d.token; localStorage.setItem('rf_token', TOKEN);
+        enterGame();
+        openTab('postac');   // świeża postać ląduje na swojej karcie, nie w wieży
+      }
+    }));
   };
   $('#name').addEventListener('keydown', e => { if (e.key === 'Enter') $('#create').click(); });
 
@@ -115,6 +123,99 @@ async function boot() {
   $('#code').addEventListener('keydown', e => { if (e.key === 'Enter') restore(); });
 }
 
+// ---------------------------------------------------------------- WPROWADZENIE
+// Zasada: opisujemy TYLKO to, co faktycznie działa w tym buildzie. Nowe sekcje
+// dopisujemy dopiero wtedy, gdy system naprawdę wejdzie do gry — inaczej gracz
+// dostaje obietnice, których gra nie spełnia.
+const INTRO = [
+  ['Wieża nie ma końca', `
+    <p>Stoisz na jej dole. Nikt nie policzył pięter — ci, którzy próbowali, nie wrócili z liczbą.</p>
+    <p>Piętra są zakryte. <b>Co jest wyżej, zobaczysz dopiero, gdy tam wejdziesz.</b></p>
+    <p>Co dziesiąte piętro pilnuje boss aktu. Bije mocniej i ma dużo więcej życia niż to, co spotkałeś po drodze.</p>`],
+
+  ['Ściana jest w środku piętra', `
+    <p>Piętro to <b>od sześciu do dziesięciu fal</b> przeciwników, jedna po drugiej.</p>
+    <p>Utkniesz na siódmej fali? Wracasz na niższe piętro, dobijasz poziom, poprawiasz sprzęt i wchodzisz jeszcze raz.</p>
+    <p>Cofanie się nie jest porażką. <b>Na tej pętli stoi cała gra.</b></p>`],
+
+  ['Jak się bijesz', `
+    <p>Dwa tryby. <b>Automatyczny</b> toczy się sam — patrzysz i zbierasz łup. <b>Turowy</b> oddaje ci każdy cios.</p>
+    <p>Trzy siły ciosu: lekki, średni, mocny. <b>Mocniej znaczy rzadziej</b> — mocny cios boli podwójnie, ale łatwiej nim spudłować.</p>
+    <p>Nie każdy cios trafia. Celność jest twoja, unik jego — obie rosną ze Zręczności.</p>`],
+
+  ['Pasek ultimate', `
+    <p>Każde trafienie ładuje pasek: lekki cios o 1, średni o 2, mocny o 3. Pełny pasek to 10.</p>
+    <p>Ładunki wydajesz na umiejętności i na ultimate swojej broni. <b>Pudło zeruje cały pasek</b> — mocny cios ryzykuje więcej, niż widać.</p>
+    <p>Za każde piętro dostajesz trzy punkty atrybutów. Wytrzymałość daje życie i pancerz, Zręczność prędkość, celność i unik — to działa u każdego tak samo. <b>Obrażenia rosną tylko z atrybutu Twojej klasy</b>, a klasę wybierzesz za chwilę.</p>`],
+];
+
+function showIntro(done) {
+  let i = 0;
+  const last = () => i === INTRO.length - 1;
+  const paint = () => {
+    $('#introStep').textContent = `Wprowadzenie · ${i + 1} z ${INTRO.length}`;
+    $('#introTitle').textContent = INTRO[i][0];
+    $('#introBody').innerHTML = INTRO[i][1];
+    $('#introNext').textContent = last() ? 'Wejdź do wieży' : 'Dalej';
+    $('#intro').scrollTop = 0;
+  };
+  const finish = () => { $('#intro').hidden = true; done(); };
+  $('#introNext').onclick = () => { if (last()) finish(); else { i++; paint(); } };
+  $('#introSkip').onclick = finish;
+  $('#start').hidden = true;
+  $('#intro').hidden = false;
+  paint();
+}
+
+// ---------------------------------------------------------------- WYBÓR KLASY
+// ATTR_LABEL siedzi niżej, przy ekranie Postaci — tu tylko z niego korzystamy.
+const scalingText = (attrs = []) => attrs.map(k => ATTR_LABEL[k] ?? k).join(' i ');
+
+async function showClasses(done) {
+  const d = await fetch('/api/classes').then(r => r.json()).catch(() => ({ classes: [] }));
+  const list = d.classes ?? [];
+  let pick = null;
+
+  $('#cpGrid').innerHTML = list.map(c => `<button class="cp-item" data-id="${c.id}">
+    <b>${esc(c.label)}</b><span>${esc(scalingText(c.dmgAttrs))}</span></button>`).join('');
+
+  const paint = () => {
+    $$('#cpGrid .cp-item').forEach(b => b.classList.toggle('on', b.dataset.id === pick));
+    const c = list.find(x => x.id === pick);
+    $('#cpDetail').hidden = !c;
+    $('#cpStart').disabled = !c;
+    if (!c) return;
+    $('#cpStart').textContent = `Zacznij jako ${c.label}`;
+    const start = [c.startWeapon, c.startOffhand].filter(Boolean).join(' + ');
+    const bonus = Object.entries(c.attrs ?? {}).map(([k, v]) => `+${v} ${ATTR_LABEL[k] ?? k}`).join(' · ');
+    $('#cpDetail').innerHTML = `
+      <div class="t1">${esc(c.label)}</div>
+      <div class="cp-line"><span>Obrażenia rosną z</span><b>${esc(scalingText(c.dmgAttrs))}</b></div>
+      <div class="cp-line"><span>Bronie</span><b>${esc(c.bronie ?? '—')}</b></div>
+      <div class="cp-line"><span>Na start</span><b>${esc(start || '—')}</b></div>
+      ${bonus ? `<div class="cp-line"><span>Atrybuty</span><b>${esc(bonus)}</b></div>` : ''}
+      <p class="cp-opis">${esc(c.opis ?? '')}</p>`;
+  };
+
+  $('#cpGrid').onclick = (e) => {
+    const b = e.target.closest('.cp-item');
+    if (!b) return;
+    pick = b.dataset.id;
+    paint();
+  };
+  $('#cpStart').onclick = () => { if (pick) { $('#classpick').hidden = true; done(pick); } };
+
+  $('#intro').hidden = true;
+  $('#classpick').hidden = false;
+  paint();
+}
+
+function openTab(name) {
+  $$('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  $$('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
+  $('.screens').scrollTop = 0;
+}
+
 function enterGame() {
   $('#start').hidden = true;
   $('#app').hidden = false;
@@ -126,7 +227,7 @@ function enterGame() {
 function header() {
   const box = $('#hdrCrest');
   if (box) box.innerHTML = heroCrest(30);
-  $('#hdrName').textContent = S.klasa === 'wedrowiec' ? S.name : `${S.name} · ${S.klasaLabel}`;
+  $('#hdrName').textContent = `${S.name} · ${S.klasaLabel}`;
   $('#hdrMeta').textContent = `PIĘTRO ${S.maxFloor} · MOC ${nf(S.stats.power)} · ${S.actName.toUpperCase()}`;
 }
 
@@ -292,7 +393,6 @@ function renderFightResult(f) {
     h += `<div class="card">
       <div class="stat"><span class="k">Złoto</span><span class="v up">+${nf(f.gold)}</span></div>
       ${f.potionsUsed ? `<div class="stat"><span class="k">Mikstury</span><span class="v down">−${f.potionsUsed}</span></div>` : ''}
-      ${f.levelUps.map(u => `<div class="stat"><span class="k">${u.skill}</span><span class="v up">poziom ${u.level}</span></div>`).join('')}
     </div>`;
     if (f.loot.length) h += `<div class="sec">Łup · ${f.loot.length}</div>` + f.loot.map(it => itemRow(it)).join('');
     if (f.backpackFull) h += `<div class="card bad"><div class="t2">Plecak pełny — reszta łupu przepadła.</div></div>`;
@@ -325,8 +425,11 @@ function tickPlayback() {
   const F = FIGHT;
   if (!F || !F.playing) return;
 
-  const entry = F.log[F.idx++];
+  // Podbijamy indeks dopiero po sprawdzeniu wpisu. Wcześniej wychodził poza log
+  // i przerysowanie ekranu po walce leciało na undefined.
+  const entry = F.log[F.idx];
   if (!entry) return finishPlayback();
+  F.idx++;
 
   F.party = entry.party; F.enemies = entry.enemies; F.charge = entry.charge;
   paintArena();
@@ -486,38 +589,78 @@ function itemRow(it, opts = {}) {
   </div>`;
 }
 
-const SLOT_ICON = { bron:'🗡', offhand:'🛡', helm:'🪖', napiersnik:'🥋', spodnie:'👖',
-                    buty:'👢', rekawice:'🧤', pas:'🎗', pierscien:'💍', amulet:'📿' };
+const SLOT_ICON = { bron:'🗡', offhand:'🛡', helm:'🪖', napiersnik:'🥋',
+                    buty:'👢', rekawice:'🧤', pierscien:'💍', amulet:'📿' };
 
+// Jedna bramka: poziom postaci. Serwer sprawdza to samo w canEquip().
 function canEquipLocal(it) {
-  if (it.reqLevel > S.maxFloor) return { ok: false, reason: `Wymaga poziomu ${it.reqLevel} — masz ${S.maxFloor}` };
-  const WT = { mele: 'atak', dystans: 'dystansowy', magia: 'magia' };
-  const def = S.slots[it.slot];
-  let gate = def.gate;
-  if (gate === 'weapon') gate = WT[it.wtype] ?? 'atak';
-  if (gate === 'offhand') gate = it.wtype === 'tarcza' ? 'obrona' : 'atak';
-  if (gate === 'any') {
-    const best = Math.max(...['atak','dystansowy','magia','obrona'].map(s => S.skills[s].level));
-    return best >= it.reqSkill ? { ok: true } : { ok: false, reason: `Wymaga dowolnego skilla ${it.reqSkill}` };
-  }
-  return S.skills[gate].level >= it.reqSkill
-    ? { ok: true }
-    : { ok: false, reason: `Wymaga ${gate} ${it.reqSkill} — masz ${S.skills[gate].level}` };
+  return it.reqLevel > S.poziom
+    ? { ok: false, reason: `Wymaga poziomu ${it.reqLevel} — masz ${S.poziom}` }
+    : { ok: true };
 }
 
 const ATTR_LABEL = { sila: 'Siła', intelekt: 'Intelekt', zrecznosc: 'Zręczność', wytrzymalosc: 'Wytrzymałość' };
+// Warstwa uniwersalna działa u każdego; obrażenia tylko z atrybutu swojej klasy.
 const ATTR_DESC = {
-  sila: 'obrażenia bronią · trochę HP',
-  intelekt: 'obrażenia magiczne · mana',
-  zrecznosc: 'prędkość ataku · celność · kryt',
-  wytrzymalosc: 'zdrowie · pancerz',
+  sila: 'obrażenia — tylko klasy siłowe',
+  intelekt: 'obrażenia — tylko klasy magiczne',
+  zrecznosc: 'prędkość · celność · unik · kryt (każdy)',
+  wytrzymalosc: 'zdrowie i pancerz (każdy)',
 };
+
+// Makieta postaci. Broń po lewej, druga ręka po prawej, pancerz między nimi —
+// pusta komórka w górnym rzędzie robi miejsce na hełm nad środkiem.
+const DOLL_ROWS = [
+  [null,        'helm',       null],
+  ['pierscien', 'amulet',     'rekawice'],
+  ['bron',      'napiersnik', 'offhand'],
+  [null,        'buty',       null],
+];
+
+let dollSlot = null;   // który slot gracz właśnie ogląda
+
+function paperDollHtml() {
+  const cell = (slot) => {
+    if (!slot) return '<div class="doll-cell blank"></div>';
+    const it = S.equipped[slot];
+    const on = slot === dollSlot ? ' on' : '';
+    return `<button class="doll-cell${it ? '' : ' empty'}${on}" data-act="slot" data-slot="${slot}"
+      style="${it ? `border-color:${rarityColor(it.rarity)}` : ''}">
+      <span class="ic">${SLOT_ICON[slot] ?? '▪'}</span>
+      <span class="lb">${esc(S.slots[slot].label)}</span></button>`;
+  };
+
+  let h = `<div class="doll">${DOLL_ROWS.flat().map(cell).join('')}</div>`;
+  if (dollSlot) {
+    const it = S.equipped[dollSlot];
+    h += it
+      ? itemRow(it, { equipped: true })
+      : `<div class="card"><div class="t1">${esc(S.slots[dollSlot].label)}</div>
+         <div class="t2">Pusty slot. Załóż coś z plecaka w zakładce Ekwipunek.</div></div>`;
+  }
+  return h;
+}
 
 function renderPostac() {
   const st = S.stats;
   let h = `<div class="scr-head">${esc(S.name)} <span>${S.klasaLabel.toUpperCase()}</span></div>`;
 
   h += `<div class="card">
+    <div class="stat"><span class="k">Zdrowie</span><span class="v">${nf(st.maxHp)}</span></div>
+    <div class="stat"><span class="k">Obrażenia</span><span class="v">${nf(st.damage)}</span></div>
+    <div class="stat"><span class="k">Prędkość ataku</span><span class="v">${st.speed}</span></div>
+    <div class="stat"><span class="k">Pancerz</span><span class="v">${st.armor}</span></div>
+    <div class="stat"><span class="k">Celność</span><span class="v">${Math.round(st.accuracy * 100)}%</span></div>
+    <div class="stat"><span class="k">Unik</span><span class="v">${(st.evasion * 100).toFixed(1)}%</span></div>
+    <div class="stat"><span class="k">Kryt</span><span class="v">${(st.crit * 100).toFixed(1)}% × ${st.critMult.toFixed(2)}</span></div>
+    ${st.block ? `<div class="stat"><span class="k">Blok</span><span class="v">${Math.round(st.block * 100)}% × −${Math.round(st.blockCut * 100)}% obrażeń</span></div>` : ''}
+    <div class="stat"><span class="k">Moc</span><span class="v" style="color:var(--brass)">${nf(st.power)}</span></div>
+  </div>`;
+
+  h += `<div class="sec">Na sobie</div>`;
+  h += paperDollHtml();
+
+  h += `<div class="sec">Zasoby</div><div class="card">
     <div class="stat"><span class="k">Złoto</span><span class="v" style="color:var(--brass)">${nf(S.gold)}</span></div>
     <div class="stat"><span class="k">Waluta specjalna</span><span class="v">${S.currency}</span></div>
     <div class="stat"><span class="k">Mikstury</span><span class="v">${S.potions}</span></div>
@@ -525,7 +668,7 @@ function renderPostac() {
 
   h += `<div class="card ${S.unspentAttr ? 'hi' : ''}">
     <div class="row"><div class="grow"><div class="t1">Punkty do rozdania</div>
-      <div class="t2">3 za każde zdobyte piętro</div></div>
+      <div class="t2">10 na start, potem 3 za każde zdobyte piętro</div></div>
       <span class="num" style="font-size:22px;color:var(--brass)">${S.unspentAttr}</span></div>
   </div>`;
 
@@ -538,42 +681,11 @@ function renderPostac() {
     </div>`;
   }
 
-  h += `<div class="sec">Wynikowe</div><div class="card">
-    <div class="stat"><span class="k">Zdrowie</span><span class="v">${nf(st.maxHp)}</span></div>
-    <div class="stat"><span class="k">Obrażenia</span><span class="v">${nf(st.damage)}</span></div>
-    <div class="stat"><span class="k">Prędkość ataku</span><span class="v">${st.speed}</span></div>
-    <div class="stat"><span class="k">Pancerz</span><span class="v">${st.armor}</span></div>
-    <div class="stat"><span class="k">Celność</span><span class="v">${Math.round(st.accuracy * 100)}%</span></div>
-    <div class="stat"><span class="k">Kryt</span><span class="v">${(st.crit * 100).toFixed(1)}% × ${st.critMult.toFixed(2)}</span></div>
-    <div class="stat"><span class="k">Moc</span><span class="v" style="color:var(--brass)">${nf(st.power)}</span></div>
-  </div>`;
-
-  h += `<div class="sec">Skille bojowe · exp idzie tam, czego używasz</div>`;
-  const GATE = { atak: 'bronie mele', dystansowy: 'łuki i kusze', magia: 'różdżki i orby',
-                 obrona: 'pancerz i tarcze', zdrowie: 'nic — daje życie' };
-  for (const [k, v] of Object.entries(S.skills)) {
-    const pct = Math.round(v.exp / v.next * 100);
-    const active = k === S.mainSkill || k === 'zdrowie' || (S.shield && k === 'obrona');
-    h += `<div class="card">
-      <div class="row" style="margin-bottom:6px">
-        <div class="grow"><div class="t1">${k} <span class="num" style="color:var(--brass)">${v.level}</span></div>
-          <div class="t2">otwiera: ${GATE[k]}</div></div>
-        ${active ? '<span class="badge on">ROŚNIE</span>' : ''}
-      </div>
-      <div class="bar xp"><i style="width:${pct}%"></i></div>
-    </div>`;
-  }
-
-  h += `<div class="card" style="margin-top:12px">
-    <div class="t2">${S.shield
-      ? 'Masz tarczę w drugiej ręce — exp dzieli się po połowie między <b>' + S.mainSkill + '</b> i <b>obronę</b>.'
-      : 'Bez tarczy cały exp idzie w <b>' + S.mainSkill + '</b>. Załóż tarczę, żeby rosła też Obrona.'}</div>
-  </div>`;
-
-  h += `<div class="sec">Do wydania później</div><div class="card">
-    <div class="stat"><span class="k">Punkty drzewka</span><span class="v">${S.treePoints}</span></div>
+  h += `<div class="sec">Drzewko klasy</div><div class="card">
+    <div class="stat"><span class="k">Punkty drzewka</span><span class="v" style="color:var(--brass)">${S.treePoints}</span></div>
     <div class="stat"><span class="k">Waluta specjalna</span><span class="v">${S.currency}</span></div>
-    <div class="stat"><span class="k mut">Drzewko dojdzie w kolejnym kawałku</span><span class="v mut">—</span></div>
+    <div class="t2" style="margin-top:8px">Skille bojowe zniknęły — sprzęt bramkuje sam poziom postaci,
+      a specjalizację niesie drzewko ${esc(S.klasaLabel)}. Wydajesz punkty w zakładce Drzewko.</div>
   </div>`;
 
   h += `<div class="sec">Kod postaci</div>
@@ -593,6 +705,85 @@ function renderPostac() {
       swoim kodem, więc najpierw go skopiuj.</div>
       <button class="btn wide" data-act="logout">Zmień postać</button>
     </div>`;
+
+  return h;
+}
+
+// ---------------------------------------------------------------- drzewko klasy
+
+// Opisy węzłów rodzą się z liczb w config — nie ma drugiego miejsca do poprawiania,
+// gdy zmieni się balans.
+const EFF_LABEL = {
+  dmgPct:     { t: 'Obrażenia',            pct: true },
+  hpPct:      { t: 'Zdrowie',              pct: true },
+  armorPct:   { t: 'Pancerz',              pct: true },
+  armorFlat:  { t: 'Pancerz',              pct: false },
+  critChance: { t: 'Szansa na kryt',       pct: true },
+  critPower:  { t: 'Siła kryta',           pct: true },
+  speed:      { t: 'Prędkość ataku',       pct: false },
+  accuracy:   { t: 'Celność',              pct: true },
+  evasion:    { t: 'Unik',                 pct: true },
+  block:      { t: 'Szansa na blok',       pct: true },
+  blockCut:   { t: 'Siła bloku',           pct: true },
+  potionPct:  { t: 'Leczenie z mikstur',   pct: true },
+};
+
+// dopełniacz — "obrażenia z Intelektu", nie "z Intelekt"
+const ATTR_GEN = { sila: 'Siły', intelekt: 'Intelektu', zrecznosc: 'Zręczności', wytrzymalosc: 'Wytrzymałości' };
+
+function effText(eff, mult = 1) {
+  const parts = [];
+  for (const [k, v] of Object.entries(eff)) {
+    if (k === 'attrWeight') {
+      for (const [a, w] of Object.entries(v)) {
+        parts.push(`Obrażenia z ${ATTR_GEN[a] ?? a} +${(w * mult * 100).toFixed(0)}%`);
+      }
+      continue;
+    }
+    const d = EFF_LABEL[k];
+    if (!d) continue;
+    parts.push(d.pct
+      ? `${d.t} +${(v * mult * 100).toFixed(1).replace(/\.0$/, '')}%`
+      : `${d.t} +${Math.round(v * mult)}`);
+  }
+  return parts.join(' · ');
+}
+
+function renderDrzewko() {
+  const total = (S.tree ?? []).reduce((s, b) => s + b.spent, 0);
+  let h = `<div class="scr-head">Drzewko <span>${esc(S.klasaLabel.toUpperCase())}</span></div>`;
+
+  h += `<div class="card ${S.treePoints ? 'hi' : ''}">
+    <div class="row"><div class="grow"><div class="t1">Punkty do wydania</div>
+      <div class="t2">1 za piętro, 5 za bossa aktu · wydane: ${total}</div></div>
+      <span class="num" style="font-size:22px;color:var(--brass)">${S.treePoints}</span></div>
+  </div>`;
+
+  for (const branch of S.tree ?? []) {
+    h += `<div class="sec">${esc(branch.label)} · ${branch.spent} pkt</div>`;
+    for (const n of branch.nodes) {
+      const pelny = n.rank >= n.max;
+      h += `<div class="card ${n.unlocked ? '' : 'locked'}">
+        <div class="row">
+          <div class="grow">
+            <div class="t1">${esc(n.label)}
+              <span class="num" style="color:${n.rank ? 'var(--brass)' : 'var(--ink-mute)'}">${n.rank}/${n.max}</span></div>
+            <div class="t2">${esc(effText(n.eff))} za rangę</div>
+            ${n.rank ? `<div class="t2" style="color:var(--brass)">teraz: ${esc(effText(n.eff, n.rank))}</div>` : ''}
+            ${n.unlocked ? '' : `<div class="t2" style="color:#D9736B">Wymaga ${n.need} pkt w gałęzi ${esc(branch.label)}</div>`}
+          </div>
+          <button class="btn" data-act="tree" data-node="${n.id}" ${n.canRaise ? '' : 'disabled'}>${pelny ? 'MAX' : '+'}</button>
+        </div>
+      </div>`;
+    }
+  }
+
+  h += `<div class="sec">Reset</div><div class="card">
+    <div class="t2" style="margin-bottom:9px">Zwraca wszystkie ${total} wydanych punktów.
+      Koszt rośnie z poziomem postaci.</div>
+    <button class="btn wide" data-act="treereset" ${total && S.gold >= S.treeRespec ? '' : 'disabled'}>
+      Zresetuj za ${nf(S.treeRespec)} zł</button>
+  </div>`;
 
   return h;
 }
@@ -639,6 +830,7 @@ function render() {
   if (FIGHT) drawFightView();
   else $('#s-wieza').innerHTML = renderWieza();
   $('#s-postac').innerHTML = renderPostac();
+  $('#s-drzewko').innerHTML = renderDrzewko();
   $('#s-eq').innerHTML     = renderEq();
 }
 
@@ -646,12 +838,7 @@ function render() {
 
 document.addEventListener('click', async (ev) => {
   const tab = ev.target.closest('.tabs button');
-  if (tab) {
-    $$('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b === tab)));
-    $$('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + tab.dataset.tab));
-    $('.screens').scrollTop = 0;
-    return;
-  }
+  if (tab) { openTab(tab.dataset.tab); return; }
 
   const btn = ev.target.closest('[data-act]');
   if (!btn || btn.disabled) return;
@@ -712,6 +899,16 @@ document.addEventListener('click', async (ev) => {
       FIGHT = null;
       const d = await api('advance', {});
       if (!d.error) { toast(`Piętro ${d.floor}`); render(); }
+    } else if (act === 'tree') {
+      const d = await api('tree', { node: btn.dataset.node });
+      if (d.error) toast(d.error, true); else render();
+    } else if (act === 'treereset') {
+      const d = await api('treereset', {});
+      if (d.error) toast(d.error, true); else { toast(`Zwrócono ${d.punkty} pkt`); render(); }
+    } else if (act === 'slot') {
+      // drugie kliknięcie w ten sam slot zwija podgląd
+      dollSlot = dollSlot === btn.dataset.slot ? null : btn.dataset.slot;
+      render();
     } else if (act === 'equip') {
       const d = await api('equip', { itemId: btn.dataset.id });
       if (!d.error) { toast('Założone'); render(); }

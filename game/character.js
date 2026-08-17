@@ -10,7 +10,7 @@ function starterItem(name, slot, wtype) {
   const def = C.gear.slots[slot];
   const it = {
     id: null, slot, wtype, name, rarity: 'common', ilvl: 1, plus: 0, energy: 0,
-    reqLevel: 1, reqSkill: 1, damage: 0, armor: 0, affixes: [],
+    reqLevel: 1, damage: 0, armor: 0, affixes: [],
   };
   if (def.base === 'damage' || def.base === 'mixed') {
     it.damage = Math.round((C.gear.weaponDamageBase + C.gear.weaponDamagePerIlvl) * def.mult);
@@ -21,27 +21,64 @@ function starterItem(name, slot, wtype) {
   return it;
 }
 
-export function newCharacter(name, klasa = 'wedrowiec', crest = null) {
+// Zamiennictwo starego modelu klas na nowy. Postacie z bazy trzymają stare id
+// i nie mogą się wywalić przy wczytaniu — dostają najbliższy odpowiednik:
+//   Wędrowiec → Wojownik   (neutralny start, mele, Siła)
+//   Łucznik   → Łowca      (dystans, Zręczność — jeden do jednego)
+//   Obrońca   → Paladyn    (miecz i tarcza, Siła; Paladyn dokłada Intelekt)
+// Mag i Wojownik zostają sobą. Klasy bez odpowiednika w starym modelu
+// (Tropiciel, Tancerz Ostrzy) są tylko do wyboru przy nowej postaci.
+const KLASA_ALIAS = { wedrowiec: 'wojownik', lucznik: 'lowca', obronca: 'paladyn' };
+
+export const klasaId = (klasa) => (C.classes[klasa] ? klasa : (KLASA_ALIAS[klasa] ?? 'wojownik'));
+export const classOf = (klasa) => C.classes[klasaId(klasa)];
+
+// Doprowadza postać z bazy do obecnego kształtu gry. Wołane przy każdym wczytaniu,
+// więc naprawa zapisuje się przy następnym save.
+export function migrate(ch) {
+  ch.klasa = klasaId(ch.klasa);
+
+  // Sloty skasowane z gry (Pas, Spodnie) zabierają ze sobą swoje przedmioty —
+  // zostawione w ekwipunku wywalałyby ekran, bo nie mają już definicji slotu.
+  for (const slot of Object.keys(ch.equipped)) {
+    if (!C.gear.slots[slot]) delete ch.equipped[slot];
+  }
+  ch.backpack = ch.backpack.filter(it => C.gear.slots[it.slot]);
+
+  // Skille bojowe skasowane — stare postacie zrzucają je bez śladu.
+  delete ch.skills;
+
+  // Drzewko doszło później; postacie sprzed niego dostają puste.
+  ch.tree ??= {};
+  // Węzły, które zniknęły z config, oddają swoje punkty.
+  const znane = new Set(treeOf(ch.klasa).flatMap(b => b.nodes.map(n => n.id)));
+  for (const [id, rank] of Object.entries(ch.tree)) {
+    if (!znane.has(id)) { ch.treePoints += rank; delete ch.tree[id]; }
+  }
+  return ch;
+}
+
+// Poziom postaci = najwyższe zdobyte piętro. Nie ma osobnego paska expa —
+// wieża jest jedyną miarą postępu.
+export const poziom = (ch) => ch.maxFloor;
+
+export function newCharacter(name, klasa = 'wojownik', crest = null) {
   const cls = C.classes[klasa];
   if (!cls) throw new Error('nieznana klasa: ' + klasa);
 
   const attrs = { ...C.character.startingAttrs };
-  for (const [k, v] of Object.entries(cls.attrs)) attrs[k] += v;
-
-  const skills = {};
-  for (const s of C.skills.list) skills[s] = { level: 1, exp: 0 };
 
   const equipped = {};
   if (cls.startWeapon)  equipped.bron    = starterItem(cls.startWeapon, 'bron', cls.startWtype);
-  if (cls.startOffhand) equipped.offhand = starterItem(cls.startOffhand, 'offhand', 'tarcza');
+  if (cls.startOffhand) equipped.offhand = starterItem(cls.startOffhand, 'offhand', cls.startOffWtype ?? 'tarcza');
 
   return {
     name, klasa,
     crest: crest ?? { shape: 'tarcza', symbol: 'miecz', color: 'mosiadz', border: 'smola', ink: 'smola' },
     floor: 1, fight: 0, maxFloor: 1,
-    attrs, unspentAttr: 0,
+    attrs, unspentAttr: C.character.startingAttrPoints,
     treePoints: 0,
-    skills,
+    tree: {},              // id węzła -> ranga
     gold: 0, currency: 0,
     potions: C.healing.startingPotions,
     mode: 'auto',          // 'auto' | 'turowa'
@@ -54,74 +91,76 @@ export function newCharacter(name, klasa = 'wedrowiec', crest = null) {
   };
 }
 
-// ---------------------------------------------------------------- exp skilli
+// ---------------------------------------------------------------- drzewko klasy
 
-export function skillExpToNext(level) {
-  return Math.round(C.skills.expBase * Math.pow(C.skills.expGrowth, level - 1));
+export const treeOf = (klasa) => C.tree.classes[klasaId(klasa)] ?? [];
+
+// Ile punktów siedzi w danej gałęzi.
+const branchSpent = (ch, branch) =>
+  branch.nodes.reduce((s, n) => s + (ch.tree?.[n.id] ?? 0), 0);
+
+// Węzeł numer i wymaga i * nodeStep punktów w swojej gałęzi.
+export function nodeState(ch, branch, index) {
+  const node = branch.nodes[index];
+  const rank = ch.tree?.[node.id] ?? 0;
+  const need = index * C.tree.nodeStep;
+  const spent = branchSpent(ch, branch);
+  return {
+    rank, need, spent,
+    max: C.tree.rankMax,
+    unlocked: spent >= need,
+    canRaise: spent >= need && rank < C.tree.rankMax && ch.treePoints > 0,
+  };
 }
 
-export function grantSkillExp(ch, skill, amount) {
-  const s = ch.skills[skill];
-  if (!s) return [];
-  const ups = [];
-  s.exp += amount;
-  while (s.exp >= skillExpToNext(s.level)) {
-    s.exp -= skillExpToNext(s.level);
-    s.level++;
-    ups.push({ skill, level: s.level });
+// Suma wszystkich wykupionych efektów. Jedno miejsce, w którym drzewko
+// zamienia się w liczby — computeStats zna tylko wynik.
+export function treeEffects(ch) {
+  const out = { dmgPct: 0, hpPct: 0, armorPct: 0, armorFlat: 0, critChance: 0,
+                critPower: 0, speed: 0, accuracy: 0, evasion: 0, block: 0,
+                blockCut: 0, potionPct: 0, attrWeight: {} };
+  for (const branch of treeOf(ch.klasa)) {
+    for (const node of branch.nodes) {
+      const rank = ch.tree?.[node.id] ?? 0;
+      if (!rank) continue;
+      for (const [k, v] of Object.entries(node.eff)) {
+        if (k === 'attrWeight') {
+          for (const [a, w] of Object.entries(v)) out.attrWeight[a] = (out.attrWeight[a] ?? 0) + w * rank;
+        } else {
+          out[k] = (out[k] ?? 0) + v * rank;
+        }
+      }
+    }
   }
-  return ups;
+  return out;
 }
 
-// Który skill bojowy rośnie zależnie od ekwipunku.
-// Zasada: liczy się druga ręka. Tarcza dzieli exp na pół z Obroną.
-const WTYPE_SKILL = { mele: 'atak', dystans: 'dystansowy', magia: 'magia' };
-
-export function expSplit(ch) {
-  const weapon = ch.equipped.bron;
-  const off = ch.equipped.offhand;
-  const isShield = off && off.wtype === 'tarcza';
-
-  let main = 'atak';
-  if (weapon?.wtype) main = WTYPE_SKILL[weapon.wtype] ?? 'atak';
-  if (!weapon) {
-    if (ch.klasa === 'mag') main = 'magia';
-    if (ch.klasa === 'lucznik') main = 'dystansowy';
+export function spendTreePoint(ch, nodeId) {
+  if (ch.treePoints <= 0) return { ok: false, reason: 'Nie masz punktów drzewka' };
+  for (const branch of treeOf(ch.klasa)) {
+    const index = branch.nodes.findIndex(n => n.id === nodeId);
+    if (index < 0) continue;
+    const st = nodeState(ch, branch, index);
+    if (st.rank >= st.max) return { ok: false, reason: 'Węzeł jest już na maksymalnej randze' };
+    if (!st.unlocked) return { ok: false, reason: `Wymaga ${st.need} punktów w gałęzi ${branch.label}` };
+    ch.tree ??= {};
+    ch.tree[nodeId] = st.rank + 1;
+    ch.treePoints--;
+    return { ok: true, rank: ch.tree[nodeId] };
   }
-
-  const split = {};
-  if (isShield) {
-    split[main] = C.skills.shieldSplit;
-    split.obrona = C.skills.shieldSplit;
-  } else {
-    split[main] = 1;
-  }
-  return { main, isShield, split };
+  return { ok: false, reason: 'Nie ma takiego węzła w drzewku tej klasy' };
 }
 
-export function awardFightExp(ch, mobLevel) {
-  const { split } = expSplit(ch);
-  const cls = C.classes[ch.klasa];
-  const ups = [];
+export const respecCost = (ch) => C.tree.respecBase + C.tree.respecPerLevel * poziom(ch);
 
-  for (const [skill, share] of Object.entries(split)) {
-    const lvl = ch.skills[skill].level;
-    const diff = Math.max(0, lvl - mobLevel);
-    const falloff = Math.max(C.skills.expFalloffMin, 1 - diff * C.skills.expFalloffPerLevel);
-    let amount = C.skills.expPerFight * share * falloff;
-    if (cls.skill === skill) amount *= (1 + cls.expBonus);
-    ups.push(...grantSkillExp(ch, skill, Math.max(1, Math.round(amount))));
-  }
-
-  // Zdrowie rośnie zawsze, cokolwiek robisz
-  const zLvl = ch.skills.zdrowie.level;
-  const zDiff = Math.max(0, zLvl - mobLevel);
-  const zFall = Math.max(C.skills.expFalloffMin, 1 - zDiff * C.skills.expFalloffPerLevel);
-  let zAmt = C.skills.expPerFight * C.skills.zdrowieShare * zFall;
-  if (cls.skill === 'zdrowie') zAmt *= (1 + cls.expBonus);
-  ups.push(...grantSkillExp(ch, 'zdrowie', Math.max(1, Math.round(zAmt))));
-
-  return ups;
+export function resetTree(ch) {
+  const cost = respecCost(ch);
+  if (ch.gold < cost) return { ok: false, reason: `Reset kosztuje ${cost} zł — masz ${ch.gold}` };
+  const wrocilo = Object.values(ch.tree ?? {}).reduce((a, b) => a + b, 0);
+  ch.gold -= cost;
+  ch.treePoints += wrocilo;
+  ch.tree = {};
+  return { ok: true, cost, punkty: wrocilo };
 }
 
 // ---------------------------------------------------------------- statystyki wynikowe
@@ -144,24 +183,38 @@ export function computeStats(ch) {
   const cc = C.character;
   // Liniowo. Mnożnik od Wytrzymałości robił z tego skalowanie kwadratowe
   // i Obrońca przechodził całą wieżę bez jednej przegranej.
+  // Poziom postaci = najwyższe zdobyte piętro. Po skasowaniu skilla Zdrowie
+  // to on niesie darmowy przyrost HP, żeby wieża nie robiła się coraz ostrzejsza
+  // dla kogoś, kto nie wpakował wszystkiego w Wytrzymałość.
+  const T = treeEffects(ch);
+
   const maxHp = Math.round(
-    cc.startHp + a.wytrzymalosc * cc.hpPerStamina + ch.skills.zdrowie.level * cc.hpPerLevel + hpFlat
+    (cc.startHp + a.wytrzymalosc * cc.hpPerStamina + poziom(ch) * cc.hpPerLevel + hpFlat)
+    * (1 + T.hpPct)
   );
 
-  // Każdy styl walki ma swój atrybut skalujący. Bez tego łucznik
-  // pakował punkty w Zręczność i nie dostawał z nich ani jednego obrażenia.
-  const main = expSplit(ch).main;
-  const ATTR_FOR = { atak: 'sila', magia: 'intelekt', dystansowy: 'zrecznosc' };
-  const DIV_FOR = { atak: cc.strDamageDivisor, magia: cc.intMagicDivisor, dystansowy: cc.agiDamageDivisor };
-  const mainAttr = a[ATTR_FOR[main] ?? 'sila'];
-  const divisor = DIV_FOR[main] ?? cc.strDamageDivisor;
+  // Obrażenia skalują się z atrybutami KLASY, nie z typu trzymanej broni — inaczej
+  // trzy klasy mieszane nie mają jak istnieć. Każdy atrybut klasy liczy się w pełni,
+  // a cena za elastyczność siedzi w dzielniku (config.classes[x].dmgDivisor).
+  const cls = classOf(ch.klasa);
+  const divisor = cls.dmgDivisor ?? cc.strDamageDivisor;
+  // Drzewko podbija WAGĘ atrybutu w obrażeniach — tak wygląda "większe obrażenia
+  // od magii" w silniku, który nie zna typów obrażeń, tylko atrybuty klasy.
+  const mainAttr = (cls.dmgAttrs ?? ['sila'])
+    .reduce((sum, attr) => sum + (a[attr] ?? 0) * (1 + (T.attrWeight[attr] ?? 0)), 0);
 
-  const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor));
-  const speed = Math.round(C.combat.baseSpeed + speedFlat + a.zrecznosc / (cc.agiSpeedDivisor / 100));
-  const armor = Math.round(armorFlat + a.wytrzymalosc * cc.staArmorPerPoint);
+  const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor) * (1 + T.dmgPct));
+  const speed = Math.round(C.combat.baseSpeed + speedFlat + T.speed + a.zrecznosc / (cc.agiSpeedDivisor / 100));
+  const armor = Math.round((armorFlat + T.armorFlat + a.wytrzymalosc * cc.staArmorPerPoint) * (1 + T.armorPct));
 
-  const accuracy = cc.accuracyBase + a.zrecznosc * cc.accuracyPerAgi + accFlat / 100;
-  const evasion = Math.min(cc.evasionMax, a.zrecznosc * cc.evasionPerAgi + evaFlat / 100);
+  const accuracy = cc.accuracyBase + a.zrecznosc * cc.accuracyPerAgi + accFlat / 100 + T.accuracy;
+  const evasion = Math.min(cc.evasionMax, a.zrecznosc * cc.evasionPerAgi + evaFlat / 100 + T.evasion);
+
+  // Blok wymaga tarczy. Drzewko bez tarczy w ręce nie daje z niego nic.
+  const maTarcze = ch.equipped.offhand?.wtype === 'tarcza';
+  const block = maTarcze
+    ? Math.min(C.combat.blockChanceMax, C.combat.blockChanceShield + T.block)
+    : 0;
 
   return {
     maxHp,
@@ -171,9 +224,12 @@ export function computeStats(ch) {
     armor,
     accuracy: Math.min(C.combat.accuracyMax, accuracy),
     evasion,
+    block,
+    blockCut: C.combat.blockCut + T.blockCut,
+    potionPct: T.potionPct,
     wtype: ch.equipped.bron?.wtype ?? 'mele',
-    crit: C.combat.critBase + critChance / 100 + a.zrecznosc / cc.agiCritDivisor,
-    critMult: C.combat.critMultBase + critPower / 100,
+    crit: C.combat.critBase + critChance / 100 + a.zrecznosc / cc.agiCritDivisor + T.critChance,
+    critMult: C.combat.critMultBase + critPower / 100 + T.critPower,
     attrs: a,
     power: Math.round(damage * 3 + maxHp * 0.5 + armor * 1.5),
   };
@@ -181,24 +237,13 @@ export function computeStats(ch) {
 
 // ---------------------------------------------------------------- ekwipunek
 
+// Jedyna bramka na sprzęt: poziom postaci. Skille bojowe były drugą bramką
+// na to samo — sprzęt z piętra 40 i tak wymagał piętra 40, żeby go zdobyć.
 export function canEquip(ch, item) {
-  if (item.reqLevel > ch.maxFloor) {
-    return { ok: false, reason: `Wymaga poziomu ${item.reqLevel} — masz ${ch.maxFloor}` };
+  if (item.reqLevel > poziom(ch)) {
+    return { ok: false, reason: `Wymaga poziomu ${item.reqLevel} — masz ${poziom(ch)}` };
   }
-  const def = C.gear.slots[item.slot];
-  let gate = def.gate;
-  if (gate === 'weapon') gate = WTYPE_SKILL[item.wtype] ?? 'atak';
-  if (gate === 'offhand') gate = item.wtype === 'tarcza' ? 'obrona' : 'atak';
-
-  if (gate === 'any') {
-    const best = Math.max(...C.skills.list.filter(s => s !== 'zdrowie').map(s => ch.skills[s].level));
-    if (best < item.reqSkill) return { ok: false, reason: `Wymaga dowolnego skilla bojowego ${item.reqSkill}` };
-    return { ok: true, gate: 'dowolny' };
-  }
-  if (ch.skills[gate].level < item.reqSkill) {
-    return { ok: false, reason: `Wymaga ${gate} ${item.reqSkill} — masz ${ch.skills[gate].level}`, gate };
-  }
-  return { ok: true, gate };
+  return { ok: true };
 }
 
 export function equip(ch, itemId) {
@@ -214,3 +259,99 @@ export function equip(ch, itemId) {
   if (old) ch.backpack.push(old);
   return { ok: true, equipped: item, unequipped: old };
 }
+
+// --------------------------------------------------------------- self-check
+// node game/character.js — pilnuje skalowania obrażeń z atrybutów klasy.
+
+export function demo() {
+  // nagi=true zdejmuje wyprawkę — inaczej porównanie klas mierzy startowy sprzęt
+  // (tarcza Paladyna dokłada obrażenia), a nie samo skalowanie z atrybutów.
+  const dmg = (klasa, add = {}, nagi = false) => {
+    const ch = newCharacter('T', klasa);
+    if (nagi) ch.equipped = {};
+    for (const [k, v] of Object.entries(add)) ch.attrs[k] += v;
+    return computeStats(ch).damage;
+  };
+
+  // czysta klasa bierze wszystko ze swojego atrybutu, z cudzego nic
+  console.assert(dmg('wojownik', { sila: 30 }) > dmg('wojownik'), 'Sila daje Wojownikowi obrazenia');
+  console.assert(dmg('wojownik', { zrecznosc: 30 }) === dmg('wojownik'), 'Zrecznosc nie daje Wojownikowi obrazen');
+  console.assert(dmg('mag', { intelekt: 30 }) > dmg('mag'), 'Intelekt daje Magowi obrazenia');
+  console.assert(dmg('mag', { sila: 30 }) === dmg('mag'), 'Sila nie daje Magowi obrazen');
+
+  // klasa mieszana bierze oba atrybuty w pełni — nie ma znaczenia, jak je rozdzieli
+  const mieszanyPo = dmg('paladyn', { sila: 500, intelekt: 500 }, true) - dmg('paladyn', {}, true);
+  const mieszanyW1 = dmg('paladyn', { sila: 1000 }, true) - dmg('paladyn', {}, true);
+  console.assert(mieszanyPo === mieszanyW1, 'mieszanej klasie nie zalezy na podziale punktow');
+
+  // ...ale wyciska z punktu mniej niż klasa czysta — to jest cena za elastyczność
+  const czysty = dmg('wojownik', { sila: 1000 }, true) - dmg('wojownik', {}, true);
+  console.assert(mieszanyPo < czysty, `mieszana klasa placi za elastycznosc (${mieszanyPo} vs ${czysty})`);
+  console.assert(mieszanyPo > czysty * 0.8, `...ale kara jest umiarkowana (${mieszanyPo} vs ${czysty})`);
+
+  // Wytrzymałość nie jest osią obrażeń dla nikogo
+  for (const k of Object.keys(C.classes)) {
+    console.assert(dmg(k, { wytrzymalosc: 30 }) === dmg(k), `Wytrzymalosc nie daje obrazen: ${k}`);
+  }
+
+  // start: puste atrybuty i worek punktów
+  const swiezy = newCharacter('T', 'mag');
+  console.assert(Object.values(swiezy.attrs).every(v => v === 0), 'atrybuty startuja na zerze');
+  console.assert(swiezy.unspentAttr === 10, 'dziesiec punktow na start');
+  console.assert(swiezy.skills === undefined, 'skille bojowe nie istnieja');
+
+  // sprzęt bramkuje wyłącznie poziom postaci
+  const ch = newCharacter('T', 'wojownik');
+  ch.maxFloor = 5;
+  console.assert(canEquip(ch, { reqLevel: 5, slot: 'helm' }).ok, 'przedmiot na poziomie postaci wchodzi');
+  console.assert(!canEquip(ch, { reqLevel: 6, slot: 'helm' }).ok, 'przedmiot ponad poziom nie wchodzi');
+
+  // poziom niesie HP zamiast skasowanego skilla Zdrowie
+  const hp1 = computeStats(newCharacter('T', 'mag')).maxHp;
+  const wyzej = newCharacter('T', 'mag'); wyzej.maxFloor = 10;
+  console.assert(computeStats(wyzej).maxHp > hp1, 'wyzsze pietro daje wiecej HP');
+
+  // drzewko: bramka gałęzi, wpływ na statystyki, reset
+  const p = newCharacter('T', 'paladyn');
+  p.treePoints = 30;
+  const galaz = treeOf('paladyn').find(b => b.id === 'mur');
+  console.assert(!spendTreePoint(p, galaz.nodes[1].id).ok, 'drugi wezel zamkniety bez punktow w galezi');
+  for (let i = 0; i < 2; i++) spendTreePoint(p, galaz.nodes[0].id);
+  console.assert(spendTreePoint(p, galaz.nodes[1].id).ok, 'dwa punkty w galezi otwieraja drugi wezel');
+  console.assert(p.tree[galaz.nodes[0].id] === 2, 'ranga rosnie');
+  console.assert(p.treePoints === 27, 'punkty schodza z puli');
+
+  // blok liczy się tylko z tarczą
+  console.assert(computeStats(p).block > 0, 'paladyn z tarcza blokuje');
+  const bezTarczy = newCharacter('T', 'paladyn'); bezTarczy.tree = { ...p.tree };
+  delete bezTarczy.equipped.offhand;
+  console.assert(computeStats(bezTarczy).block === 0, 'bez tarczy blok zerowy');
+
+  // węzeł obrażeń faktycznie podnosi obrażenia
+  const bijak = newCharacter('T', 'mag'); bijak.treePoints = 10; bijak.attrs.intelekt = 40;
+  const przed = computeStats(bijak).damage;
+  for (let i = 0; i < 3; i++) spendTreePoint(bijak, 'plomien');
+  console.assert(computeStats(bijak).damage > przed, 'wezel Plomien podnosi obrazenia');
+
+  // reset oddaje punkty i zabiera złoto
+  bijak.gold = 99999;
+  const wydane = Object.values(bijak.tree).reduce((a, b) => a + b, 0);
+  const przedPkt = bijak.treePoints;
+  resetTree(bijak);
+  console.assert(bijak.treePoints === przedPkt + wydane, 'reset oddaje wszystkie punkty');
+  console.assert(Object.keys(bijak.tree).length === 0, 'reset czysci drzewko');
+  const biedak = newCharacter('T', 'mag'); biedak.gold = 0;
+  console.assert(!resetTree(biedak).ok, 'reset bez zlota nie przechodzi');
+
+  // zamiennictwo starych klas — postacie z bazy nie mogą się wywalić
+  console.assert(classOf('wedrowiec').label === 'Wojownik', 'Wedrowiec -> Wojownik');
+  console.assert(classOf('lucznik').label === 'Łowca', 'Lucznik -> Lowca');
+  console.assert(classOf('obronca').label === 'Paladyn', 'Obronca -> Paladyn');
+  console.assert(klasaId('mag') === 'mag', 'Mag zostaje soba');
+  console.assert(klasaId('cokolwiek') === 'wojownik', 'nieznana klasa spada na Wojownika');
+  console.assert(Object.keys(C.classes).length === 6, 'szesc klas, nie piec');
+
+  console.log('character.js — wszystkie testy przeszly');
+}
+
+if (process.argv[1] && process.argv[1].endsWith('character.js')) demo();

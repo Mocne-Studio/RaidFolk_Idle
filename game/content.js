@@ -112,12 +112,10 @@ const NAMES = {
   offhand:    ['Puklerz', 'Tarcza', 'Orb', 'Kastet', 'Sztylet'],
   helm:       ['Hełm', 'Kaptur', 'Diadem', 'Maska'],
   napiersnik: ['Napierśnik', 'Kolczuga', 'Kirys', 'Płaszcz'],
-  spodnie:    ['Nogawice', 'Spodnie', 'Nabiodrki'],
   buty:       ['Buty', 'Trzewiki', 'Sandały'],
   rekawice:   ['Rękawice', 'Karwasze', 'Naręczaki'],
-  pas:        ['Pas', 'Przepaska', 'Bandolier'],
   pierscien:  ['Pierścień', 'Sygnet', 'Obrączka'],
-  amulet:     ['Amulet', 'Naszyjnik', 'Talizman'],
+  amulet:     ['Naszyjnik', 'Amulet', 'Talizman'],
 };
 
 const EPITHETS = [
@@ -148,7 +146,6 @@ export function rollItem(rng, { ilvl, weights, slot = null }) {
     name: `${baseName} ${pick(rng, EPITHETS)}`,
     rarity, ilvl: itemIlvl, plus: 0, energy: 0,
     reqLevel: itemIlvl,
-    reqSkill: Math.max(1, Math.floor(itemIlvl * C.gear.skillGateRatio)),
     damage: 0, armor: 0,
     affixes: [],
   };

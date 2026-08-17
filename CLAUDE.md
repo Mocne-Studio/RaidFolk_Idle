@@ -32,44 +32,66 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
   - **pasek ultimate** (0–10): lekki ładuje 1, średni 2, mocny 3;
     **pudło zeruje cały pasek**; ultimate zależy od typu broni
   - **umiejętności** z cooldownami: Okrzyk bojowy, Wir, Cios ogłuszający
+  - **blok** — tylko z tarczą w drugiej ręce; 10% bazy + drzewko, zbija cios o połowę
   - leczenie miksturami, każda kolejna w walce o 10% słabsza
 - **Łup** — 7 rzadkości, afiksy skalowane z ilvl, bronie w trzech typach
-- **Ekwipunek** — 10 slotów, **dwa progi**: poziom postaci i poziom skilla
-- **Skille bojowe** — rosną z tego, czego używasz; tarcza dzieli exp 50/50 z Obroną
-- **Atrybuty** — 3 punkty za piętro, Siła/Intelekt/Zręczność skalują swój styl walki
+- **Ekwipunek** — 8 slotów, **jeden próg**: poziom postaci (= najwyższe piętro)
+- **Atrybuty** — start na zerze, **10 punktów do rozdania**, potem 3 za piętro;
+  obrażenia rosną tylko z atrybutu swojej klasy
 - **Generator herbu** — kształt, symbol, trzy kolory; SVG, nie plik graficzny
 - **Kod postaci** — pozwala wrócić do postaci z innego adresu lub urządzenia
+- **Ekran wprowadzenia** — cztery ekrany, z pominięciem; treść w `public/app.js`
+  (stała `INTRO`). Pokazuje się raz, tylko nowej postaci
+- **Wybór klasy** — sześć klas z opisem i skalowaniem, zaraz po wprowadzeniu
+- **Drzewka klas** — własna zakładka; 3 gałęzie × 5 węzłów × 5 rang dla każdej klasy,
+  węzeł `i` wymaga `i × 2` punktów w swojej gałęzi, reset za złoto
 
 ## Czego NIE MA
 
-Drzewko (punkty się naliczają, nie ma ich gdzie wydać) · sojusznicy i pet (sloty
-w arenie stoją puste, silnik gotowy) · Przywołanie i klucze · przepalanie i energia ·
+Sojusznicy i pet (sloty w arenie stoją puste, silnik gotowy) · Przywołanie i klucze · przepalanie i energia ·
 kowal i afiksy · wyprawy · world boss · rajdy · bank · skille zbierackie · offline ·
-**ekran wprowadzenia** · **nowy model klas**.
+**Dusze** · **wiele postaci na koncie**.
 
 ---
 
-## UWAGA: model klas w kodzie jest NIEAKTUALNY
+## Model klas — wdrożony w połowie
 
-Kod ma stary model: 4 klasy dające +50% expa do swojego skilla bojowego, nowa postać
-dostaje neutralnego **Wędrowca**.
+**Zrobione:** sześć klas z dokumentu (Wojownik, Paladyn, Łowca, Tropiciel, Mag, Tancerz
+Ostrzy), wybierane na ekranie po wprowadzeniu. Stary Wędrowiec i bonus +50% expa do
+skilla klasy **zniknęły**.
 
-**Projekt ustalił coś zupełnie innego** (`RAIDFOLK_IDLE_DESIGN.md`, sekcja o klasach):
+Obrażenia skalują się z atrybutami klasy (`classes[x].dmgAttrs`), a nie z typu trzymanej
+broni. Warstwa uniwersalna została wspólna: Zręczność daje prędkość, kryt, celność i unik
+każdemu, Wytrzymałość daje HP i pancerz każdemu.
 
-- **Sześć klas** — Wojownik, Paladyn, Łowca, Tropiciel, Mag, Tancerz Ostrzy
-- **Każda to osobna postać na koncie** — własny poziom, atrybuty, drzewko, ekwipunek
-- **Wieża jest jedna i wspólna** — nowa klasa nie dostaje kopii świata, po prostu
-  zaczyna nisko
-- **Skille bojowe znikają** (Atak, Dystansowy, Magia, Obrona, Zdrowie) — bramkowanie
-  sprzętu przejmuje klasa i poziom
-- **Atrybuty mają dwie warstwy**: efekty uniwersalne dostaje każdy, obrażenia skalują
-  się tylko z atrybutem swojej klasy
-- **Przedmioty mają etykietę klas** — likwiduje martwy drop
-- **Klasy odblokowują bossowie aktów** — start z jedną, każdy boss daje kolejną
-- Wspólne dla konta: skille zbierackie, bank, złoto, materiały, wiedza o wieży
+**Klasy mieszane liczą oba atrybuty w pełni, a płacą wyższym dzielnikiem**
+(`dmgDivisor`: czyste 100/130, mieszane 115–125). Wersja z liczeniem po połowie była
+pierwsza i okazała się karą, nie wyborem — Paladyn dostawał 37% mniej obrażeń z tych
+samych punktów. Nie wracaj do niej bez policzenia.
 
-To jest **duża przebudowa** i nie została zaczęta. Nie „naprawiaj" kodu do zgodności
-z dokumentem bez wyraźnego polecenia — autor wie o różnicy.
+**Skille bojowe skasowane.** Atak, Dystansowy, Magia, Obrona i Zdrowie zniknęły z gry.
+Sprzęt bramkuje wyłącznie **poziom postaci = najwyższe zdobyte piętro** (`poziom()`
+w `game/character.js`). Po skasowaniu skilla Zdrowie darmowy przyrost HP niesie poziom
+(`hpPerLevel` × piętro), inaczej wieża robiłaby się coraz ostrzejsza dla każdego,
+kto nie wsypał wszystkiego w Wytrzymałość.
+
+**Drzewka klas działają.** Trzy gałęzie po pięć węzłów dla każdej z sześciu klas,
+wszystko liczbami w `config.tree`. Opisy węzłów w UI generują się z tych liczb —
+nie ma drugiego miejsca do poprawiania po zmianie balansu.
+
+Efekty węzłów to `dmgPct`, `hpPct`, `armorPct/armorFlat`, `critChance/critPower`,
+`speed`, `accuracy`, `evasion`, `block/blockCut`, `potionPct` oraz `attrWeight`.
+Ten ostatni podbija WAGĘ atrybutu w obrażeniach i tak wygląda „większe obrażenia
+od magii" w silniku, który nie zna typów obrażeń, tylko atrybuty klasy.
+
+**Czego wciąż NIE MA z modelu klas:**
+
+- **Sześć osobnych postaci na koncie** — jedna postać, jedna klasa, na zawsze
+- **Dusze** — ekran wyboru klasy obiecuje je graczowi, ale nic za tym nie stoi
+- **Odblokowywanie klas przez bossów aktów** — wszystkie sześć dostępnych od startu
+- **Etykiety klas na przedmiotach** — martwy drop nadal istnieje
+
+To wciąż **duża przebudowa**. Nie „naprawiaj" reszty bez wyraźnego polecenia.
 
 ---
 
@@ -80,7 +102,8 @@ server.js            HTTP, API, pliki statyczne — Node 22+, ZERO zależności 
 game/config.js       WSZYSTKIE liczby gry
 game/content.js      akty, piętra, przeciwnicy, generator przedmiotów
 game/combat.js       symulacja walki + testy (node game/combat.js)
-game/character.js    atrybuty, skille, ekwipunek, statystyki wynikowe
+game/character.js    atrybuty, drzewko, ekwipunek, statystyki wynikowe
+                     + testy (node game/character.js)
 game/db.js           SQLite (wbudowany node:sqlite), postać jako JSON
 public/              frontend — czysty JS, moduły ES, bez frameworka
 public/crest.js      generator herbu (SVG)
@@ -144,7 +167,8 @@ przez `-m` się wysypują — pisz treść do pliku i używaj `git commit -F pli
 ```
 node server.js                  http://localhost:8080
 .\start.ps1                     serwer + tunel publiczny
-node game/combat.js             testy symulacji
+node game/combat.js             testy symulacji walki
+node game/character.js          testy skalowania klas i atrybutów
 npm run apk <adres>             budowa APK
 ```
 
@@ -152,30 +176,18 @@ Baza to plik `raidfolk.db`. Skasowanie go czyści świat.
 
 ---
 
-## NASTĘPNE ZADANIE — ekran wprowadzenia
+## Ekran wprowadzenia — zasada na przyszłość
 
-Po wyborze herbu, przed wejściem do gry, ma się pojawić **krótkie wprowadzenie**.
+Zrobiony: cztery ekrany po stworzeniu postaci (wieża bez końca → ściana wewnątrz
+piętra → tryby i siły ciosu → pasek ultimate i atrybuty), przycisk dalej i pominięcie.
+Treść siedzi w stałej `INTRO` w `public/app.js`.
 
 **Ustalona zasada: wprowadzenie opisuje TYLKO to, co faktycznie działa w buildzie.**
 Nie opisuj klas, wypraw ani drzewka, dopóki ich nie ma — gracz zobaczyłby obietnice,
 których gra nie spełnia. Sekcje dopisuj w miarę, jak systemy wchodzą.
 
-Do opisania w obecnej wersji:
-
-- **Wieża nie ma końca**, idziesz piętro po piętrze
-- **Piętro ma 6–10 fal**; utykasz na siódmej — wracasz na piątą, poprawiasz sprzęt
-  i próbujesz znowu. Ściana jest wewnątrz piętra, nie między piętrami
-- **Co dziesiąte piętro to boss aktu**
-- **Nie wiesz, co jest wyżej** — piętra są zakryte, dopóki tam nie wejdziesz
-- **Cztery atrybuty**: Siła (obrażenia wręcz, trochę HP), Intelekt (obrażenia magiczne,
-  mana), Zręczność (prędkość, celność, unik, obrażenia z dystansu), Wytrzymałość
-  (HP, regeneracja, pancerz)
-- **Dwa tryby walki**: automatyczny i turowy
-- **Trzy siły ciosu** — mocniej znaczy rzadziej
-- **Pasek ultimate** ładuje się z trafień (1/2/3 wg siły ciosu), a **pudło go zeruje**
-
-Szkic treści powstał w rozmowie — napisz własną wersję, krótką, kilka ekranów
-z przyciskiem dalej i możliwością pominięcia.
+Świadomie pominięte, bo w kodzie tego nie ma: mana (Intelekt daje tylko obrażenia
+magiczne) i regeneracja. Jak wejdą — dopisz je do ekranu czwartego.
 
 ---
 
