@@ -106,11 +106,13 @@ etykiety klas na przedmiotach.
 | | |
 |---|---|
 | Branch | `main` |
-| HEAD | `0b4ac30` — „Corrections pass: bez klasy gracza, bez tutorialu, jeden ekran, grywalne Gornictwo" |
+| HEAD | `15e0390` — „Dokumenty po corrections pass" |
 | Working tree | **czysty** |
 
 Poprzednie punkty:
 
+- `0b4ac30` — corrections pass: bez klasy gracza, bez tutorialu, jeden ekran,
+  grywalne Górnictwo, naprawa zakleszczenia walki turowej
 - `84317f1` / `4dd5503` — dokumenty przekazania
 - `aeddb98` — cały vertical slice: sześć zakładek, stały pasek walki,
   wyczerpanie HP, turowy boss, Kronika
