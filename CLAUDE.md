@@ -19,9 +19,9 @@ nic wspólnego, nie jest jej trybem ani gałęzią. Nie sięgaj do niej po nic.
 | `makieta_ui.html` | klikalna makieta wszystkich ekranów, także tych niezaimplementowanych |
 | `README.md` | uruchomienie, strojenie, struktura |
 
-**Sekcje 17 i 18 dokumentu projektowego opisują to, co faktycznie stoi w kodzie.**
-Gdzie reszta dokumentu mówi co innego — a mówi, bo opisuje klasy gracza i Dusze —
-wygrywają sekcje 17 i 18.
+**Sekcje 17–23 dokumentu projektowego opisują to, co faktycznie stoi w kodzie.**
+Gdzie wcześniejsze rozdziały mówią co innego — a mówią, bo opisują klasy gracza
+i Dusze — **wygrywają sekcje 17–23**.
 
 **Dokument projektowy wyprzedza implementację.** Opisuje docelową grę; kod ma na razie
 pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan na później.
@@ -30,59 +30,74 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 
 ## Co JEST zaimplementowane
 
-- **Sześć zakładek** — Wyprawa, Drużyna, Ekwipunek, Skille, Przywołanie, Kronika.
-  Postać i Drzewko siedzą pod przyciskiem profilu w nagłówku, nie mają zakładki
-- **Stały pasek walki** — nad zakładkami, żyje na każdym ekranie, dopóki coś się bije
-- **Hub Wyprawy** — Wieża otwarta, Wyprawa `WKRÓTCE`, World Boss / Kolos / Tytan `ZAMKNIĘTE`
-- **Wieża** — piętra po 6–10 fal, wariant „+" co 5, boss aktu co 10, akty po 10 pięter;
-  siatka dziesięciu pięter biomu, odblokowanie sekwencyjne, powrót na zdobyte piętro
-- **Wyczerpanie HP** — zdrowie **nie wraca między falami**; pełne oddaje wejście
-  na nowe piętro albo porażka, która cofa na pierwszą falę
-- **Walka** — symulacja serwerowa, attack speed steruje częstotliwością ciosów
-  - dwa tryby: **automatyczny** i **turowy**; automat leci przez **całe piętro**
-  - **boss aktu zawsze turowy**, przełącznik trybu na jego piętrze znika
-  - **Obrona** jako akcja tury — połowa obrażeń do następnej tury
-  - trzy siły ciosu: lekki, średni, mocny — mocniej znaczy rzadziej
-  - **celność** i **unik**, obie rosną ze Zręczności
-  - **pasek ultimate** (0–10): lekki ładuje 1, średni 2, mocny 3;
-    **pudło zeruje cały pasek**; ultimate zależy od typu broni
-  - **umiejętności** z cooldownami: Okrzyk bojowy, Wir, Cios ogłuszający
-  - **blok** — tylko z tarczą w drugiej ręce; 10% bazy + drzewko, zbija cios o połowę
-  - leczenie miksturami, każda kolejna w walce o 10% słabsza
-- **Łup** — 7 rzadkości, afiksy skalowane z poziomem przedmiotu, bronie w trzech typach
-- **Ekwipunek** — 8 slotów, **jeden próg**: poziom postaci (= najwyższe piętro);
-  makieta postaci 3×3 z portretem, siatka statystyk, porównanie z noszonym,
-  kategorie plecaka
-- **Atrybuty** — start na zerze, **10 punktów do rozdania**, potem 3 za piętro;
-  obrażenia rosną z Siły, Intelektu i Zręczności naraz
-- **Górnictwo** — pełna pętla: kopiesz, dostajesz rudę i exp, wbijasz poziom,
-  odblokowujesz kolejny surowiec; cykle lecą same do „Przerwij"
-- **Generator herbu** — kształt, symbol, trzy kolory; SVG, nie plik graficzny
-- **Kod postaci** — pozwala wrócić do postaci z innego adresu lub urządzenia
-- **Wejście do gry** — herb → imię → **od razu gra**. Nie ma wprowadzenia
-  ani wyboru klasy; jedno i drugie zostało skasowane
-- **Drzewko Bohatera** — jedno, uniwersalne: Siła / Hart / Tempo, 3 × 5 węzłów × 5 rang,
-  węzeł `i` wymaga `i × 2` punktów w swojej gałęzi, reset za złoto
-- **Układ jednoekranowy** — żaden z sześciu ekranów nie przewija się jako strona;
-  responsywność 520 / 900 / 1180 px
-- **Kronika** — bestiariusz z licznikiem zabić i trofeami (4 na przeciwnika,
-  odsłaniane na zawsze); obsada biomu Puszcza
-- **Przywołanie** — klucze (dawna „waluta specjalna"), osobne pule sojuszników i petów
+**Nawigacja i UI**
+- **Sześć zakładek** — Przygody, Drużyna, Ekwipunek, Skille, Przywołanie, Kronika.
+  Postać siedzi pod przyciskiem profilu; ekran drzewka usunięty
+- **Skille = trzy sekcje**: Zbierackie · Bojowe · Atrybuty. Tam rozdajesz punkty
+- **Stały pasek walki** nad zakładkami, żyje na każdym ekranie
+- **Układ jednoekranowy**, responsywność 520 / 900 / 1180 px
+- **Przewijanie przeżywa render** — patrz `PRZEWIJANE` w `public/app.js`
+- **Wejście do gry**: herb → imię → od razu gra. Bez wprowadzenia i wyboru klasy
+
+**Przygody**
+- **Wieża** — piętra po 6–10 fal, wariant „+" co 5, boss co 10; siatka pięter,
+  odblokowanie sekwencyjne, powrót na zdobyte piętro. **NIE DAJE ŁUPU**
+- **Wyprawa** — jedyne źródło sprzętu. Dziesięć etapów z ziarna: walki, rozdroża,
+  zdarzenia, postój, elita, boss. Sakwa wpada do plecaka dopiero po bossie
+- **Modyfikatory trudności** z mnożnikiem nagrody, otwierane piętrami
+- **Tabela dropów** z odkrywaniem (`???` do pierwszego zdobycia)
+
+**Walka**
+- symulacja serwerowa, tryb automatyczny (całe piętro) i turowy
+- **boss zawsze turowy**, z przełącznikiem „zawsze automatyczna"
+- **szyk trzech rzędów** — klasa daje rząd, broń zasięg; biała musi podchodzić
+- **dwóch przeciwników od piętra 3**
+- trzy siły ciosu, celność, unik, pasek ultimate, Obrona jako akcja tury
+- **MANA** — zaklęcia nią płacą; pasek został przy umiejętnościach zwykłych
+- **sojusznik i pet walczą**; sloty 2–3 zamknięte świadomie
+- rodzaj obrażeń w logu: fizyczne bordowe, magiczne niebieskie
+- **wyczerpanie HP** — nie wraca między falami ani po porażce
+
+**Postać i sprzęt**
+- **broń decyduje o atrybucie obrażeń** (biała/Siła, dystans/Zręczność,
+  różdżka/Intelekt); reszta liczy się z wagą `offAttrWeight`
+- **skille bojowe** — Broń biała, Łuk, Różdżka, Obrona, Witalność. Rosną z tego,
+  czym bijesz; podział expa zależy od rąk. **Dają bonusy, NIE bramkują sprzętu**
+- bronie mają liczbę rąk; dwuręczne biją mocniej i blokują drugą rękę
+- 8 slotów, makieta 3×3, porównanie „nosisz kontra bierzesz", kategorie plecaka
+- **ulepszanie sprzętu** sztabami z Kowalstwa
+- **punkty za piętro lecą przy ostatnim mobie**, nie przy wejściu wyżej
+
+**Profesje — wszystkie siedem gra**
+```
+Górnictwo    ruda + runy podstawowe + esencja + kryształy
+Kowalstwo    ruda → sztaby → ulepszanie sprzętu
+Rybołówstwo  ryby
+Rolnictwo    zioła i zboże
+Gotowanie    ryby + zboże → jedzenie → buff na kilka WALK
+Alchemia     zioła → MIKSTURY (jedyne źródło, kupowanie skasowane)
+Runy         esencja + kryształ → RUNA → podpięcie → zaklęcia
+```
+
+**Magia**
+- runę **podpinasz**, a poziom skilla **Magia** otwiera kolejne zaklęcia
+- pierwszy czar to **Fireball**: Runa Ognia + Magia 1
+
+**Reszta** — Kronika z bestiariuszem i trofeami · Przywołanie z jawnymi szansami ·
+generator herbu · kod postaci
 
 ## Zrobione w połowie
 
-- **Drużyna** — struktura pięciu slotów stoi, przywołani lądują w kolekcji,
-  ale **jeszcze nie wchodzą do walki**
-- **Skille zbierackie** — **Górnictwo gra naprawdę**; pozostałe sześć profesji
-  to makiety z drabinkami, poziomy stoją na 1
-- **Przywołanie** — brak prawdziwych szans, pity, duplikatów i gwiazdek
+- **Drużyna** — bohater + jeden sojusznik + pet walczą, sloty 2–3 zamknięte
+- **Klasy Sojuszników** nadają rząd w szyku, ale nie dają umiejętności
+- **Przywołanie** — szanse jawne, brak pity, duplikatów i gwiazdek
 - **Kronika** — Przedmioty i Osiągnięcia to karty opisujące zamiar
+- **Żywioły poza ogniem mają po jednym zaklęciu**
 
 ## Czego NIE MA
 
-Sojusznicy i pet w walce (sloty w arenie stoją puste, silnik gotowy) ·
-przepalanie i energia · kowal i przetapianie rudy · wyprawy · world boss ·
-Kolos · Tytan · rajdy · bank · sześć pozostałych profesji · offline ·
+World Boss · Kolos · Tytan · rajdy · multiplayer · gildia · Mystic/God crafting ·
+przepalanie i energia · bank · postęp offline · umiejętności Sojuszników ·
 **klasy gracza (skasowane na stałe)** · **wiele postaci na koncie**.
 
 ---
@@ -94,7 +109,8 @@ jej nie dostanie. Ekran wyboru klasy i endpoint `/api/classes` zostały skasowan
 
 Gracz ma stały profil **Bohater** (`config.classes.bohater`):
 
-- obrażenia z **Siły, Intelektu i Zręczności naraz**, `dmgDivisor: 110`
+- obrażenia niesie atrybut **pasujący do trzymanej broni** (patrz sekcja 23.1
+  dokumentu projektowego); pozostałe liczą się z wagą `offAttrWeight`
 - Wytrzymałość dalej daje wyłącznie życie i pancerz
 - drzewko **jedno i uniwersalne**: Siła / Hart / Tempo
 
@@ -113,15 +129,16 @@ Gdy Sojusznicy wejdą — nie wracaj do niej bez policzenia.
 **Migracja:** każda postać z bazy staje się Bohaterem przy pierwszym wczytaniu,
 a punkty wydane w martwych węzłach wracają do puli (`migrate()` w `game/character.js`).
 
-**Skille bojowe skasowane.** Atak, Dystansowy, Magia, Obrona i Zdrowie zniknęły z gry.
-(Nie myl skasowanego **skilla** Obrona z **akcją tury** Obrona, która doszła później —
-to dwie różne rzeczy o tej samej nazwie.)
+**Skille bojowe WRÓCIŁY, ale jako BONUSY.** Broń biała, Łuk, Różdżka, Obrona,
+Witalność. Poprzednio bramkowały sprzęt i to był powód ich skasowania — teraz
+nie bramkują niczego. (Nie myl **skilla** Obrona z **akcją tury** Obrona.)
 Sprzęt bramkuje wyłącznie **poziom postaci = najwyższe zdobyte piętro** (`poziom()`
 w `game/character.js`). Po skasowaniu skilla Zdrowie darmowy przyrost HP niesie poziom
 (`hpPerLevel` × piętro), inaczej wieża robiłaby się coraz ostrzejsza dla każdego,
 kto nie wsypał wszystkiego w Wytrzymałość.
 
-**Drzewko działa.** Wszystko liczbami w `config.tree`. Opisy węzłów w UI generują się
+**Drzewko punktowe jest SCHOWANE z UI**, ale liczby, reguły i respec zostają
+w `config.tree` i `character.js` — może wrócić. Wszystko liczbami w `config.tree`. Opisy węzłów w UI generują się
 z tych liczb — nie ma drugiego miejsca do poprawiania po zmianie balansu.
 
 Efekty węzłów to `dmgPct`, `hpPct`, `armorPct/armorFlat`, `critChance/critPower`,
