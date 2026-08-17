@@ -120,6 +120,23 @@ export const CONFIG = {
   // Czysta Siła i czysty Intelekt mają 100, czysta Zręczność 130 (bo daje przy okazji
   // prędkość, kryt i unik), mieszane siedzą pomiędzy plus podatek za dwie ścieżki.
   classes: {
+    // GRACZ NIE WYBIERA KLASY. Główna postać ma jeden stały profil i to jest
+    // decyzja trwała — klasy przeszły do Sojuszników. Bohater liczy wszystkie
+    // trzy atrybuty ofensywne w pełni, płacąc za to nieco wyższym dzielnikiem.
+    //
+    // Skutek uboczny, który akurat jest zyskiem: znika martwy drop. Afiks Siły,
+    // Intelektu i Zręczności daje obrażenia każdemu, więc żadna broń ani
+    // pierścień nie są z góry śmieciem.
+    bohater: {
+      label: 'Bohater', dmgAttrs: ['sila', 'intelekt', 'zrecznosc'], dmgDivisor: 110,
+      bronie: 'wszystko, co uniesiesz',
+      opis: 'Główna postać. Nie ma klasy i nie będzie jej miała — buduje się atrybutami, sprzętem i drzewkiem.',
+      startWeapon: 'Wyszczerbiony Topór', startWtype: 'mele',
+    },
+
+    // ---- PONIŻEJ: klasy Sojuszników. Gracz ich NIE wybiera. ----
+    // Zostają w configu, bo drzewka i skalowanie są policzone i przetestowane.
+    // Wejdą, gdy Sojusznicy zaczną walczyć.
     wojownik: {
       label: 'Wojownik', dmgAttrs: ['sila'], dmgDivisor: 100,
       bronie: 'miecz, młot, topór — dwuręczne',
@@ -178,6 +195,33 @@ export const CONFIG = {
     respecBase: 150,          // reset drzewka: respecBase + respecPerLevel * poziom
     respecPerLevel: 25,
     classes: {
+      // Drzewko gracza. Jedno, uniwersalne — bo gracz nie ma klasy.
+      // Trzy gałęzie: bijesz mocniej, znosisz więcej, ruszasz się szybciej.
+      bohater: [
+        { id: 'sila', label: 'Siła', nodes: [
+          { id: 'ostrze',    label: 'Ostrze',        eff: { dmgPct: 0.03 } },
+          { id: 'nacisk',    label: 'Nacisk',        eff: { attrWeight: { sila: 0.03, intelekt: 0.03, zrecznosc: 0.03 } } },
+          { id: 'rozmach',   label: 'Rozmach',       eff: { critPower: 0.06 } },
+          { id: 'bezlitosci',label: 'Bez Litości',   eff: { dmgPct: 0.04 } },
+          { id: 'egzekucja', label: 'Egzekucja',     eff: { critChance: 0.015 } },
+        ] },
+        { id: 'hart', label: 'Hart', nodes: [
+          { id: 'skora',     label: 'Twarda Skóra',  eff: { armorPct: 0.05 } },
+          { id: 'krzepa',    label: 'Krzepa',        eff: { hpPct: 0.04 } },
+          { id: 'postawa',   label: 'Postawa',       eff: { armorFlat: 4 } },
+          { id: 'zaparcie',  label: 'Zaparcie',      eff: { hpPct: 0.05 } },
+          { id: 'wprawnat',  label: 'Wprawna Tarcza',eff: { block: 0.025 } },
+        ] },
+        { id: 'tempo', label: 'Tempo', nodes: [
+          { id: 'tempo',     label: 'Tempo',         eff: { speed: 3 } },
+          { id: 'zamach',    label: 'Zamach',        eff: { critChance: 0.010 } },
+          { id: 'wprawa',    label: 'Wprawa',        eff: { accuracy: 0.015 } },
+          { id: 'szal',      label: 'Szał',          eff: { speed: 4 } },
+          { id: 'refleks',   label: 'Refleks',       eff: { evasion: 0.012 } },
+        ] },
+      ],
+
+      // ---- PONIŻEJ: drzewka klas Sojuszników, jeszcze nieużywane. ----
       wojownik: [
         { id: 'rzeznia', label: 'Rzeźnia', nodes: [
           { id: 'ostrze',    label: 'Ostrze',        eff: { dmgPct: 0.03 } },
@@ -348,12 +392,28 @@ export const CONFIG = {
   },
 
   // ---------- SKILLE ZBIERACKIE ----------
-  // Na razie SAMA MAKIETA: poziomy stoją na 1, nic się nie zbiera, nie ma pętli
-  // ani postępu offline. Drabinki są prawdziwe i to one niosą całą zasadę:
-  // POZIOM decyduje, CO możesz zebrać, NARZĘDZIE decyduje, JAK SZYBKO.
+  // GÓRNICTWO GRA NAPRAWDĘ — kopiesz, dostajesz rudę i exp, wbijasz poziom,
+  // otwierasz kolejny surowiec. To jest vertical slice profesji.
+  // Reszta to nadal makiety: mają pokazać, dokąd to idzie, i nic więcej.
+  //
+  // Zasada, którą drabinka niesie od początku:
+  // POZIOM decyduje, CO możesz zebrać. NARZĘDZIE decyduje, JAK SZYBKO.
+  //
+  // xpNeed: ile expa na kolejny poziom = xpBase * poziom. Świadomie nisko —
+  // to są liczby pod obejrzenie pętli, nie pod finalny balans.
   skills: {
-    gornictwo:   { label: 'Górnictwo',    ic: '⛏', daje: 'ruda i kryształy', zasila: 'Kowalstwo',
-      ladder: [['Miedź', 1], ['Cyna', 15], ['Żelazo', 30], ['Węgiel', 41], ['Mithril', 55]] },
+    gornictwo: {
+      label: 'Górnictwo', ic: '⛏', daje: 'ruda i kryształy', zasila: 'Kowalstwo',
+      grywalne: true,
+      xpBase: 20,
+      resources: [
+        { id: 'miedz',   label: 'Miedź',   lvl: 1,  xp: 8,  ms: 3000 },
+        { id: 'cyna',    label: 'Cyna',    lvl: 3,  xp: 14, ms: 3800 },
+        { id: 'zelazo',  label: 'Żelazo',  lvl: 5,  xp: 24, ms: 4600 },
+        { id: 'wegiel',  label: 'Węgiel',  lvl: 8,  xp: 38, ms: 5400 },
+        { id: 'mithril', label: 'Mithril', lvl: 12, xp: 60, ms: 6500 },
+      ],
+    },
     kowalstwo:   { label: 'Kowalstwo',    ic: '🔨', daje: 'przetapianie i sprzęt', zasila: 'Ekwipunek',
       ladder: [['Sztaba miedzi', 1], ['Brąz', 15], ['Stal', 30], ['Stal hartowana', 45], ['Mithril', 60]] },
     rybolowstwo: { label: 'Rybołówstwo',  ic: '🐟', daje: 'ryby', zasila: 'Gotowanie',

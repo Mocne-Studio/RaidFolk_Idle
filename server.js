@@ -17,6 +17,7 @@ import {
   newCharacter, computeStats, equip, canEquip,
   classOf, migrate, poziom,
   treeOf, nodeState, spendTreePoint, resetTree, respecCost,
+  xpNeed, profOf, addSkillXp, canGather,
 } from './game/character.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -87,6 +88,29 @@ function bestiaryView(ch) {
   }).sort((a, b) => Number(b.seen) - Number(a.seen));
 }
 
+// Profesje policzone dla klienta: poziom, exp, próg awansu i to, co już wolno kopać.
+function skillsView(ch) {
+  return Object.fromEntries(Object.entries(C.skills).map(([id, s]) => {
+    const p = profOf(ch, id);
+    return [id, {
+      label: s.label, ic: s.ic, daje: s.daje, zasila: s.zasila,
+      grywalne: !!s.grywalne,
+      lvl: p.lvl, xp: p.xp, xpNeed: xpNeed(id, p.lvl),
+      resources: (s.resources ?? []).map(r => ({ ...r, unlocked: p.lvl >= r.lvl })),
+      ladder: s.ladder ?? null,
+    }];
+  }));
+}
+
+// Surowce w plecaku, z nazwami. Klient nie musi znać tabel z config.
+function materialsView(ch) {
+  const nazwy = {};
+  for (const s of Object.values(C.skills)) for (const r of s.resources ?? []) nazwy[r.id] = r.label;
+  return Object.entries(ch.materials ?? {})
+    .filter(([, n]) => n > 0)
+    .map(([id, n]) => ({ id, label: nazwy[id] ?? id, count: n }));
+}
+
 function view(ch) {
   const st = computeStats(ch);
   const info = floorInfo(ch.floor);
@@ -97,7 +121,9 @@ function view(ch) {
     floors: floorList(ch),
     bestiary: bestiaryView(ch),
     collection: ch.collection ?? { companions: [], pets: [] },
-    skills: C.skills,
+    skills: skillsView(ch),
+    materials: materialsView(ch),
+    activity: ch.activity ?? null,
     keys: ch.currency,
     keyCost: C.summon.keyCost,
     forcedTurn: info.isBoss,
@@ -138,7 +164,13 @@ function fightMode(ch) {
 function startFight(ch) {
   const info = floorInfo(ch.floor);
   if (ch.fight >= info.fights) return { error: 'Piętro zdobyte — idź wyżej' };
-  if (ch.activeFight && !ch.activeFight.over) return { error: 'Walka już trwa' };
+
+  // Niedokończona walka turowa nie może być ślepym zaułkiem. Wcześniej zwracała
+  // „Walka już trwa" i gracz zostawał z nią na zawsze, bo ekran jej nie pokazywał.
+  // Teraz „Walcz" po prostu do niej WRACA.
+  if (ch.activeFight && !ch.activeFight.over) {
+    return { fight: summary(ch.activeFight), enemy: ch.activeFight.enemies[0], awaiting: true, resumed: true };
+  }
 
   const enemy = makeEnemy(ch.floor, ch.fight);
   const st = computeStats(ch);
@@ -258,6 +290,43 @@ function doGoto(ch, floor) {
   return { ok: true, floor: f };
 }
 
+// ---------------------------------------------------------------- profesje
+// Górnictwo. Klient trzyma zegar i po każdym cyklu woła /api/minetick.
+// Serwer sprawdza czas i wydaje DOKŁADNIE JEDEN cykl — dzięki temu nie ma
+// postępu offline (którego świadomie jeszcze nie chcemy), a przełączenie
+// zakładki niczego nie gubi, bo timer klienta chodzi dalej.
+
+function doMine(ch, skill, resId) {
+  const s = C.skills[skill];
+  if (!s?.grywalne) return { error: 'Ta profesja jeszcze nie działa' };
+  const check = canGather(ch, skill, resId);
+  if (!check.ok) return { error: check.reason };
+  ch.activity = { skill, res: resId, since: Date.now() };
+  return { ok: true, activity: ch.activity };
+}
+
+function doMineStop(ch) {
+  ch.activity = null;
+  return { ok: true };
+}
+
+function doMineTick(ch) {
+  const a = ch.activity;
+  if (!a) return { error: 'Nic nie kopiesz' };
+  const check = canGather(ch, a.skill, a.res);
+  if (!check.ok) { ch.activity = null; return { error: check.reason }; }
+
+  const res = check.res;
+  const minelo = Date.now() - a.since;
+  if (minelo < res.ms - 250) return { error: 'Jeszcze nie teraz' };   // 250 ms luzu na drogę
+
+  ch.materials[res.id] = (ch.materials[res.id] ?? 0) + 1;
+  const awans = addSkillXp(ch, a.skill, res.xp);
+  a.since = Date.now();
+
+  return { ok: true, gained: { res: res.id, label: res.label, xp: res.xp }, awans };
+}
+
 // Przywołanie. Prototyp odczucia: jeden klucz, jedno losowanie, żadnej litości
 // ani pity. Wynik ląduje w kolekcji, którą czyta Drużyna i Kronika.
 function doSummon(ch, rodzaj) {
@@ -309,21 +378,12 @@ const server = http.createServer(async (req, res) => {
 
       if (path === '/api/roster') return json(res, 200, { roster: DB.roster() });
 
-      if (path === '/api/classes') {
-        return json(res, 200, {
-          classes: Object.entries(C.classes).map(([id, c]) => ({
-            id, label: c.label, dmgAttrs: c.dmgAttrs, attrs: c.attrs,
-            bronie: c.bronie, opis: c.opis,
-            startWeapon: c.startWeapon, startOffhand: c.startOffhand,
-          })),
-          acts: ACTS.map(a => ({ id: a.id, name: a.name, families: a.families })),
-        });
-      }
+      // /api/classes skasowane razem z ekranem wyboru klasy.
+      // Główna postać nie ma klasy — klasy należą do Sojuszników.
 
       if (path === '/api/new') {
         const name = String(body.name ?? '').trim().slice(0, 20);
         if (!name) return json(res, 400, { error: 'Podaj imię' });
-        const klasa = C.classes[body.klasa] ? body.klasa : 'wojownik';
         const cr = body.crest && typeof body.crest === 'object'
           ? { shape: String(body.crest.shape ?? 'tarcza').slice(0, 20),
               symbol: String(body.crest.symbol ?? 'miecz').slice(0, 20),
@@ -331,7 +391,7 @@ const server = http.createServer(async (req, res) => {
               border: String(body.crest.border ?? 'smola').slice(0, 20),
               ink: String(body.crest.ink ?? 'smola').slice(0, 20) }
           : null;
-        const ch = newCharacter(name, klasa, cr);
+        const ch = newCharacter(name, cr);
         const t = DB.newToken();
         DB.save(t, name, ch);
         return json(res, 200, { token: t, state: view(ch) });
@@ -349,15 +409,27 @@ const server = http.createServer(async (req, res) => {
         case '/api/fight':   result = startFight(ch); break;
         case '/api/act':     result = actFight(ch, body.action ?? { type: 'attack', strength: 'srednio' }); break;
         case '/api/mode': {
+          // Zmiana trybu PORZUCA niedokończoną walkę zamiast jej bronić.
+          // Porzucenie nic nie kosztuje — przegrana też nic nie kosztuje poza
+          // powrotem na pierwszą falę, a blokada robiła z tego pułapkę bez wyjścia.
           const m = body.mode === 'turowa' ? 'turowa' : 'auto';
-          if (ch.activeFight && !ch.activeFight.over) { result = { error: 'Najpierw dokończ walkę' }; break; }
+          const porzucona = !!(ch.activeFight && !ch.activeFight.over);
+          ch.activeFight = null;
           ch.mode = m;
-          result = { ok: true, mode: m };
+          result = { ok: true, mode: m, porzucona };
+          break;
+        }
+        case '/api/abandon': {
+          ch.activeFight = null;
+          result = { ok: true };
           break;
         }
         case '/api/advance': result = doAdvance(ch); break;
         case '/api/goto':    result = doGoto(ch, body.floor); break;
         case '/api/summon':  result = doSummon(ch, body.kind); break;
+        case '/api/mine':    result = doMine(ch, String(body.skill ?? 'gornictwo'), String(body.res)); break;
+        case '/api/minestop':result = doMineStop(ch); break;
+        case '/api/minetick':result = doMineTick(ch); break;
         case '/api/equip':   result = equip(ch, String(body.itemId)); break;
         case '/api/potion': {
           if (ch.potions <= 0) { result = { error: 'Brak mikstur' }; break; }

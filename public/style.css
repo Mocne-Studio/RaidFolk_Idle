@@ -17,11 +17,16 @@ body{
 }
 button{font:inherit;color:inherit}
 
-#app{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto;background:var(--stone)}
+/* Szerokość rośnie z ekranem. 520 px to telefon; tablet i desktop dostają
+   więcej miejsca, bo inaczej gra jest paskiem pośrodku pustej strony. */
+#app{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto;
+  background:var(--stone);overflow:hidden}
 /* display:flex bije domyslne [hidden]{display:none} — bez tego pusty ekran gry
    wisial pod ekranem startowym i dalo sie do niego doskrolowac */
 #app[hidden],#start[hidden]{display:none}
 #start{max-width:520px}
+@media (min-width:760px){ #app{max-width:900px} #start{max-width:640px} }
+@media (min-width:1100px){ #app{max-width:1180px} }
 
 /* ---------- nagłówek ---------- */
 .topbar{flex:none;display:flex;align-items:center;gap:10px;padding:10px 14px;
@@ -31,10 +36,33 @@ button{font:inherit;color:inherit}
 .who .m{font-family:var(--mono);font-size:10px;color:var(--ink-mute);letter-spacing:.05em;margin-top:2px}
 .purse{font-family:var(--mono);font-size:11px;color:var(--brass);text-align:right;line-height:1.5;flex:none}
 
-/* ---------- treść ---------- */
-.screens{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
-.screen{display:none;padding:14px}
-.screen.on{display:block}
+/* ---------- treść ----------
+   ZASADA: ekran gry mieści się na ekranie. Scrolluje się tylko to, co z natury
+   rośnie bez końca — lista przedmiotów, log walki, bestiariusz — i scrolluje się
+   WEWNĄTRZ swojego pudełka, nie całą stroną. */
+.screens{flex:1;min-height:0;overflow:hidden}
+.screen{display:none;padding:12px;height:100%;min-height:0}
+/* Domyślnie ekran może się przewinąć — to jest siatka bezpieczeństwa, żeby
+   nic nigdy nie zniknęło pod krawędzią. Ekrany, które mają własne przewijane
+   pudełka, wyłączają ją poniżej. */
+.screen.on{display:flex;flex-direction:column;gap:0;overflow-y:auto}
+#s-eq.on,#s-skille.on,#s-kronika.on,#s-drzewko.on,#s-druzyna.on{overflow:hidden}
+/* pudełko, które wolno przewijać */
+.scrollbox{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding-right:2px}
+
+/* dwie i trzy kolumny — na telefonie zwijają się do jednej */
+.two-col,.three-col{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0;overflow-y:auto}
+.two-col>.col,.three-col>.col{display:flex;flex-direction:column;gap:0;min-width:0}
+@media (min-width:760px){
+  .two-col{flex-direction:row;overflow:hidden}
+  .two-col>.col{flex:1;min-height:0;overflow-y:auto}
+  .three-col{flex-direction:row;overflow:hidden}
+  .three-col>.col{min-height:0;overflow-y:auto}
+  .three-col>.skill-list{flex:0 0 168px}
+  .three-col>.skill-mid{flex:1.2}
+  .three-col>.skill-now{flex:1}
+}
 
 .scr-head{font-family:var(--display);font-size:14px;color:var(--ink);
   padding-bottom:9px;margin-bottom:12px;border-bottom:1px solid var(--edge-soft);
@@ -213,38 +241,72 @@ button.card:active{background:#26211B}
 .picker button.on .glyph{color:var(--brass)}
 .picker.colors button i{display:block;width:26px;height:26px;border-radius:50%}
 
-/* wprowadzenie — resztę stylu bierze z .start */
-.intro h1{font-size:27px;margin-bottom:16px}
-.intro-body p{font-size:14.5px;line-height:1.55;color:var(--ink-dim);margin:0 0 13px}
-.intro-body b{color:var(--ink);font-weight:600}
+/* ---------- EKWIPUNEK ---------- */
+.eq-top{display:flex;flex-direction:column;gap:10px;flex:none}
+.eq-doll{flex:none}
+.eq-side{display:flex;flex-direction:column;gap:8px;min-width:0}
+.eq-bag{display:flex;flex-direction:column;flex:1;min-height:0;margin-top:10px}
+@media (min-width:760px){
+  .eq-top{flex-direction:row;align-items:flex-start}
+  .eq-doll{flex:0 0 290px}
+  .eq-side{flex:1}
+}
 
-/* wybór klasy */
-.cp-lead{font-size:13.5px;line-height:1.5;color:var(--ink-dim);margin:0 0 16px}
-.cp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-.cp-item{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;
-  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
-  padding:10px;cursor:pointer;color:var(--ink);font:inherit}
-.cp-item b{font-family:var(--display);font-size:15px;font-weight:400}
-.cp-item span{font-family:var(--mono);font-size:9px;line-height:1.35;color:var(--ink-mute)}
-.cp-item.on{border-color:var(--brass);background:rgba(200,154,74,.12)}
-.cp-item.on span{color:var(--brass)}
-.cp-line{display:flex;justify-content:space-between;gap:12px;font-size:12px;margin-top:5px}
-.cp-line span{color:var(--ink-mute);flex:none}
-.cp-line b{color:var(--ink);font-weight:600;text-align:right}
-.cp-opis{font-size:13px;line-height:1.5;color:var(--ink-dim);margin:10px 0 0}
-
-/* makieta postaci — sloty ekwipunku */
-.doll{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 auto 9px;max-width:270px}
-.doll-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+/* makieta postaci — 3×3 z portretem w środku */
+.doll{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 auto;max-width:290px}
+.doll-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
   aspect-ratio:1;background:var(--stone-hi);border:1px solid var(--edge);border-radius:4px;
-  color:var(--ink);font:inherit;cursor:pointer;padding:4px}
-.doll-cell .ic{font-size:24px;line-height:1}
-.doll-cell .lb{font-family:var(--mono);font-size:8px;letter-spacing:.06em;text-transform:uppercase;
-  color:var(--ink-mute);text-align:center;line-height:1.2}
+  color:var(--ink);font:inherit;cursor:pointer;padding:3px;overflow:hidden}
+.doll-cell .ic{font-size:21px;line-height:1}
+.doll-cell .lb{font-family:var(--mono);font-size:7.5px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ink-mute);text-align:center;line-height:1.15;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .doll-cell.empty{background:var(--stone);border-style:dashed;border-color:var(--edge-soft)}
-.doll-cell.empty .ic{opacity:.28}
+.doll-cell.empty .ic{opacity:.25}
 .doll-cell.on{box-shadow:inset 0 0 0 1px var(--brass)}
-.doll-cell.blank{border:none;background:none;cursor:default}
+.doll-hero{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  aspect-ratio:1;background:radial-gradient(circle at 50% 40%,#241E18,var(--stone));
+  border:1px solid var(--brass);border-radius:4px;padding:4px}
+.doll-hero span{font-family:var(--display);font-size:11px;color:var(--ink-dim);
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doll-hero svg{display:block}
+
+/* statystyki — siatka kafelków zamiast listy */
+.statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.stat-box{background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
+  padding:6px 7px;display:flex;flex-direction:column;gap:1px;cursor:help}
+.stat-box .k{font-family:var(--mono);font-size:7.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-mute)}
+.stat-box .v{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+  font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* panel szczegółu przedmiotu */
+.card.detail{margin-bottom:0}
+.card.detail.pusty{border-style:dashed}
+.d-head{display:flex;gap:9px;align-items:center;margin-bottom:8px}
+
+/* plecak: zakładki + lista, która jako jedyna się przewija */
+.invtabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;flex:none}
+.invtabs button{font-family:var(--mono);font-size:8.5px;letter-spacing:.06em;
+  text-transform:uppercase;padding:5px 8px;border-radius:3px;border:1px solid var(--edge);
+  background:none;color:var(--ink-mute);cursor:pointer}
+.invtabs button.on{border-color:var(--brass);color:var(--brass);background:rgba(200,154,74,.12)}
+.invtabs .junk{margin-left:auto;border-color:var(--edge-soft)}
+
+.invlist{flex:1;min-height:0;overflow-y:auto;display:grid;gap:5px;
+  grid-template-columns:1fr;align-content:start;padding-right:2px}
+@media (min-width:760px){ .invlist{grid-template-columns:1fr 1fr} }
+@media (min-width:1100px){ .invlist{grid-template-columns:1fr 1fr 1fr} }
+
+.inv-item{display:flex;align-items:center;gap:8px;text-align:left;font:inherit;color:var(--ink);
+  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
+  padding:7px 8px;cursor:pointer;min-width:0}
+.inv-item.on{background:#26211B}
+.inv-item.mat{cursor:default}
+.inv-item .t1{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inv-item .t2{font-size:9.5px}
+.inv-item .icon{width:28px;height:28px;font-size:13px}
+.up-dot{color:var(--heal);font-size:10px;flex:none}
 
 .hdr-crest{flex:none;width:30px;height:30px;line-height:0}
 .hdr-crest svg{display:block}
@@ -305,7 +367,9 @@ button.topbar:active{background:#2A231C}
 .cbtn.go{flex:1;border-color:var(--brass);color:var(--brass)}
 
 /* ---------- hub wyprawy ---------- */
-.mode-card{align-items:flex-start}
+.modes{display:grid;grid-template-columns:1fr;gap:6px}
+@media (min-width:760px){ .modes{grid-template-columns:1fr 1fr} }
+.mode-card{align-items:center;width:100%;text-align:left}
 .mode-card:disabled{cursor:default}
 .mode-card .icon{filter:grayscale(.4)}
 .mode-card.hi .icon{filter:none}
@@ -333,15 +397,39 @@ button.topbar:active{background:#2A231C}
 .bar.big{height:9px;border-radius:3px}
 
 /* ---------- skille zbierackie ---------- */
-.skillgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px}
-.skilltile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  padding:9px 2px;background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
-  color:var(--ink-dim);font:inherit;cursor:pointer}
-.skilltile .ic{font-size:18px;line-height:1}
-.skilltile .nm{font-size:8.5px;text-align:center;line-height:1.15}
-.skilltile .lv{font-family:var(--mono);font-size:8px;color:var(--ink-mute)}
-.skilltile.on{border-color:var(--brass);background:rgba(200,154,74,.12);color:var(--brass)}
-.skilltile.on .lv{color:var(--brass)}
+/* Na telefonie lista profesji leży poziomo jako pasek — pionowa zjadłaby ekran. */
+.skill-list{display:flex;flex-direction:row;gap:5px;overflow-x:auto;flex:none;padding-bottom:6px}
+.skillrow{display:flex;align-items:center;gap:6px;flex:none;font:inherit;color:var(--ink-dim);
+  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
+  padding:7px 9px;cursor:pointer;position:relative}
+.skillrow .ic{font-size:15px;line-height:1}
+.skillrow .grow{display:flex;flex-direction:column;gap:1px;text-align:left}
+.skillrow .nm{font-size:11px;white-space:nowrap}
+.skillrow .lv{font-family:var(--mono);font-size:8.5px;color:var(--ink-mute)}
+.skillrow.on{border-color:var(--brass);background:rgba(200,154,74,.12);color:var(--brass)}
+.skillrow.on .lv{color:var(--brass)}
+.skillrow .dot{position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;
+  background:var(--heal);animation:puls 1.2s ease-in-out infinite}
+@keyframes puls{50%{opacity:.25}}
+@media (min-width:760px){
+  .skill-list{flex-direction:column;overflow-x:visible;padding-bottom:0}
+  .skillrow{flex:none}
+  .skillrow .nm{white-space:normal}
+}
+
+.card.compact{padding:7px 9px;margin-bottom:5px}
+.res-row{cursor:pointer;width:100%;text-align:left}
+.res-row:disabled{cursor:default}
+.xp-card{border-color:var(--edge)}
+.bar.xp>i{background:linear-gradient(90deg,#2F5567,var(--skill))}
+
+.matlist{background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;padding:4px 9px}
+.matrow{display:flex;justify-content:space-between;gap:10px;font-size:11.5px;
+  padding:4px 0;border-top:1px solid var(--edge-soft)}
+.matrow:first-child{border-top:0}
+
+.big-n{font-size:22px;color:var(--brass)}
+.attr-row{cursor:help}
 
 /* ---------- przywołanie ---------- */
 .portal{position:relative;height:186px;display:grid;place-items:center;margin:12px 0 14px}
@@ -364,8 +452,17 @@ button.topbar:active{background:#2A231C}
 .reveal .nm{font-family:var(--display);font-size:22px;margin:5px 0 6px;color:var(--ink)}
 @keyframes pop{from{transform:scale(.86);opacity:0}to{transform:scale(1);opacity:1}}
 
+/* ---------- drzewko: trzy gałęzie obok siebie, gdy jest miejsce ---------- */
+.branches{display:flex;flex-direction:column;gap:0}
+.branch{min-width:0}
+@media (min-width:760px){
+  .branches{flex-direction:row;gap:10px;align-items:flex-start}
+  .branch{flex:1}
+  .branch .sec:first-child{margin-top:0}
+}
+
 /* ---------- kronika ---------- */
-.logtabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.logtabs{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;flex:none}
 .logtabs button{font-family:var(--mono);font-size:9px;letter-spacing:.06em;
   text-transform:uppercase;padding:6px 9px;border-radius:3px;border:1px solid var(--edge);
   background:none;color:var(--ink-mute);cursor:pointer}

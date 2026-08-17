@@ -21,22 +21,19 @@ function starterItem(name, slot, wtype) {
   return it;
 }
 
-// Zamiennictwo starego modelu klas na nowy. Postacie z bazy trzymają stare id
-// i nie mogą się wywalić przy wczytaniu — dostają najbliższy odpowiednik:
-//   Wędrowiec → Wojownik   (neutralny start, mele, Siła)
-//   Łucznik   → Łowca      (dystans, Zręczność — jeden do jednego)
-//   Obrońca   → Paladyn    (miecz i tarcza, Siła; Paladyn dokłada Intelekt)
-// Mag i Wojownik zostają sobą. Klasy bez odpowiednika w starym modelu
-// (Tropiciel, Tancerz Ostrzy) są tylko do wyboru przy nowej postaci.
-const KLASA_ALIAS = { wedrowiec: 'wojownik', lucznik: 'lowca', obronca: 'paladyn' };
+// Profil głównej postaci. GRACZ NIE WYBIERA KLASY — decyzja trwała.
+// Klasy istnieją dalej w config, ale należą do Sojuszników.
+export const PROFIL = 'bohater';
 
-export const klasaId = (klasa) => (C.classes[klasa] ? klasa : (KLASA_ALIAS[klasa] ?? 'wojownik'));
+export const klasaId = (klasa) => (C.classes[klasa] ? klasa : PROFIL);
 export const classOf = (klasa) => C.classes[klasaId(klasa)];
 
 // Doprowadza postać z bazy do obecnego kształtu gry. Wołane przy każdym wczytaniu,
 // więc naprawa zapisuje się przy następnym save.
 export function migrate(ch) {
-  ch.klasa = klasaId(ch.klasa);
+  // Każda postać z bazy — Wędrowiec, Wojownik, Mag, cokolwiek — staje się Bohaterem.
+  // Punkty z nieistniejących już węzłów drzewka wracają niżej, same z siebie.
+  ch.klasa = PROFIL;
 
   // Sloty skasowane z gry (Pas, Spodnie) zabierają ze sobą swoje przedmioty —
   // zostawione w ekwipunku wywalałyby ekran, bo nie mają już definicji slotu.
@@ -55,6 +52,10 @@ export function migrate(ch) {
   ch.collection ??= { companions: [], pets: [] };
   ch.collection.companions ??= [];
   ch.collection.pets ??= [];
+  ch.prof ??= {};
+  ch.prof.gornictwo ??= { lvl: 1, xp: 0 };
+  ch.materials ??= {};
+  ch.activity ??= null;
 
   // Drzewko doszło później; postacie sprzed niego dostają puste.
   ch.tree ??= {};
@@ -70,10 +71,9 @@ export function migrate(ch) {
 // wieża jest jedyną miarą postępu.
 export const poziom = (ch) => ch.maxFloor;
 
-export function newCharacter(name, klasa = 'wojownik', crest = null) {
+export function newCharacter(name, crest = null) {
+  const klasa = PROFIL;
   const cls = C.classes[klasa];
-  if (!cls) throw new Error('nieznana klasa: ' + klasa);
-
   const attrs = { ...C.character.startingAttrs };
 
   const equipped = {};
@@ -93,6 +93,12 @@ export function newCharacter(name, klasa = 'wojownik', crest = null) {
     currency: C.summon.startingKeys,
     // Kronika. family -> { kills, drops: [nazwy odkrytych trofeów] }
     bestiary: {},
+    // Profesje zbierackie. id skilla -> { lvl, xp }
+    prof: { gornictwo: { lvl: 1, xp: 0 } },
+    // Surowce. id surowca -> sztuki
+    materials: {},
+    // Co gracz teraz kopie: { skill, res, since } albo null
+    activity: null,
     // Co wypadło z Przywołania. Drużyna czyta stąd pierwszego sojusznika.
     collection: { companions: [], pets: [] },
     potions: C.healing.startingPotions,
@@ -176,6 +182,33 @@ export function resetTree(ch) {
   ch.treePoints += wrocilo;
   ch.tree = {};
   return { ok: true, cost, punkty: wrocilo };
+}
+
+// ---------------------------------------------------------------- profesje
+
+// Ile expa na kolejny poziom. Liniowo i nisko — to są liczby pod obejrzenie
+// pętli, nie pod finalny balans.
+export const xpNeed = (skill, lvl) => (C.skills[skill].xpBase ?? 20) * lvl;
+
+export const profOf = (ch, skill) => (ch.prof?.[skill] ?? { lvl: 1, xp: 0 });
+
+// Dopisuje exp i przelewa nadmiar w kolejne poziomy. Zwraca, ile poziomów wpadło.
+export function addSkillXp(ch, skill, xp) {
+  ch.prof ??= {};
+  const p = ch.prof[skill] ??= { lvl: 1, xp: 0 };
+  p.xp += xp;
+  let awans = 0;
+  while (p.xp >= xpNeed(skill, p.lvl)) { p.xp -= xpNeed(skill, p.lvl); p.lvl++; awans++; }
+  return awans;
+}
+
+// Surowiec da się kopać tylko na swoim poziomie. Bramka jest jedna i jest tutaj.
+export function canGather(ch, skill, resId) {
+  const res = (C.skills[skill].resources ?? []).find(r => r.id === resId);
+  if (!res) return { ok: false, reason: 'Nie ma takiego surowca' };
+  const lvl = profOf(ch, skill).lvl;
+  if (lvl < res.lvl) return { ok: false, reason: `Wymaga ${C.skills[skill].label} ${res.lvl} — masz ${lvl}` };
+  return { ok: true, res };
 }
 
 // ---------------------------------------------------------------- statystyki wynikowe
@@ -279,74 +312,68 @@ export function equip(ch, itemId) {
 // node game/character.js — pilnuje skalowania obrażeń z atrybutów klasy.
 
 export function demo() {
-  // nagi=true zdejmuje wyprawkę — inaczej porównanie klas mierzy startowy sprzęt
-  // (tarcza Paladyna dokłada obrażenia), a nie samo skalowanie z atrybutów.
-  const dmg = (klasa, add = {}, nagi = false) => {
-    const ch = newCharacter('T', klasa);
+  // nagi=true zdejmuje wyprawkę — inaczej pomiar mierzy startowy sprzęt,
+  // a nie samo skalowanie z atrybutów.
+  const dmg = (add = {}, nagi = false) => {
+    const ch = newCharacter('T');
     if (nagi) ch.equipped = {};
     for (const [k, v] of Object.entries(add)) ch.attrs[k] += v;
     return computeStats(ch).damage;
   };
 
-  // czysta klasa bierze wszystko ze swojego atrybutu, z cudzego nic
-  console.assert(dmg('wojownik', { sila: 30 }) > dmg('wojownik'), 'Sila daje Wojownikowi obrazenia');
-  console.assert(dmg('wojownik', { zrecznosc: 30 }) === dmg('wojownik'), 'Zrecznosc nie daje Wojownikowi obrazen');
-  console.assert(dmg('mag', { intelekt: 30 }) > dmg('mag'), 'Intelekt daje Magowi obrazenia');
-  console.assert(dmg('mag', { sila: 30 }) === dmg('mag'), 'Sila nie daje Magowi obrazen');
+  // GRACZ NIE MA KLASY. Bohater bierze obrażenia z wszystkich trzech
+  // atrybutów ofensywnych — dlatego nie ma martwego dropu.
+  console.assert(newCharacter('T').klasa === PROFIL, 'nowa postac to Bohater, nie klasa');
+  console.assert(dmg({ sila: 30 }) > dmg(), 'Sila daje obrazenia');
+  console.assert(dmg({ intelekt: 30 }) > dmg(), 'Intelekt daje obrazenia');
+  console.assert(dmg({ zrecznosc: 30 }) > dmg(), 'Zrecznosc daje obrazenia');
 
-  // klasa mieszana bierze oba atrybuty w pełni — nie ma znaczenia, jak je rozdzieli
-  const mieszanyPo = dmg('paladyn', { sila: 500, intelekt: 500 }, true) - dmg('paladyn', {}, true);
-  const mieszanyW1 = dmg('paladyn', { sila: 1000 }, true) - dmg('paladyn', {}, true);
-  console.assert(mieszanyPo === mieszanyW1, 'mieszanej klasie nie zalezy na podziale punktow');
+  // ...i liczy je tak samo, więc podział punktów między nie nic nie zmienia
+  const razem = dmg({ sila: 300, intelekt: 300, zrecznosc: 300 }, true) - dmg({}, true);
+  const wJedno = dmg({ sila: 900 }, true) - dmg({}, true);
+  console.assert(razem === wJedno, `podzial punktow ofensywnych bez znaczenia (${razem} vs ${wJedno})`);
 
-  // ...ale wyciska z punktu mniej niż klasa czysta — to jest cena za elastyczność
-  const czysty = dmg('wojownik', { sila: 1000 }, true) - dmg('wojownik', {}, true);
-  console.assert(mieszanyPo < czysty, `mieszana klasa placi za elastycznosc (${mieszanyPo} vs ${czysty})`);
-  console.assert(mieszanyPo > czysty * 0.8, `...ale kara jest umiarkowana (${mieszanyPo} vs ${czysty})`);
-
-  // Wytrzymałość nie jest osią obrażeń dla nikogo
-  for (const k of Object.keys(C.classes)) {
-    console.assert(dmg(k, { wytrzymalosc: 30 }) === dmg(k), `Wytrzymalosc nie daje obrazen: ${k}`);
-  }
+  // Wytrzymałość nie jest osią obrażeń
+  console.assert(dmg({ wytrzymalosc: 30 }) === dmg(), 'Wytrzymalosc nie daje obrazen');
 
   // start: puste atrybuty i worek punktów
-  const swiezy = newCharacter('T', 'mag');
+  const swiezy = newCharacter('T');
   console.assert(Object.values(swiezy.attrs).every(v => v === 0), 'atrybuty startuja na zerze');
   console.assert(swiezy.unspentAttr === 10, 'dziesiec punktow na start');
   console.assert(swiezy.skills === undefined, 'skille bojowe nie istnieja');
 
   // sprzęt bramkuje wyłącznie poziom postaci
-  const ch = newCharacter('T', 'wojownik');
+  const ch = newCharacter('T');
   ch.maxFloor = 5;
   console.assert(canEquip(ch, { reqLevel: 5, slot: 'helm' }).ok, 'przedmiot na poziomie postaci wchodzi');
   console.assert(!canEquip(ch, { reqLevel: 6, slot: 'helm' }).ok, 'przedmiot ponad poziom nie wchodzi');
 
   // poziom niesie HP zamiast skasowanego skilla Zdrowie
-  const hp1 = computeStats(newCharacter('T', 'mag')).maxHp;
-  const wyzej = newCharacter('T', 'mag'); wyzej.maxFloor = 10;
+  const hp1 = computeStats(newCharacter('T')).maxHp;
+  const wyzej = newCharacter('T'); wyzej.maxFloor = 10;
   console.assert(computeStats(wyzej).maxHp > hp1, 'wyzsze pietro daje wiecej HP');
 
   // drzewko: bramka gałęzi, wpływ na statystyki, reset
-  const p = newCharacter('T', 'paladyn');
+  const p = newCharacter('T');
   p.treePoints = 30;
-  const galaz = treeOf('paladyn').find(b => b.id === 'mur');
+  const galaz = treeOf(PROFIL).find(b => b.id === 'hart');
   console.assert(!spendTreePoint(p, galaz.nodes[1].id).ok, 'drugi wezel zamkniety bez punktow w galezi');
   for (let i = 0; i < 2; i++) spendTreePoint(p, galaz.nodes[0].id);
   console.assert(spendTreePoint(p, galaz.nodes[1].id).ok, 'dwa punkty w galezi otwieraja drugi wezel');
   console.assert(p.tree[galaz.nodes[0].id] === 2, 'ranga rosnie');
   console.assert(p.treePoints === 27, 'punkty schodza z puli');
 
-  // blok liczy się tylko z tarczą
-  console.assert(computeStats(p).block > 0, 'paladyn z tarcza blokuje');
-  const bezTarczy = newCharacter('T', 'paladyn'); bezTarczy.tree = { ...p.tree };
-  delete bezTarczy.equipped.offhand;
-  console.assert(computeStats(bezTarczy).block === 0, 'bez tarczy blok zerowy');
+  // blok liczy się tylko z tarczą — Bohater startuje bez niej
+  const zTarcza = newCharacter('T');
+  zTarcza.equipped.offhand = { slot: 'offhand', wtype: 'tarcza', affixes: [], damage: 0, armor: 5 };
+  console.assert(computeStats(zTarcza).block > 0, 'z tarcza blok istnieje');
+  console.assert(computeStats(newCharacter('T')).block === 0, 'bez tarczy blok zerowy');
 
   // węzeł obrażeń faktycznie podnosi obrażenia
-  const bijak = newCharacter('T', 'mag'); bijak.treePoints = 10; bijak.attrs.intelekt = 40;
+  const bijak = newCharacter('T'); bijak.treePoints = 10; bijak.attrs.sila = 40;
   const przed = computeStats(bijak).damage;
-  for (let i = 0; i < 3; i++) spendTreePoint(bijak, 'plomien');
-  console.assert(computeStats(bijak).damage > przed, 'wezel Plomien podnosi obrazenia');
+  for (let i = 0; i < 3; i++) spendTreePoint(bijak, 'ostrze');
+  console.assert(computeStats(bijak).damage > przed, 'wezel Ostrze podnosi obrazenia');
 
   // reset oddaje punkty i zabiera złoto
   bijak.gold = 99999;
@@ -355,16 +382,22 @@ export function demo() {
   resetTree(bijak);
   console.assert(bijak.treePoints === przedPkt + wydane, 'reset oddaje wszystkie punkty');
   console.assert(Object.keys(bijak.tree).length === 0, 'reset czysci drzewko');
-  const biedak = newCharacter('T', 'mag'); biedak.gold = 0;
+  const biedak = newCharacter('T'); biedak.gold = 0;
   console.assert(!resetTree(biedak).ok, 'reset bez zlota nie przechodzi');
 
-  // zamiennictwo starych klas — postacie z bazy nie mogą się wywalić
-  console.assert(classOf('wedrowiec').label === 'Wojownik', 'Wedrowiec -> Wojownik');
-  console.assert(classOf('lucznik').label === 'Łowca', 'Lucznik -> Lowca');
-  console.assert(classOf('obronca').label === 'Paladyn', 'Obronca -> Paladyn');
-  console.assert(klasaId('mag') === 'mag', 'Mag zostaje soba');
-  console.assert(klasaId('cokolwiek') === 'wojownik', 'nieznana klasa spada na Wojownika');
-  console.assert(Object.keys(C.classes).length === 6, 'szesc klas, nie piec');
+  // Postacie z bazy: KAZDA klasa staje sie Bohaterem, a punkty z martwych
+  // wezlow wracaja do puli. Bez tego stary Mag traci wszystko, co wydal.
+  const stary = newCharacter('T');
+  stary.klasa = 'mag'; stary.tree = { plomien: 3, tafla: 2 }; stary.treePoints = 0;
+  migrate(stary);
+  console.assert(stary.klasa === PROFIL, 'stara klasa staje sie Bohaterem');
+  console.assert(stary.treePoints === 5, `punkty z martwych wezlow wracaja (${stary.treePoints})`);
+  console.assert(Object.keys(stary.tree).length === 0, 'martwe wezly znikaja');
+  console.assert(klasaId('cokolwiek') === PROFIL, 'nieznana klasa spada na Bohatera');
+  console.assert(classOf('wedrowiec').label === 'Bohater', 'Wedrowiec -> Bohater');
+
+  // klasy Sojusznikow zostaja w config, ale gracz ich nie dostaje
+  console.assert(C.classes.wojownik && C.classes.mag, 'klasy Sojusznikow czekaja w config');
 
   console.log('character.js — wszystkie testy przeszly');
 }

@@ -93,19 +93,15 @@ async function boot() {
   });
   $('#roll').onclick = () => { crest = randomCrest(); buildPickers(); paintMaker(); };
 
-  // Kolejność: herb → wprowadzenie → wybór klasy → dopiero teraz postać powstaje
-  // na serwerze, bo klasa jest jej częścią i nie da się jej potem podmienić.
-  $('#create').onclick = () => {
+  // Herb → imię → gra. Bez przystanków: żadnego wprowadzenia, żadnego wyboru klasy.
+  $('#create').onclick = async () => {
     const name = $('#name').value.trim();
     if (!name) return toast('Podaj imię', true);
-    showIntro(() => showClasses(async (klasa) => {
-      const d = await api('new', { name, crest, klasa });
-      if (d.token) {
-        TOKEN = d.token; localStorage.setItem('rf_token', TOKEN);
-        enterGame();
-        openTab('postac');   // świeża postać ląduje na swojej karcie, nie w wieży
-      }
-    }));
+    const d = await api('new', { name, crest });
+    if (d.token) {
+      TOKEN = d.token; localStorage.setItem('rf_token', TOKEN);
+      enterGame();
+    }
   };
   $('#name').addEventListener('keydown', e => { if (e.key === 'Enter') $('#create').click(); });
 
@@ -123,97 +119,6 @@ async function boot() {
   $('#code').addEventListener('keydown', e => { if (e.key === 'Enter') restore(); });
 }
 
-// ---------------------------------------------------------------- WPROWADZENIE
-// Zasada: opisujemy TYLKO to, co faktycznie działa w tym buildzie. Nowe sekcje
-// dopisujemy dopiero wtedy, gdy system naprawdę wejdzie do gry — inaczej gracz
-// dostaje obietnice, których gra nie spełnia.
-const INTRO = [
-  ['Wieża nie ma końca', `
-    <p>Stoisz na jej dole. Nikt nie policzył pięter — ci, którzy próbowali, nie wrócili z liczbą.</p>
-    <p>Piętra są zakryte. <b>Co jest wyżej, zobaczysz dopiero, gdy tam wejdziesz.</b></p>
-    <p>Co dziesiąte piętro pilnuje boss aktu. Bije mocniej i ma dużo więcej życia niż to, co spotkałeś po drodze.</p>`],
-
-  ['Zdrowie nie wraca między falami', `
-    <p>Piętro to <b>od sześciu do dziesięciu fal</b> przeciwników, jedna po drugiej.</p>
-    <p>Z czym wyjdziesz z pierwszej fali, z tym wchodzisz w drugą. <b>Zdrowie nie odnawia się samo.</b>
-      Zostają mikstury i to, co wyniesiesz z rozdanych punktów.</p>
-    <p>Pełne zdrowie oddaje dopiero wejście na nowe piętro. Przegrana cofa Cię na pierwszą falę —
-      nic nie tracisz poza czasem. <b>Na tej pętli stoi cała gra.</b></p>`],
-
-  ['Jak się bijesz', `
-    <p>Dwa tryby. <b>Automatyczny</b> puszcza całe piętro sam — fale lecą jedna za drugą, a pasek u dołu
-      pokazuje walkę także wtedy, gdy grzebiesz w ekwipunku. <b>Turowy</b> oddaje ci każdy cios.</p>
-    <p><b>Boss aktu zawsze idzie turowo.</b> Tam nic nie rozegra się bez Ciebie.</p>
-    <p>Trzy siły ciosu: lekki, średni, mocny. <b>Mocniej znaczy rzadziej</b> — mocny cios boli podwójnie, ale łatwiej nim spudłować.</p>
-    <p>Nie każdy cios trafia. Celność jest twoja, unik jego — obie rosną ze Zręczności.</p>`],
-
-  ['Pasek ultimate', `
-    <p>Każde trafienie ładuje pasek: lekki cios o 1, średni o 2, mocny o 3. Pełny pasek to 10.</p>
-    <p>Ładunki wydajesz na umiejętności i na ultimate swojej broni. <b>Pudło zeruje cały pasek</b> — mocny cios ryzykuje więcej, niż widać.</p>
-    <p>Za każde piętro dostajesz trzy punkty atrybutów. Wytrzymałość daje życie i pancerz, Zręczność prędkość, celność i unik — to działa u każdego tak samo. <b>Obrażenia rosną tylko z atrybutu Twojej klasy</b>, a klasę wybierzesz za chwilę.</p>`],
-];
-
-function showIntro(done) {
-  let i = 0;
-  const last = () => i === INTRO.length - 1;
-  const paint = () => {
-    $('#introStep').textContent = `Wprowadzenie · ${i + 1} z ${INTRO.length}`;
-    $('#introTitle').textContent = INTRO[i][0];
-    $('#introBody').innerHTML = INTRO[i][1];
-    $('#introNext').textContent = last() ? 'Wejdź do wieży' : 'Dalej';
-    $('#intro').scrollTop = 0;
-  };
-  const finish = () => { $('#intro').hidden = true; done(); };
-  $('#introNext').onclick = () => { if (last()) finish(); else { i++; paint(); } };
-  $('#introSkip').onclick = finish;
-  $('#start').hidden = true;
-  $('#intro').hidden = false;
-  paint();
-}
-
-// ---------------------------------------------------------------- WYBÓR KLASY
-// ATTR_LABEL siedzi niżej, przy ekranie Postaci — tu tylko z niego korzystamy.
-const scalingText = (attrs = []) => attrs.map(k => ATTR_LABEL[k] ?? k).join(' i ');
-
-async function showClasses(done) {
-  const d = await fetch('/api/classes').then(r => r.json()).catch(() => ({ classes: [] }));
-  const list = d.classes ?? [];
-  let pick = null;
-
-  $('#cpGrid').innerHTML = list.map(c => `<button class="cp-item" data-id="${c.id}">
-    <b>${esc(c.label)}</b><span>${esc(scalingText(c.dmgAttrs))}</span></button>`).join('');
-
-  const paint = () => {
-    $$('#cpGrid .cp-item').forEach(b => b.classList.toggle('on', b.dataset.id === pick));
-    const c = list.find(x => x.id === pick);
-    $('#cpDetail').hidden = !c;
-    $('#cpStart').disabled = !c;
-    if (!c) return;
-    $('#cpStart').textContent = `Zacznij jako ${c.label}`;
-    const start = [c.startWeapon, c.startOffhand].filter(Boolean).join(' + ');
-    const bonus = Object.entries(c.attrs ?? {}).map(([k, v]) => `+${v} ${ATTR_LABEL[k] ?? k}`).join(' · ');
-    $('#cpDetail').innerHTML = `
-      <div class="t1">${esc(c.label)}</div>
-      <div class="cp-line"><span>Obrażenia rosną z</span><b>${esc(scalingText(c.dmgAttrs))}</b></div>
-      <div class="cp-line"><span>Bronie</span><b>${esc(c.bronie ?? '—')}</b></div>
-      <div class="cp-line"><span>Na start</span><b>${esc(start || '—')}</b></div>
-      ${bonus ? `<div class="cp-line"><span>Atrybuty</span><b>${esc(bonus)}</b></div>` : ''}
-      <p class="cp-opis">${esc(c.opis ?? '')}</p>`;
-  };
-
-  $('#cpGrid').onclick = (e) => {
-    const b = e.target.closest('.cp-item');
-    if (!b) return;
-    pick = b.dataset.id;
-    paint();
-  };
-  $('#cpStart').onclick = () => { if (pick) { $('#classpick').hidden = true; done(pick); } };
-
-  $('#intro').hidden = true;
-  $('#classpick').hidden = false;
-  paint();
-}
-
 function openTab(name) {
   $$('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   $$('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
@@ -224,6 +129,12 @@ function enterGame() {
   $('#start').hidden = true;
   $('#app').hidden = false;
   render();
+  // Kopanie przetrwało odświeżenie strony — serwer pamięta, co gracz robił.
+  if (S.activity) {
+    const s = S.skills[S.activity.skill];
+    const r = s?.resources?.find(x => x.id === S.activity.res);
+    if (r) startMineLoop(r.id, r.ms);
+  }
 }
 
 // ---------------------------------------------------------------- render
@@ -231,27 +142,10 @@ function enterGame() {
 function header() {
   const box = $('#hdrCrest');
   if (box) box.innerHTML = heroCrest(30);
-  $('#hdrName').textContent = `${S.name} · ${S.klasaLabel}`;
+  $('#hdrName').textContent = S.name;
   $('#hdrMeta').textContent = `POZIOM ${S.poziom} · MOC ${nf(S.stats.power)} · ${S.actName.toUpperCase()}`;
   const purse = $('#hdrPurse');
   if (purse) purse.innerHTML = `${nf(S.gold)} zł<br>${S.keys ?? 0} 🔑`;
-}
-
-function hpCard() {
-  const st = S.stats;
-  const low = S.potions === 0;
-  return `<div class="card ${low ? 'bad' : ''}">
-    <div class="row" style="margin-bottom:7px">
-      <div class="grow"><div class="t1">Mikstury</div>
-        <div class="t2">Wypijają się same poniżej 30% HP w trakcie walki</div></div>
-      <span class="num" style="font-size:17px;color:${low ? 'var(--blood)' : 'var(--brass)'}">${S.potions}</span>
-    </div>
-    <div class="stat"><span class="k">Zdrowie</span><span class="v">${nf(st.hp)} / ${nf(st.maxHp)}</span></div>
-    <div class="actions">
-      <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij teraz</button>
-      <button class="btn ghost" data-act="buypotion">Kup za ${nf(40 + S.maxFloor * 6)}</button>
-    </div>
-  </div>`;
 }
 
 // ---------------------------------------------------------------- walka
@@ -583,20 +477,22 @@ const STAN_BADGE = { on: 'OTWARTE', soon: 'WKRÓTCE', lock: 'ZAMKNIĘTE' };
 
 function renderHub() {
   let h = `<div class="scr-head">Wyprawa <span>PIĘTRO ${S.maxFloor}</span></div>`;
+  h += `<div class="modes">`;
   for (const t of TRYBY) {
     const czynny = t.stan === 'on';
-    h += `<button class="card row mode-card ${czynny ? 'hi' : 'off'}"
+    h += `<button class="card row mode-card compact ${czynny ? 'hi' : 'off'}" title="${esc(t.desc)}"
       ${czynny ? `data-act="opentower"` : ''} ${czynny ? '' : 'disabled'}>
       <div class="icon lg">${t.ic}</div>
       <div class="grow">
         <div class="t1">${esc(t.label)}</div>
-        <div class="t2">${esc(t.desc)}</div>
-        ${czynny ? `<div class="t2" style="color:var(--brass)">${esc(S.actName)} · piętro ${S.floor} z ${S.actId * 10}</div>` : ''}
+        <div class="t2">${czynny
+          ? `${esc(S.actName)} · piętro ${S.floor} z ${S.actId * 10}`
+          : esc(t.desc)}</div>
       </div>
       <span class="badge ${czynny ? 'on' : ''}">${STAN_BADGE[t.stan]}</span>
     </button>`;
   }
-  return h;
+  return h + `</div>`;
 }
 
 // Lista pięter biomu. Zamknięte piętra pokazują tylko numer — co jest wyżej,
@@ -622,59 +518,73 @@ function renderWieza() {
 
   let html = `<div class="scr-head">
     <button class="lnk" data-act="hub">‹ Wyprawa</button>
-    <span>${esc(S.actName.toUpperCase())}</span></div>`;
+    <span>${esc(S.actName.toUpperCase())} · PIĘTRO ${S.floor}</span></div>`;
 
-  html += `<div class="sec">Piętra biomu</div>${floorGrid()}`;
+  html += `<div class="two-col">`;
 
-  html += `<div class="card hi" style="margin-top:10px">
-    <div class="row" style="margin-bottom:8px">
-      <div class="grow"><div class="t1">Piętro ${S.floor}${S.isBoss ? ` · ${esc(S.bossName ?? 'Boss')}` : ''}</div>
-        <div class="t2">${S.isBoss ? 'Jedna walka. Turowa — bez wyjścia.' : `${S.fightsOnFloor} fal, HP nie wraca między nimi`}</div></div>
-      <span class="badge on">${S.isBoss ? 'BOSS' : S.isPlus ? 'PIĘTRO +' : 'ZWYKŁE'}</span>
-    </div>
-    ${waveDots()}
-  </div>`;
-
-  if (done) {
-    html += `<div class="sec">Piętro zdobyte</div>
-      <div class="card hi cleared">
-        <div class="big-word">PIĘTRO ZDOBYTE</div>
-        <div class="stat"><span class="k">Punkty drzewka</span><span class="v up">+${S.isBoss ? 5 : 1}</span></div>
-        <div class="stat"><span class="k">Punkty atrybutów</span><span class="v up">+3</span></div>
-        <div class="stat"><span class="k">Klucze Przywołania</span><span class="v up">+${S.isBoss ? 3 : 1}</span></div>
-        <div class="stat"><span class="k">Zdrowie</span><span class="v up">pełne na nowym piętrze</span></div>
-        <button class="btn solid big wide" style="margin-top:10px" data-act="advance">Wejdź na piętro ${S.floor + 1}</button>
-      </div>`;
-    html += hpCard();
-    return html;
-  }
-
-  // Wyczerpanie ma być widać, zanim gracz kliknie „Walcz".
-  html += `<div class="sec">Twoje zdrowie</div>
-    <div class="card ${hpPct < 40 ? 'bad' : ''}">
+  // ---- lewa: gdzie jesteś ----
+  html += `<div class="col">
+    ${floorGrid()}
+    <div class="card hi" style="margin-top:8px">
       <div class="row" style="margin-bottom:7px">
-        <div class="grow"><div class="t1">${nf(st.hp)} / ${nf(st.maxHp)}</div>
-          <div class="t2">${hpPct === 100 ? 'Pełne. Piętro dopiero się zaczyna.'
-            : 'Tyle zostało po poprzednich falach. Pełne HP oddaje dopiero nowe piętro.'}</div></div>
+        <div class="grow"><div class="t1">Piętro ${S.floor}${S.isBoss ? ` · ${esc(S.bossName ?? 'Boss')}` : ''}</div>
+          <div class="t2">${S.isBoss ? 'Jedna walka, turowa' : `${S.fightsOnFloor} fal · HP nie wraca`}</div></div>
+        <span class="badge on">${S.isBoss ? 'BOSS' : S.isPlus ? 'PIĘTRO +' : 'ZWYKŁE'}</span>
+      </div>
+      ${waveDots()}
+    </div>
+
+    <div class="card ${hpPct < 40 ? 'bad' : ''}" style="margin-top:6px">
+      <div class="row" style="margin-bottom:6px">
+        <div class="grow"><div class="t1">Zdrowie ${nf(st.hp)} / ${nf(st.maxHp)}</div>
+          <div class="t2">Mikstury: ${S.potions}</div></div>
         <span class="num" style="font-size:17px;color:${hpPct < 40 ? 'var(--blood)' : 'var(--brass)'}">${hpPct}%</span>
       </div>
       <div class="bar hp big"><i style="width:${hpPct}%"></i></div>
-    </div>`;
+      <div class="actions">
+        <button class="btn ghost" data-act="potion" ${S.potions && st.hp < st.maxHp ? '' : 'disabled'}>Wypij</button>
+        <button class="btn ghost" data-act="buypotion">Kup za ${nf(40 + S.maxFloor * 6)}</button>
+      </div>
+    </div>
+  </div>`;
 
-  if (S.forcedTurn) {
-    html += `<div class="sec">Tryb walki</div>
-      <div class="card hi"><div class="t1">Walka turowa</div>
-        <div class="t2">Boss aktu nie gra się sam. Każdy cios, umiejętność i mikstura są Twoje.</div></div>`;
-  } else {
-    html += `<div class="sec">Tryb walki</div>
-      <div class="segs">
+  // ---- prawa: co robisz teraz ----
+  html += `<div class="col">`;
+
+  // Niedokończona walka turowa zostawiona na innym ekranie. Musi być z niej
+  // wyjście w obie strony, inaczej postać zakleszcza się na zawsze.
+  if (S.activeFight) {
+    html += `<div class="card hi">
+      <div class="t1">Masz niedokończoną walkę</div>
+      <div class="t2">Turowa walka czeka na Twój ruch. Możesz do niej wrócić albo ją porzucić —
+        porzucenie nic nie kosztuje, fala zaczyna się od nowa.</div>
+      <div class="actions">
+        <button class="btn solid" data-act="fight">Wróć do walki</button>
+        <button class="btn ghost" data-act="abandon">Porzuć</button>
+      </div>
+    </div></div></div>`;
+    return html;
+  }
+
+  if (done) {
+    html += `<div class="card hi cleared">
+      <div class="big-word">PIĘTRO ZDOBYTE</div>
+      <div class="stat"><span class="k">Punkty drzewka</span><span class="v up">+${S.isBoss ? 5 : 1}</span></div>
+      <div class="stat"><span class="k">Punkty atrybutów</span><span class="v up">+3</span></div>
+      <div class="stat"><span class="k">Klucze Przywołania</span><span class="v up">+${S.isBoss ? 3 : 1}</span></div>
+      <div class="stat"><span class="k">Zdrowie</span><span class="v up">pełne na nowym piętrze</span></div>
+      <button class="btn solid big wide" style="margin-top:10px" data-act="advance">Wejdź na piętro ${S.floor + 1}</button>
+    </div></div></div>`;
+    return html;
+  }
+
+  html += S.forcedTurn
+    ? `<div class="card hi"><div class="t1">Walka turowa</div>
+        <div class="t2">Boss aktu nie gra się sam. Każdy cios, umiejętność i mikstura są Twoje.</div></div>`
+    : `<div class="segs">
         <button data-act="mode" data-m="auto"   aria-selected="${S.mode === 'auto'}">Automatyczna</button>
         <button data-act="mode" data-m="turowa" aria-selected="${S.mode === 'turowa'}">Turowa</button>
-      </div>
-      <div class="card"><div class="t2">${S.mode === 'auto'
-        ? 'Fale lecą jedna za drugą, same. Możesz przejść na inną zakładkę — pasek u dołu pokazuje, co się dzieje.'
-        : 'Co turę wybierasz siłę ciosu. Mocniej znaczy rzadziej — celność rośnie ze Zręcznością.'}</div></div>`;
-  }
+      </div>`;
 
   html += `<div class="sec">Fala ${S.fight + 1} z ${S.fightsOnFloor}</div>
     <div class="units">
@@ -688,15 +598,15 @@ function renderWieza() {
         <div class="hpn">${nf(e.maxHp)}</div></div>
     </div>
     <div class="card">
-      <div class="stat"><span class="k">Obrażenia</span><span class="v">${nf(st.damage)} vs ${nf(e.damage)}</span></div>
+      <div class="stat"><span class="k">Atak</span><span class="v">${nf(st.damage)} vs ${nf(e.damage)}</span></div>
       <div class="stat"><span class="k">Prędkość</span><span class="v">${st.speed} vs ${e.speed}</span></div>
-      <div class="stat"><span class="k">Pancerz</span><span class="v">${st.armor} vs ${e.armor}</span></div>
+      <div class="stat"><span class="k">Obrona</span><span class="v">${st.armor} vs ${e.armor}</span></div>
       <div class="stat"><span class="k">Celność</span><span class="v">${Math.round(st.accuracy * 100)}%</span></div>
     </div>
-    <button class="btn solid big wide" style="margin-top:10px" data-act="fight">
+    <button class="btn solid big wide" style="margin-top:8px" data-act="fight">
       ${S.isBoss ? 'Stań do bossa' : S.mode === 'auto' ? 'Ruszaj — fale lecą same' : 'Walcz'}</button>`;
 
-  html += hpCard();
+  html += `</div></div>`;
   return html;
 }
 
@@ -716,7 +626,7 @@ function itemRow(it, opts = {}) {
     <div class="icon" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
     <div class="grow">
       <div class="t1" style="color:${rarityColor(it.rarity)}">${esc(it.name)}</div>
-      <div class="t2 num">${rar.label} · ilvl ${it.ilvl}${it.damage ? ` · obr. ${it.damage}` : ''}${it.armor ? ` · panc. ${it.armor}` : ''}</div>
+      <div class="t2 num" title="Poziom przedmiotu — tyle pięter trzeba zdobyć, żeby go założyć.">${rar.label} · poz. ${it.ilvl}${it.damage ? ` · atak ${it.damage}` : ''}${it.armor ? ` · obrona ${it.armor}` : ''}</div>
       ${affix ? `<div class="t2">${esc(affix)}</div>` : ''}
       ${eqCheck && !eqCheck.ok ? `<div class="t2" style="color:#D9736B">${esc(eqCheck.reason)}</div>` : ''}
     </div>
@@ -745,106 +655,60 @@ const ATTR_DESC = {
   wytrzymalosc: 'zdrowie i pancerz (każdy)',
 };
 
-// Makieta postaci. Broń po lewej, druga ręka po prawej, pancerz między nimi —
-// pusta komórka w górnym rzędzie robi miejsce na hełm nad środkiem.
-const DOLL_ROWS = [
-  [null,        'helm',       null],
-  ['pierscien', 'amulet',     'rekawice'],
-  ['bron',      'napiersnik', 'offhand'],
-  [null,        'buty',       null],
-];
-
-let dollSlot = null;   // który slot gracz właśnie ogląda
-
-function paperDollHtml() {
-  const cell = (slot) => {
-    if (!slot) return '<div class="doll-cell blank"></div>';
-    const it = S.equipped[slot];
-    const on = slot === dollSlot ? ' on' : '';
-    return `<button class="doll-cell${it ? '' : ' empty'}${on}" data-act="slot" data-slot="${slot}"
-      style="${it ? `border-color:${rarityColor(it.rarity)}` : ''}">
-      <span class="ic">${SLOT_ICON[slot] ?? '▪'}</span>
-      <span class="lb">${esc(S.slots[slot].label)}</span></button>`;
-  };
-
-  let h = `<div class="doll">${DOLL_ROWS.flat().map(cell).join('')}</div>`;
-  if (dollSlot) {
-    const it = S.equipped[dollSlot];
-    h += it
-      ? itemRow(it, { equipped: true })
-      : `<div class="card"><div class="t1">${esc(S.slots[dollSlot].label)}</div>
-         <div class="t2">Pusty slot. Załóż coś z plecaka w zakładce Ekwipunek.</div></div>`;
-  }
-  return h;
-}
+// Makieta postaci przeniosła się do zakładki Ekwipunek — tam, gdzie gracz
+// jej szuka. Postać zostaje kartą liczb: atrybuty, zasoby, drzewko, kod.
 
 function renderPostac() {
   const st = S.stats;
   let h = `<div class="scr-head">
     <button class="lnk" data-act="tab" data-tab="wyprawa">‹ Wyprawa</button>
-    <span>${esc(S.name.toUpperCase())} · ${S.klasaLabel.toUpperCase()}</span></div>`;
+    <span>${esc(S.name.toUpperCase())} · POZIOM ${S.poziom}</span></div>`;
 
-  h += `<div class="card">
-    <div class="stat"><span class="k">Zdrowie</span><span class="v">${nf(st.maxHp)}</span></div>
-    <div class="stat"><span class="k">Obrażenia</span><span class="v">${nf(st.damage)}</span></div>
-    <div class="stat"><span class="k">Prędkość ataku</span><span class="v">${st.speed}</span></div>
-    <div class="stat"><span class="k">Pancerz</span><span class="v">${st.armor}</span></div>
-    <div class="stat"><span class="k">Celność</span><span class="v">${Math.round(st.accuracy * 100)}%</span></div>
-    <div class="stat"><span class="k">Unik</span><span class="v">${(st.evasion * 100).toFixed(1)}%</span></div>
-    <div class="stat"><span class="k">Kryt</span><span class="v">${(st.crit * 100).toFixed(1)}% × ${st.critMult.toFixed(2)}</span></div>
-    ${st.block ? `<div class="stat"><span class="k">Blok</span><span class="v">${Math.round(st.block * 100)}% × −${Math.round(st.blockCut * 100)}% obrażeń</span></div>` : ''}
-    <div class="stat"><span class="k">Moc</span><span class="v" style="color:var(--brass)">${nf(st.power)}</span></div>
-  </div>`;
+  h += `<div class="two-col">`;
 
-  h += `<div class="sec">Na sobie</div>`;
-  h += paperDollHtml();
+  // ---- lewa kolumna: atrybuty, czyli jedyna rzecz, którą tu się KLIKA ----
+  h += `<div class="col">
+    <div class="card ${S.unspentAttr ? 'hi' : ''} row">
+      <div class="grow"><div class="t1">Punkty do rozdania</div>
+        <div class="t2">10 na start, 3 za każde zdobyte piętro</div></div>
+      <span class="num big-n">${S.unspentAttr}</span>
+    </div>`;
 
-  h += `<div class="sec">Zasoby</div><div class="card">
-    <div class="stat"><span class="k">Złoto</span><span class="v" style="color:var(--brass)">${nf(S.gold)}</span></div>
-    <div class="stat"><span class="k">Klucze Przywołania</span><span class="v">${S.keys ?? 0}</span></div>
-    <div class="stat"><span class="k">Mikstury</span><span class="v">${S.potions}</span></div>
-  </div>`;
-
-  h += `<div class="card ${S.unspentAttr ? 'hi' : ''}">
-    <div class="row"><div class="grow"><div class="t1">Punkty do rozdania</div>
-      <div class="t2">10 na start, potem 3 za każde zdobyte piętro</div></div>
-      <span class="num" style="font-size:22px;color:var(--brass)">${S.unspentAttr}</span></div>
-  </div>`;
-
-  h += `<div class="sec">Atrybuty</div>`;
   for (const k of ['sila', 'intelekt', 'zrecznosc', 'wytrzymalosc']) {
-    h += `<div class="card row">
+    h += `<div class="card row attr-row" title="${esc(ATTR_DESC[k])}">
       <div class="grow"><div class="t1">${ATTR_LABEL[k]}</div><div class="t2">${ATTR_DESC[k]}</div></div>
       <span class="num" style="font-size:17px;width:38px;text-align:right">${st.attrs[k]}</span>
       <button class="btn" data-act="attr" data-attr="${k}" ${S.unspentAttr ? '' : 'disabled'}>+</button>
     </div>`;
   }
+  h += `</div>`;
 
-  h += `<div class="sec">Drzewko klasy</div><div class="card ${S.treePoints ? 'hi' : ''}">
-    <div class="stat"><span class="k">Punkty drzewka</span><span class="v" style="color:var(--brass)">${S.treePoints}</span></div>
-    <div class="t2" style="margin:8px 0">Skille bojowe zniknęły — sprzęt bramkuje sam poziom postaci,
-      a specjalizację niesie drzewko ${esc(S.klasaLabel)}.</div>
-    <button class="btn wide" data-act="tab" data-tab="drzewko">Otwórz drzewko</button>
-  </div>`;
-
-  h += `<div class="sec">Kod postaci</div>
+  // ---- prawa kolumna: liczby i sprawy administracyjne ----
+  h += `<div class="col">
     <div class="card">
-      <div class="t2" style="margin-bottom:8px">Zapisz go sobie. Pozwala wrócić do tej postaci
-      z innego urządzenia albo gdy zmieni się adres serwera. Kto ma ten kod, ma Twoją postać.</div>
-      <div class="code-box" id="mycode">${esc(TOKEN ?? '')}</div>
-      <div class="actions">
-        <button class="btn" data-act="copycode">Kopiuj kod</button>
-      </div>
+      <div class="stat"><span class="k">Złoto</span><span class="v" style="color:var(--brass)">${nf(S.gold)}</span></div>
+      <div class="stat"><span class="k">Klucze Przywołania</span><span class="v">${S.keys ?? 0}</span></div>
+      <div class="stat"><span class="k">Mikstury</span><span class="v">${S.potions}</span></div>
+      <div class="stat"><span class="k">Moc</span><span class="v" style="color:var(--brass)">${nf(st.power)}</span></div>
     </div>
 
-    <div class="sec">Zmiana postaci</div>
-    <div class="card">
-      <div class="t2" style="margin-bottom:9px">Wraca do ekranu startowego, gdzie zrobisz nową postać
-      albo wczytasz inną kodem. <b style="color:var(--brass)">Ta postać nie znika</b> — wrócisz do niej
-      swoim kodem, więc najpierw go skopiuj.</div>
-      <button class="btn wide" data-act="logout">Zmień postać</button>
-    </div>`;
+    <div class="card ${S.treePoints ? 'hi' : ''} row">
+      <div class="grow"><div class="t1">Drzewko</div>
+        <div class="t2">${S.treePoints ? 'Masz co wydać' : 'Punkt za piętro, pięć za bossa'}</div></div>
+      <span class="num big-n">${S.treePoints}</span>
+    </div>
+    <button class="btn wide" data-act="tab" data-tab="drzewko">Otwórz drzewko</button>
 
+    <div class="sec">Kod postaci</div>
+    <div class="code-box" id="mycode">${esc(TOKEN ?? '')}</div>
+    <div class="actions">
+      <button class="btn" data-act="copycode">Kopiuj</button>
+      <button class="btn ghost" data-act="logout">Zmień postać</button>
+    </div>
+    <div class="t2" style="margin-top:6px">Kto ma ten kod, ma Twoją postać. Zmiana postaci jej nie kasuje.</div>
+  </div>`;
+
+  h += `</div>`;
   return h;
 }
 
@@ -892,7 +756,7 @@ function renderDrzewko() {
   const total = (S.tree ?? []).reduce((s, b) => s + b.spent, 0);
   let h = `<div class="scr-head">
     <button class="lnk" data-act="tab" data-tab="postac">‹ Postać</button>
-    <span>${esc(S.klasaLabel.toUpperCase())}</span></div>`;
+    <span>DRZEWKO BOHATERA</span></div>`;
 
   h += `<div class="card ${S.treePoints ? 'hi' : ''}">
     <div class="row"><div class="grow"><div class="t1">Punkty do wydania</div>
@@ -900,67 +764,240 @@ function renderDrzewko() {
       <span class="num" style="font-size:22px;color:var(--brass)">${S.treePoints}</span></div>
   </div>`;
 
+  h += `<div class="scrollbox"><div class="branches">`;
   for (const branch of S.tree ?? []) {
-    h += `<div class="sec">${esc(branch.label)} · ${branch.spent} pkt</div>`;
+    h += `<div class="branch"><div class="sec">${esc(branch.label)} · ${branch.spent} pkt</div>`;
     for (const n of branch.nodes) {
       const pelny = n.rank >= n.max;
-      h += `<div class="card ${n.unlocked ? '' : 'locked'}">
+      const tip = n.unlocked
+        ? `${effText(n.eff)} za rangę${n.rank ? ` · teraz ${effText(n.eff, n.rank)}` : ''}`
+        : `Wymaga ${n.need} pkt w gałęzi ${branch.label}`;
+      h += `<div class="card compact ${n.unlocked ? '' : 'locked'}" title="${esc(tip)}">
         <div class="row">
           <div class="grow">
             <div class="t1">${esc(n.label)}
               <span class="num" style="color:${n.rank ? 'var(--brass)' : 'var(--ink-mute)'}">${n.rank}/${n.max}</span></div>
-            <div class="t2">${esc(effText(n.eff))} za rangę</div>
-            ${n.rank ? `<div class="t2" style="color:var(--brass)">teraz: ${esc(effText(n.eff, n.rank))}</div>` : ''}
-            ${n.unlocked ? '' : `<div class="t2" style="color:#D9736B">Wymaga ${n.need} pkt w gałęzi ${esc(branch.label)}</div>`}
+            <div class="t2">${n.unlocked ? esc(effText(n.eff)) : `zamknięte — ${n.need} pkt w gałęzi`}</div>
           </div>
           <button class="btn" data-act="tree" data-node="${n.id}" ${n.canRaise ? '' : 'disabled'}>${pelny ? 'MAX' : '+'}</button>
         </div>
       </div>`;
     }
+    h += `</div>`;
   }
+  h += `</div>`;
 
-  h += `<div class="sec">Reset</div><div class="card">
-    <div class="t2" style="margin-bottom:9px">Zwraca wszystkie ${total} wydanych punktów.
-      Koszt rośnie z poziomem postaci.</div>
-    <button class="btn wide" data-act="treereset" ${total && S.gold >= S.treeRespec ? '' : 'disabled'}>
-      Zresetuj za ${nf(S.treeRespec)} zł</button>
-  </div>`;
+  h += `<div class="card" style="margin-top:8px">
+    <div class="row"><div class="grow"><div class="t1">Reset drzewka</div>
+      <div class="t2">Zwraca wszystkie ${total} wydanych punktów. Koszt rośnie z poziomem.</div></div>
+      <button class="btn" data-act="treereset" ${total && S.gold >= S.treeRespec ? '' : 'disabled'}>
+        ${nf(S.treeRespec)} zł</button></div>
+  </div></div>`;
 
   return h;
 }
 
-function renderEq() {
-  let h = `<div class="scr-head">Ekwipunek <span>${S.backpack.length} / ${S.backpackMax}</span></div>`;
+// ---------------------------------------------------------------- EKWIPUNEK
+// Ekran ma się mieścić na jednym ekranie: makieta postaci i statystyki obok
+// siebie u góry, plecak z kategoriami niżej. Scrolluje się WYŁĄCZNIE lista
+// przedmiotów, bo tylko ona rośnie bez końca.
 
-  h += `<div class="sec">Założone</div>`;
-  const order = Object.keys(S.slots);
-  let any = false;
-  for (const slot of order) {
+// Makieta 3×3 z portretem w środku. Głowa u góry, bronie po bokach,
+// pancerz pod spodem, dodatki w rogach — czyta się bez legendy.
+const DOLL_GRID = [
+  ['rekawice', 'helm',       'amulet'],
+  ['bron',     null,         'offhand'],
+  ['buty',     'napiersnik', 'pierscien'],
+];
+
+let invCat = 'all';        // kategoria plecaka
+let detail = null;         // { id, where: 'bag' | 'worn' | 'slot' }
+
+const KATEGORIE = [
+  ['all',  'Wszystko', null],
+  ['bron', 'Broń',     ['bron', 'offhand']],
+  ['panc', 'Pancerz',  ['helm', 'napiersnik', 'buty', 'rekawice']],
+  ['dod',  'Dodatki',  ['pierscien', 'amulet']],
+  ['mat',  'Surowce',  []],
+];
+
+function dollHtml() {
+  const cell = (slot) => {
+    if (!slot) {
+      return `<div class="doll-hero">${heroCrest(52)}<span>${esc(S.name)}</span></div>`;
+    }
     const it = S.equipped[slot];
-    if (!it) continue;
-    any = true;
-    h += itemRow(it, { equipped: true });
-  }
-  if (!any) h += `<div class="card"><div class="t2">Nic nie masz na sobie. Zacznij walczyć.</div></div>`;
+    const wybrany = detail?.where === 'worn' && detail.slot === slot;
+    return `<button class="doll-cell${it ? '' : ' empty'}${wybrany ? ' on' : ''}"
+      data-act="slot" data-slot="${slot}" title="${esc(S.slots[slot].label)}"
+      style="${it ? `border-color:${rarityColor(it.rarity)}` : ''}">
+      <span class="ic">${SLOT_ICON[slot] ?? '▪'}</span>
+      <span class="lb">${it ? esc(it.name.split(' ')[0]) : esc(S.slots[slot].label)}</span>
+    </button>`;
+  };
+  return `<div class="doll">${DOLL_GRID.flat().map(cell).join('')}</div>`;
+}
 
-  const empty = order.filter(s => !S.equipped[s]);
-  if (empty.length) {
-    h += `<div class="card"><div class="t2">Puste sloty: ${empty.map(s => S.slots[s].label).join(', ')}</div></div>`;
+// Statystyki główne. Sześć liczb, które naprawdę o czymś mówią — reszta
+// siedzi w podpowiedziach, żeby nie zasypać ekranu.
+function statsHtml() {
+  const st = S.stats;
+  const w = (k, v, tip) => `<div class="stat-box" title="${esc(tip)}">
+    <span class="k">${k}</span><span class="v">${v}</span></div>`;
+  return `<div class="statgrid">
+    ${w('Zdrowie', `${nf(st.hp)}/${nf(st.maxHp)}`, 'Nie wraca między falami. Pełne oddaje nowe piętro albo porażka.')}
+    ${w('Atak', nf(st.damage), 'Obrażenia z jednego ciosu, przed pancerzem wroga. Rosną z Siły, Intelektu i Zręczności.')}
+    ${w('Obrona', nf(st.armor), 'Pancerz. Zbija otrzymywane obrażenia — im więcej, tym mniejszy każdy cios.')}
+    ${w('Kryt', `${(st.crit * 100).toFixed(1)}% ×${st.critMult.toFixed(2)}`, 'Szansa na trafienie krytyczne i jego mnożnik.')}
+    ${w('Prędkość', st.speed, 'Jak często bijesz. 100 to cios co dwie sekundy.')}
+    ${w('Moc', nf(st.power), 'Jedna liczba na porównanie buildów: atak, zdrowie i pancerz razem.')}
+    ${w('Celność', `${Math.round(st.accuracy * 100)}%`, 'Szansa, że cios trafi. Pudło zeruje pasek ultimate.')}
+    ${w('Unik', `${(st.evasion * 100).toFixed(1)}%`, 'Szansa, że cios wroga Cię minie.')}
+    ${st.block ? w('Blok', `${Math.round(st.block * 100)}%`, 'Wymaga tarczy w drugiej ręce. Zablokowany cios traci połowę obrażeń.') : ''}
+  </div>`;
+}
+
+// Ile dana statystyka wynosi z przedmiotu — do porównania z noszonym.
+function itemStats(it) {
+  const s = { dmg: it?.damage ?? 0, arm: it?.armor ?? 0 };
+  for (const a of it?.affixes ?? []) {
+    if (a.id === 'dmgFlat') s.dmg += a.value;
+    else if (a.id === 'armorFlat') s.arm += a.value;
+    else s[a.id] = (s[a.id] ?? 0) + a.value;
+  }
+  return s;
+}
+
+const STAT_NAZWA = {
+  dmg: 'Atak', arm: 'Obrona', sila: 'Siła', intelekt: 'Intelekt',
+  zrecznosc: 'Zręczność', wytrzymalosc: 'Wytrzymałość', wszystkie: 'Wszystkie staty',
+  hpFlat: 'Zdrowie', critChance: 'Szansa na kryt', critPower: 'Siła kryta',
+  speed: 'Prędkość', accuracy: 'Celność', evasion: 'Unik',
+};
+const STAT_PCT = new Set(['critChance', 'critPower', 'accuracy', 'evasion']);
+
+// Panel szczegółu: nazwa, rzadkość, typ, slot, RÓŻNICA wobec noszonego, opis.
+function detailHtml() {
+  if (!detail) {
+    return `<div class="card detail pusty"><div class="t2">Kliknij slot albo przedmiot,
+      żeby zobaczyć, co robi i co zmieni.</div></div>`;
   }
 
+  const it = detail.where === 'worn'
+    ? S.equipped[detail.slot]
+    : S.backpack.find(x => x.id === detail.id);
+
+  if (!it) {
+    const slot = detail.slot;
+    return `<div class="card detail"><div class="t1">${esc(S.slots[slot]?.label ?? '—')}</div>
+      <div class="t2">Pusty slot. Załóż tu coś z plecaka poniżej.</div></div>`;
+  }
+
+  const rar = S.rarities[it.rarity];
+  const noszony = detail.where === 'bag' ? S.equipped[it.slot] : null;
+  const mine = itemStats(it);
+  const stare = itemStats(noszony);
+  const klucze = [...new Set([...Object.keys(mine), ...Object.keys(stare)])];
+
+  const diff = klucze.map(k => {
+    const d = (mine[k] ?? 0) - (stare[k] ?? 0);
+    if (!d) return '';
+    const pct = STAT_PCT.has(k) ? '%' : '';
+    return `<div class="stat"><span class="k">${STAT_NAZWA[k] ?? k}</span>
+      <span class="v ${d > 0 ? 'up' : 'down'}">${d > 0 ? '+' : ''}${d}${pct}</span></div>`;
+  }).join('');
+
+  const eqCheck = canEquipLocal(it);
+
+  return `<div class="card detail" style="border-color:${rarityColor(it.rarity)}">
+    <div class="d-head">
+      <div class="icon lg" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+      <div class="grow">
+        <div class="t1" style="color:${rarityColor(it.rarity)}">${esc(it.name)}</div>
+        <div class="t2">${esc(rar.label)} · ${esc(S.slots[it.slot]?.label ?? it.slot)}${it.wtype ? ` · ${esc(it.wtype)}` : ''}</div>
+      </div>
+    </div>
+
+    <div class="stat" title="Poziom przedmiotu. Tyle pięter trzeba zdobyć, żeby go założyć — i tyle waży jego baza obrażeń albo pancerza.">
+      <span class="k">Poziom przedmiotu</span><span class="v">${it.ilvl}</span></div>
+    ${it.damage ? `<div class="stat"><span class="k">Atak</span><span class="v">${nf(it.damage)}</span></div>` : ''}
+    ${it.armor ? `<div class="stat"><span class="k">Obrona</span><span class="v">${nf(it.armor)}</span></div>` : ''}
+    ${(it.affixes ?? []).map(a => `<div class="stat"><span class="k">${esc(a.label)}</span>
+      <span class="v up">+${a.value}${a.pct ? '%' : ''}</span></div>`).join('')}
+
+    ${detail.where === 'bag' && diff ? `<div class="sec">Zmiana wobec noszonego</div>${diff}` : ''}
+    ${detail.where === 'bag' && !diff ? `<div class="sec">Zmiana</div>
+      <div class="t2">Dokładnie to samo, co masz na sobie.</div>` : ''}
+
+    ${!eqCheck.ok ? `<div class="t2" style="color:#D9736B;margin-top:8px">${esc(eqCheck.reason)}</div>` : ''}
+
+    ${detail.where === 'bag' ? `<div class="actions">
+      <button class="btn solid" data-act="equip" data-id="${it.id}" ${eqCheck.ok ? '' : 'disabled'}>Załóż</button>
+      <button class="btn ghost" data-act="sell" data-id="${it.id}">Sprzedaj</button>
+    </div>` : ''}
+  </div>`;
+}
+
+function bagList() {
+  const kat = KATEGORIE.find(k => k[0] === invCat);
+
+  if (invCat === 'mat') {
+    const mats = S.materials ?? [];
+    if (!mats.length) {
+      return `<div class="card"><div class="t2">Brak surowców. Kop w zakładce Skille.</div></div>`;
+    }
+    return mats.map(m => `<div class="inv-item mat">
+      <div class="icon">🪨</div>
+      <div class="grow"><div class="t1">${esc(m.label)}</div>
+        <div class="t2">surowiec</div></div>
+      <span class="num">${m.count}</span>
+    </div>`).join('');
+  }
+
+  const lista = [...S.backpack].reverse()
+    .filter(it => !kat[2] || kat[2].includes(it.slot));
+
+  if (!lista.length) return `<div class="card"><div class="t2">Nic tu nie ma.</div></div>`;
+
+  return lista.map(it => {
+    const on = detail?.where === 'bag' && detail.id === it.id;
+    const lepszy = S.equipped[it.slot]
+      ? itemStats(it).dmg + itemStats(it).arm > itemStats(S.equipped[it.slot]).dmg + itemStats(S.equipped[it.slot]).arm
+      : true;
+    return `<button class="inv-item ${on ? 'on' : ''}" data-act="pick" data-id="${it.id}"
+      style="border-color:${on ? rarityColor(it.rarity) : ''}">
+      <div class="icon" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+      <div class="grow">
+        <div class="t1" style="color:${rarityColor(it.rarity)}">${esc(it.name)}</div>
+        <div class="t2">${esc(S.slots[it.slot]?.label ?? '')} · poz. ${it.ilvl}</div>
+      </div>
+      ${lepszy ? '<span class="up-dot" title="Lepsze od noszonego">▲</span>' : ''}
+    </button>`;
+  }).join('');
+}
+
+function renderEq() {
   const full = S.backpack.length >= S.backpackMax;
-  h += `<div class="sec">Plecak</div>`;
-  if (full) {
-    h += `<div class="card bad"><div class="t1">Plecak pełny</div>
-      <div class="t2">Nowy łup przepada. Sprzedaj coś, zanim ruszysz dalej.</div></div>`;
-  }
-  if (S.backpack.length) {
-    h += `<button class="btn ghost wide" data-act="selljunk" style="margin-bottom:9px">
-      Sprzedaj wszystko gorsze od noszonego</button>`;
-  }
-  h += S.backpack.length
-    ? [...S.backpack].reverse().map(it => itemRow(it)).join('')
-    : `<div class="card"><div class="t2">Pusto.</div></div>`;
+
+  let h = `<div class="scr-head">Ekwipunek
+    <span>PLECAK ${S.backpack.length} / ${S.backpackMax}</span></div>`;
+
+  h += `<div class="eq-top">
+    <div class="eq-doll">${dollHtml()}</div>
+    <div class="eq-side">${statsHtml()}${detailHtml()}</div>
+  </div>`;
+
+  h += `<div class="eq-bag">
+    <div class="invtabs">
+      ${KATEGORIE.map(([id, label]) => `<button class="${id === invCat ? 'on' : ''}"
+        data-act="invcat" data-c="${id}">${label}</button>`).join('')}
+      ${S.backpack.length ? `<button class="junk" data-act="selljunk"
+        title="Sprzedaje wszystko gorsze od noszonego">Sprzedaj zbędne</button>` : ''}
+    </div>
+    ${full ? `<div class="card bad"><div class="t2">Plecak pełny — nowy łup przepada.</div></div>` : ''}
+    <div class="invlist">${bagList()}</div>
+  </div>`;
+
   return h;
 }
 
@@ -979,11 +1016,12 @@ function renderDruzyna() {
     <div class="icon lg">${heroCrest(30)}</div>
     <div class="grow">
       <div class="t1">${esc(S.name)}</div>
-      <div class="t2">${esc(S.klasaLabel)} · poziom ${S.poziom} · moc ${nf(st.power)}</div>
+      <div class="t2">poziom ${S.poziom} · moc ${nf(st.power)} · jedyny, który nosi ekwipunek</div>
     </div>
     <span class="badge on">AKTYWNY</span>
   </div>`;
 
+  h += `<div class="scrollbox">`;
   h += `<div class="sec">Sojusznicy</div>`;
   for (let i = 0; i < 3; i++) {
     const c = comp[i];
@@ -998,14 +1036,16 @@ function renderDruzyna() {
     ? `${esc(S.rarities[p.rarity]?.label ?? p.rarity)} · przywołany, jeszcze nie wchodzi do walki`
     : 'Pusty slot. Pety przychodzą z Przywołania.', p);
 
-  h += `<div class="sec">Dokąd to idzie</div>
+  h += `<div class="sec">Zasady drużyny</div>
     <div class="card">
-      <div class="t1" style="margin-bottom:6px">Legendary otwiera warstwę, nie większą cyfrę</div>
-      <div class="t2">Sojusznik od Common do Heroic ma autoatak, jedną umiejętność i pasywkę, a rośnie
-        rzadkością, duplikatami i gwiazdkami. Legendary dokłada drugą umiejętność, ultimate,
-        drzewko talentów, zachowanie w walce i relikt. Pet analogicznie — Legendary dostaje
-        własny slot na broń.</div>
+      <div class="t1" style="margin-bottom:6px">Ekwipunek należy tylko do Ciebie</div>
+      <div class="t2"><b>Sojusznicy i pety nie noszą zwykłego sprzętu</b> — żadnych hełmów,
+        napierśników ani mieczy. Rosną rzadkością, duplikatami i gwiazdkami.
+        Legendary dostanie kiedyś własny relikt, a Legendary pet własną broń — i tyle.</div>
+      <div class="t2" style="margin-top:7px">To także <b>oni mają klasy</b>, nie Ty.
+        Twoja postać jest jedna i buduje się atrybutami, sprzętem i drzewkiem.</div>
     </div>`;
+  h += `</div>`;
 
   return h;
 }
@@ -1022,49 +1062,144 @@ function slotRow(ic, nazwa, opis, wypelniony) {
 }
 
 // ---------------------------------------------------------------- SKILLE
-// Makieta. Poziomy stoją na 1, nic się nie zbiera. Drabinka niesie całą zasadę:
-// poziom decyduje CO, narzędzie decyduje JAK SZYBKO.
+// Górnictwo GRA. Reszta to makiety.
+//
+// Pętla: klient trzyma zegar, po każdym cyklu woła /api/minetick, serwer wydaje
+// dokładnie jeden cykl i sprawdza czas. Bez postępu offline, ale zmiana zakładki
+// niczego nie gubi — timer chodzi dalej, bo to ta sama strona.
 
 let skillOpen = 'gornictwo';
+let MINE = null;         // { res, ms, t0, timer, raf }
+
+function startMineLoop(res, ms) {
+  stopMineLoop();
+  MINE = { res, ms, t0: Date.now() };
+  // setInterval, nie requestAnimationFrame: rAF zamiera, gdy strona nie jest
+  // rysowana (zminimalizowane okno, tło), i pasek zastyga w miejscu.
+  const rysuj = () => {
+    if (!MINE) return;
+    const pct = Math.min(100, (Date.now() - MINE.t0) / MINE.ms * 100);
+    const bar = $('#mineprog'); if (bar) bar.style.width = pct + '%';
+    const zeg = $('#minetime');
+    if (zeg) zeg.textContent = Math.max(0, (MINE.ms - (Date.now() - MINE.t0)) / 1000).toFixed(1) + ' s';
+  };
+  rysuj();
+  MINE.tick = setInterval(rysuj, 80);
+  MINE.timer = setTimeout(async () => {
+    const d = await api('minetick', {});
+    if (d.error) { stopMineLoop(); render(); return; }
+    if (d.awans) toast(`Górnictwo ${S.skills.gornictwo.lvl}!`);
+    // Kolejny cykl rusza sam. STOP albo zmiana surowca to jedyne wyjście.
+    const r = S.skills.gornictwo.resources.find(x => x.id === res);
+    render();
+    if (S.activity) startMineLoop(res, r.ms);
+  }, ms + 60);
+}
+
+// Zatrzymuje wszystko, co po stronie klienta odtwarza walkę. Jedno miejsce,
+// bo porzucenie i zmiana trybu muszą sprzątnąć dokładnie to samo.
+function stopPlayback() {
+  if (FIGHT?.timer) clearTimeout(FIGHT.timer);
+  FIGHT = null;
+  AUTO = false;
+  paintCombatBar();
+}
+
+function stopMineLoop() {
+  if (!MINE) return;
+  clearTimeout(MINE.timer);
+  clearInterval(MINE.tick);
+  MINE = null;
+}
 
 function renderSkille() {
+  const s = S.skills[skillOpen];
+  const akt = S.activity;
+
   let h = `<div class="scr-head">Skille <span>ZBIERACKIE</span></div>`;
 
-  h += `<div class="card"><div class="t2">Jeszcze nic nie zbierasz — to makieta.
-    Poziom decyduje, <b>co</b> możesz zebrać. Narzędzie decyduje, <b>jak szybko</b>.</div></div>`;
+  h += `<div class="three-col">`;
 
-  h += `<div class="skillgrid">`;
-  for (const [id, s] of Object.entries(S.skills)) {
-    h += `<button class="skilltile ${id === skillOpen ? 'on' : ''}" data-act="skill" data-id="${id}">
-      <span class="ic">${s.ic}</span>
-      <span class="nm">${esc(s.label)}</span>
-      <span class="lv">Lv. 1</span>
+  // ---- lewa: lista profesji ----
+  h += `<div class="col skill-list">`;
+  for (const [id, sk] of Object.entries(S.skills)) {
+    const kopie = akt?.skill === id;
+    h += `<button class="skillrow ${id === skillOpen ? 'on' : ''}" data-act="skill" data-id="${id}">
+      <span class="ic">${sk.ic}</span>
+      <span class="grow">
+        <span class="nm">${esc(sk.label)}</span>
+        <span class="lv">${sk.grywalne ? `Lv. ${sk.lvl}` : 'wkrótce'}</span>
+      </span>
+      ${kopie ? '<span class="dot"></span>' : ''}
     </button>`;
   }
   h += `</div>`;
 
-  const s = S.skills[skillOpen];
-  if (s) {
-    h += `<div class="sec">${esc(s.label)} · poziom 1</div>
-      <div class="card">
-        <div class="stat"><span class="k">Daje</span><span class="v">${esc(s.daje)}</span></div>
-        <div class="stat"><span class="k">Zasila</span><span class="v">${esc(s.zasila)}</span></div>
-      </div>`;
-    for (const [nazwa, lv] of s.ladder) {
-      const otwarte = lv <= 1;
-      h += `<div class="card row ${otwarte ? '' : 'locked'}">
-        <div class="grow"><div class="t1">${esc(nazwa)}</div>
-          <div class="t2">${otwarte ? 'dostępne od początku' : `otwiera się na poziomie ${lv}`}</div></div>
-        <span class="num" style="color:${otwarte ? 'var(--brass)' : 'var(--ink-mute)'}">Lv.${lv}</span>
-      </div>`;
+  // ---- środek: surowce wybranej profesji ----
+  h += `<div class="col skill-mid">`;
+  if (!s.grywalne) {
+    h += `<div class="card"><div class="t1">${esc(s.label)}</div>
+      <div class="t2">Jeszcze nie działa. Docelowo: ${esc(s.daje)} — zasila ${esc(s.zasila)}.</div></div>`;
+    for (const [nazwa, lv] of s.ladder ?? []) {
+      h += `<div class="card row locked compact">
+        <div class="grow"><div class="t1">${esc(nazwa)}</div></div>
+        <span class="num">Lv.${lv}</span></div>`;
+    }
+  } else {
+    h += `<div class="card xp-card">
+      <div class="row">
+        <div class="grow"><div class="t1">${esc(s.label)} · poziom ${s.lvl}</div>
+          <div class="t2">${s.xp} / ${s.xpNeed} exp</div></div>
+      </div>
+      <div class="bar xp big" style="margin-top:6px"><i style="width:${Math.round(s.xp / s.xpNeed * 100)}%"></i></div>
+    </div>`;
+
+    for (const r of s.resources) {
+      const kopie = akt?.res === r.id;
+      h += `<button class="card row res-row ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}"
+        ${r.unlocked ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
+        <div class="icon">${r.unlocked ? '🪨' : '🔒'}</div>
+        <div class="grow">
+          <div class="t1">${esc(r.label)}</div>
+          <div class="t2">${r.unlocked
+            ? `${r.xp} exp · ${(r.ms / 1000).toFixed(1)} s`
+            : `otwiera się na poziomie ${r.lvl}`}</div>
+        </div>
+        <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'KOPIESZ' : `Lv.${r.lvl}`}</span>
+      </button>`;
     }
   }
+  h += `</div>`;
 
-  h += `<div class="sec">Później</div>
-    <div class="card"><div class="t2">Jedna profesja będzie działać po zamknięciu gry —
-      wybierasz ją przed wyjściem i wracasz do surowca, expa i rzadkich znalezisk.
-      <b>Walka offline nie działa i nie będzie.</b></div></div>`;
+  // ---- prawa: co się teraz dzieje ----
+  h += `<div class="col skill-now">`;
+  if (akt && S.skills[akt.skill]?.grywalne) {
+    const r = S.skills[akt.skill].resources.find(x => x.id === akt.res);
+    h += `<div class="card hi">
+      <div class="t1">Kopiesz: ${esc(r?.label ?? akt.res)}</div>
+      <div class="t2" id="minetime">—</div>
+      <div class="bar big" style="margin:9px 0"><i id="mineprog" style="width:0"></i></div>
+      <div class="stat"><span class="k">Za cykl</span><span class="v">1 szt. · ${r?.xp ?? 0} exp</span></div>
+      <div class="stat"><span class="k">Narzędzie</span><span class="v">Gołe ręce</span></div>
+      <button class="btn wide" style="margin-top:10px" data-act="minestop">Przerwij</button>
+    </div>`;
+  } else {
+    h += `<div class="card"><div class="t1">Nic nie kopiesz</div>
+      <div class="t2">Wybierz surowiec obok. Kolejne cykle lecą same, aż klikniesz Przerwij.</div></div>`;
+  }
 
+  h += `<div class="sec">Surowce</div>`;
+  const mats = S.materials ?? [];
+  h += mats.length
+    ? `<div class="matlist">${mats.map(m => `<div class="matrow">
+        <span>${esc(m.label)}</span><span class="num">${m.count}</span></div>`).join('')}</div>`
+    : `<div class="card"><div class="t2">Pusto. Wykopane trafia tutaj i do Ekwipunku → Surowce.</div></div>`;
+
+  h += `<div class="card" style="margin-top:8px"><div class="t2">Poziom decyduje, <b>co</b> kopiesz.
+    Narzędzie będzie decydować, <b>jak szybko</b>. Postęp po zamknięciu gry jeszcze nie działa.</div></div>`;
+  h += `</div>`;
+
+  h += `</div>`;
   return h;
 }
 
@@ -1134,7 +1269,7 @@ function renderKronika() {
   for (const [id, label] of LOG_TABS) {
     h += `<button class="${id === logView ? 'on' : ''}" data-act="logview" data-v="${id}">${label}</button>`;
   }
-  h += `</div>`;
+  h += `</div><div class="scrollbox">`;
 
   if (logView === 'bestiariusz') h += bestiariuszHtml(e => !e.family.includes('Strażnik'));
   else if (logView === 'bossowie') h += bestiariuszHtml(e => e.family.includes('Strażnik'));
@@ -1150,6 +1285,7 @@ function renderKronika() {
       pełny bestiariusz Puszczy da symbol wilka, setny boss da obramowanie, Tytan da aurę.</div></div>`;
   }
 
+  h += `</div>`;
   return h;
 }
 
@@ -1225,6 +1361,9 @@ function paintCombatBar() {
     <div class="cb-act">
       <button class="cbtn ${SPEED === 1 ? 'on' : ''}" data-act="speed" data-v="1">×1</button>
       <button class="cbtn ${SPEED === 2 ? 'on' : ''}" data-act="speed" data-v="2">×2</button>
+      ${S.forcedTurn ? '' : `<button class="cbtn" data-act="mode"
+        data-m="${S.mode === 'auto' ? 'turowa' : 'auto'}"
+        title="Przełącza tryb i porzuca bieżącą walkę">${S.mode === 'auto' ? 'NA TUROWĄ' : 'NA AUTO'}</button>`}
       ${AUTO ? `<button class="cbtn" data-act="stopauto">STOP</button>` : ''}
       <button class="cbtn go" data-act="tab" data-tab="wyprawa">DO WALKI</button>
     </div>`;
@@ -1357,8 +1496,19 @@ document.addEventListener('click', async (ev) => {
       render();
 
     } else if (act === 'mode') {
+      // Zmiana trybu przerywa to, co leci. Serwer porzuca walkę, klient sprząta po sobie.
+      stopPlayback();
       const d = await api('mode', { mode: btn.dataset.m });
-      if (!d.error) render();
+      if (!d.error) {
+        if (d.porzucona) toast('Walka porzucona — fala zaczyna się od nowa');
+        openTab('wyprawa'); advView = 'wieza';
+        render();
+      }
+
+    } else if (act === 'abandon') {
+      stopPlayback();
+      await api('abandon', {});
+      render();
 
     } else if (act === 'advance') {
       FIGHT = null; AUTO = false;
@@ -1373,14 +1523,32 @@ document.addEventListener('click', async (ev) => {
       if (d.error) toast(d.error, true); else { toast(`Zwrócono ${d.punkty} pkt`); render(); }
     } else if (act === 'slot') {
       // drugie kliknięcie w ten sam slot zwija podgląd
-      dollSlot = dollSlot === btn.dataset.slot ? null : btn.dataset.slot;
+      detail = (detail?.where === 'worn' && detail.slot === btn.dataset.slot)
+        ? null : { where: 'worn', slot: btn.dataset.slot };
+      render();
+    } else if (act === 'pick') {
+      detail = (detail?.where === 'bag' && detail.id === btn.dataset.id)
+        ? null : { where: 'bag', id: btn.dataset.id };
+      render();
+    } else if (act === 'invcat') {
+      invCat = btn.dataset.c; render();
+    } else if (act === 'mine') {
+      const res = btn.dataset.res;
+      const d = await api('mine', { skill: skillOpen, res });
+      if (d.error) return;
+      const r = S.skills[skillOpen].resources.find(x => x.id === res);
+      render();
+      startMineLoop(res, r.ms);
+    } else if (act === 'minestop') {
+      stopMineLoop();
+      await api('minestop', {});
       render();
     } else if (act === 'equip') {
       const d = await api('equip', { itemId: btn.dataset.id });
-      if (!d.error) { toast('Założone'); render(); }
+      if (!d.error) { toast('Założone'); detail = null; render(); }
     } else if (act === 'sell') {
       const d = await api('sell', { itemId: btn.dataset.id });
-      if (!d.error) { toast(`+${nf(d.gold)} zł`); render(); }
+      if (!d.error) { toast(`+${nf(d.gold)} zł`); detail = null; render(); }
     } else if (act === 'selljunk') {
       const d = await api('selljunk', {});
       if (!d.error) { toast(`Sprzedano ${d.count} — +${nf(d.gold)} zł`); render(); }

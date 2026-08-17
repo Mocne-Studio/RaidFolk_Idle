@@ -58,34 +58,8 @@
   </div>
 </div>
 
-<!-- Wprowadzenie — pokazywane raz, po stworzeniu nowej postaci. Treść w app.js. -->
-<div id="intro" class="start intro" hidden>
-  <p class="sub" id="introStep">—</p>
-  <h1 id="introTitle">—</h1>
-  <div class="intro-body" id="introBody"></div>
-  <button class="btn solid big wide" id="introNext" style="margin-top:22px">Dalej</button>
-  <button class="btn ghost wide" id="introSkip" style="margin-top:8px">Pomiń wprowadzenie</button>
-</div>
-
-<!-- Wybór pierwszej klasy — po wprowadzeniu, przed stworzeniem postaci. -->
-<div id="classpick" class="start" hidden>
-  <p class="sub">Pierwsza klasa</p>
-  <h1>Kim wchodzisz</h1>
-  <p class="cp-lead">Klasa decyduje, z jakiego atrybutu rosną Twoje obrażenia. Reszta —
-    życie, pancerz, prędkość, unik — działa u każdego tak samo.</p>
-
-  <div class="cp-grid" id="cpGrid"></div>
-  <div class="card" id="cpDetail" hidden></div>
-
-  <div class="card" style="margin-top:10px">
-    <div class="t1">Dusze — później</div>
-    <div class="t2">Wyżej w wieży odblokujesz <b>Duszę</b>: wolny slot, do którego podepniesz
-      kolejną klasę i rozegrasz ją jako osobną postać, z własnym poziomem i sprzętem.
-      Ten wybór nie zamyka pozostałych pięciu — decyduje tylko, czym zaczynasz.</div>
-  </div>
-
-  <button class="btn solid big wide" id="cpStart" style="margin-top:16px" disabled>Wybierz klasę</button>
-</div>
+<!-- Nie ma tu wprowadzenia ani wyboru klasy. Herb → imię → gra, bez przystanków.
+     Główna postać NIE MA KLASY — klasy należą do Sojuszników. -->
 
 <div id="app" hidden>
   <!-- Cały pasek jest przyciskiem: herb i nick prowadzą do karty postaci,
