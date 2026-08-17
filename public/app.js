@@ -1573,13 +1573,26 @@ const PAUZA_MS = 700;    // oddech między cyklami — żeby było widać, że c
 
 // skill jest parametrem, nie stałą — inaczej drugi cykl Rybołówstwa szukał
 // swojego surowca w tabeli Górnictwa i wywalał się na undefined.
+// Pasek ma dojść do końca i ZACZĄĆ OD POCZĄTKU, a nie cofać się animacją.
+// `transition: width` na .bar>i odtwarzał powrót ze 100% na 0% jak przewijanie
+// wstecz — więc reset robimy bez animacji, na jedną klatkę.
+function snapPasek(el) {
+  if (!el) return;
+  el.style.transition = 'none';
+  el.style.width = '0%';
+  void el.offsetWidth;              // wymuszenie reflow: bez tego przeglądarka scala obie zmiany
+  el.style.transition = '';
+}
+
 function startMineLoop(skill, res, ms) {
   stopMineLoop();
-  MINE = { skill, res, ms, t0: Date.now() };
+  snapPasek($('#mineprog'));
+  MINE = { skill, res, ms, t0: Date.now(), pauza: false };
+
   // setInterval, nie requestAnimationFrame: rAF zamiera, gdy strona nie jest
   // rysowana (zminimalizowane okno, tło), i pasek zastyga w miejscu.
   const rysuj = () => {
-    if (!MINE) return;
+    if (!MINE || MINE.pauza) return;
     const pct = Math.min(100, (Date.now() - MINE.t0) / MINE.ms * 100);
     const bar = $('#mineprog'); if (bar) bar.style.width = pct + '%';
     const zeg = $('#minetime');
@@ -1587,20 +1600,25 @@ function startMineLoop(skill, res, ms) {
   };
   rysuj();
   MINE.tick = setInterval(rysuj, 80);
+
   MINE.timer = setTimeout(async () => {
     const d = await api('minetick', {});
     if (d.error) { stopMineLoop(); render(); return; }
     const sk = S.skills[skill];
     if (d.awans) toast(`${sk.label} ${sk.lvl}!`);
     const r = sk.resources.find(x => x.id === res);
-    render();
-    // Przerwa między cyklami. Bez niej pasek skacze do zera w tej samej klatce,
-    // w której się wypełnił, i nie widać, że coś się w ogóle wydarzyło.
+
+    // PRZERWA. Pasek zostaje PEŁNY — widać, że cykl się domknął. Zatrzymujemy
+    // rysowanie, żeby nie nadpisało go wyliczoną wartością, a kolejny cykl
+    // zeruje pasek bez animacji (snapPasek), zamiast przewijać go wstecz.
     if (S.activity && r) {
+      clearInterval(MINE.tick);
       MINE = { skill, res, ms: r.ms, t0: Date.now(), pauza: true };
-      const bar = $('#mineprog'); if (bar) bar.style.width = '100%';
-      const zeg = $('#minetime'); if (zeg) zeg.textContent = 'chwila…';
+      render();                                  // pasek narysuje się jako pełny
       MINE.timer = setTimeout(() => startMineLoop(skill, res, r.ms), PAUZA_MS);
+    } else {
+      stopMineLoop();
+      render();
     }
   }, ms + 60);
 }
@@ -1745,8 +1763,9 @@ function sekcjaZbierackie() {
     const r = S.skills[akt.skill].resources.find(x => x.id === akt.res);
     h += `<div class="card hi">
       <div class="t1">Kopiesz: ${esc(r?.label ?? akt.res)}</div>
-      <div class="t2" id="minetime">—</div>
-      <div class="bar big" style="margin:9px 0"><i id="mineprog" style="width:0"></i></div>
+      <div class="t2" id="minetime">${MINE?.pauza ? 'gotowe' : '—'}</div>
+      <div class="bar big" style="margin:9px 0"><i id="mineprog"
+        style="width:${MINE?.pauza ? 100 : 0}%${MINE?.pauza ? ';transition:none' : ''}"></i></div>
       <div class="stat"><span class="k">Za cykl</span><span class="v">1 szt. · ${r?.xp ?? 0} exp</span></div>
       <div class="stat"><span class="k">Narzędzie</span><span class="v">Gołe ręce</span></div>
       <button class="btn wide" style="margin-top:10px" data-act="minestop">Przerwij</button>
