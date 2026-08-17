@@ -34,8 +34,36 @@ function toast(msg, err = false) {
 
 // ---------------------------------------------------------------- ekran startowy
 
-const CLASS_ICON = { wojownik: '🗡', lucznik: '🏹', mag: '✨', obronca: '🛡' };
-let chosenClass = 'wojownik';
+import { SHAPES, SYMBOLS, COLORS, DEFAULT_CREST, randomCrest, crestSvg } from './crest.js';
+
+let crest = { ...DEFAULT_CREST };
+const heroCrest = (size) => crestSvg(S?.crest ?? DEFAULT_CREST, size);
+
+function paintMaker() {
+  $('#crestPreview').innerHTML = crestSvg(crest, 96);
+  $('#crestName').textContent = $('#name').value.trim() || '—';
+  $$('#pickShape  button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.shape));
+  $$('#pickSymbol button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.symbol));
+  $$('#pickColor  button').forEach(b => b.classList.toggle('on', b.dataset.v === crest.color));
+}
+
+function buildPickers() {
+  $('#pickShape').innerHTML = Object.entries(SHAPES).map(([k, v]) =>
+    `<button data-v="${k}" title="${esc(v.label)}">${crestSvg({ ...crest, shape: k }, 34)}</button>`).join('');
+  $('#pickSymbol').innerHTML = Object.entries(SYMBOLS).map(([k, v]) =>
+    `<button data-v="${k}" title="${esc(v.label)}"><span class="glyph">${v.g}</span></button>`).join('');
+  $('#pickColor').innerHTML = Object.entries(COLORS).map(([k, v]) =>
+    `<button data-v="${k}" title="${esc(v.label)}"><i style="background:${v.base}"></i></button>`).join('');
+
+  const wire = (sel, key) => $$(sel + ' button').forEach(b => b.onclick = () => {
+    crest[key] = b.dataset.v;
+    if (key !== 'symbol') buildPickers();     // podgląd kształtów zmienia kolor razem z herbem
+    paintMaker();
+  });
+  wire('#pickShape', 'shape');
+  wire('#pickSymbol', 'symbol');
+  wire('#pickColor', 'color');
+}
 
 async function boot() {
   if (TOKEN) {
@@ -43,25 +71,19 @@ async function boot() {
     if (d.state) { S = d.state; enterGame(); return; }
     localStorage.removeItem('rf_token'); TOKEN = null;
   }
-  const meta = await fetch('/api/classes').then(r => r.json());
-  $('#classes').innerHTML = meta.classes.map(c => `
-    <button class="card row klass ${c.id === chosenClass ? 'hi' : ''}" data-k="${c.id}">
-      <div class="icon lg">${CLASS_ICON[c.id]}</div>
-      <div class="grow">
-        <div class="t1">${esc(c.label)}</div>
-        <div class="t2">+${c.expBonus * 100}% expa do skilla „${c.skill}"</div>
-      </div>
-    </button>`).join('');
 
-  $$('.klass').forEach(b => b.onclick = () => {
-    chosenClass = b.dataset.k;
-    $$('.klass').forEach(x => x.classList.toggle('hi', x === b));
+  crest = randomCrest();
+  buildPickers();
+  paintMaker();
+  $('#name').addEventListener('input', () => {
+    $('#crestName').textContent = $('#name').value.trim() || '—';
   });
+  $('#roll').onclick = () => { crest = randomCrest(); buildPickers(); paintMaker(); };
 
   const r = await fetch('/api/roster').then(r => r.json());
   $('#roster').innerHTML = r.roster.length
     ? r.roster.slice(0, 8).map(p => `<div class="card row">
-        <div class="icon">${CLASS_ICON[p.klasa] ?? '·'}</div>
+        <div class="icon">${crestSvg(p.crest, 26)}</div>
         <div class="grow"><div class="t1">${esc(p.name)}</div>
         <div class="t2 num">piętro ${p.floor}</div></div></div>`).join('')
     : `<div class="card"><div class="t2">Nikt jeszcze nie wszedł. Będziesz pierwszy.</div></div>`;
@@ -69,7 +91,7 @@ async function boot() {
   $('#create').onclick = async () => {
     const name = $('#name').value.trim();
     if (!name) return toast('Podaj imię', true);
-    const d = await api('new', { name, klasa: chosenClass });
+    const d = await api('new', { name, crest });
     if (d.token) { TOKEN = d.token; localStorage.setItem('rf_token', TOKEN); enterGame(); }
   };
   $('#name').addEventListener('keydown', e => { if (e.key === 'Enter') $('#create').click(); });
@@ -97,7 +119,9 @@ function enterGame() {
 // ---------------------------------------------------------------- render
 
 function header() {
-  $('#hdrName').textContent = `${S.name} · ${S.klasaLabel}`;
+  const box = $('#hdrCrest');
+  if (box) box.innerHTML = heroCrest(30);
+  $('#hdrName').textContent = S.klasa === 'wedrowiec' ? S.name : `${S.name} · ${S.klasaLabel}`;
   $('#hdrMeta').textContent = `PIĘTRO ${S.maxFloor} · MOC ${nf(S.stats.power)} · ${S.actName.toUpperCase()}`;
   $('#hdrGold').textContent = `${nf(S.gold)} zł`;
   $('#hdrPot').textContent = `${S.potions} mikstur`;
@@ -179,7 +203,7 @@ function arenaHtml() {
   for (let i = 0; i < PARTY_SLOTS; i++) {
     h += unitBox(party[i], {
       me: i === 0,
-      icon: i === 0 ? CLASS_ICON[S.klasa] : SLOT_ICON_PARTY[i],
+      icon: i === 0 ? heroCrest(34) : SLOT_ICON_PARTY[i],
       label: SLOT_LABEL[i],
     });
   }
@@ -417,7 +441,7 @@ function renderWieza() {
 
   html += `<div class="sec">Fala ${S.fight + 1} z ${S.fightsOnFloor}</div>
     <div class="units">
-      <div class="unit me"><div class="png">${CLASS_ICON[S.klasa]}</div>
+      <div class="unit me"><div class="png">${heroCrest(38)}</div>
         <div class="nm">${esc(S.name)}</div>
         <div class="bar hp"><i style="width:100%"></i></div>
         <div class="hpn">${nf(st.maxHp)}</div></div>

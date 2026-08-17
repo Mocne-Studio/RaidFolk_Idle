@@ -92,6 +92,10 @@ export const CONFIG = {
 
   // ---------- KLASY ----------
   classes: {
+    // Startowa, neutralna. Klasę właściwą gracz wybiera dopiero w grze —
+    // wtedy, gdy machał już bronią i wie, czego nie chce.
+    wedrowiec: { label: 'Wędrowiec', skill: 'atak',     expBonus: 0,   attrs: {},
+                 startWeapon: 'Zardzewiały Miecz', startWtype: 'mele' },
     wojownik: { label: 'Wojownik', skill: 'atak',       expBonus: 0.5, attrs: { sila: 3 },
                 startWeapon: 'Wyszczerbiony Topór', startWtype: 'mele' },
     lucznik:  { label: 'Łucznik',  skill: 'dystansowy', expBonus: 0.5, attrs: { zrecznosc: 3 },

@@ -54,7 +54,7 @@ function view(ch) {
   }
 
   return {
-    name: ch.name, klasa: ch.klasa, klasaLabel: C.classes[ch.klasa].label,
+    name: ch.name, klasa: ch.klasa, klasaLabel: C.classes[ch.klasa].label, crest: ch.crest,
     floor: ch.floor, maxFloor: ch.maxFloor, fight: ch.fight,
     fightsOnFloor: info.fights, isBoss: info.isBoss, isPlus: info.isPlus,
     actName: act.name, actId: act.id, bossName: info.bossName,
@@ -218,8 +218,13 @@ const server = http.createServer(async (req, res) => {
       if (path === '/api/new') {
         const name = String(body.name ?? '').trim().slice(0, 20);
         if (!name) return json(res, 400, { error: 'Podaj imię' });
-        if (!C.classes[body.klasa]) return json(res, 400, { error: 'Wybierz klasę' });
-        const ch = newCharacter(name, body.klasa);
+        const klasa = C.classes[body.klasa] ? body.klasa : 'wedrowiec';
+        const cr = body.crest && typeof body.crest === 'object'
+          ? { shape: String(body.crest.shape ?? 'tarcza').slice(0, 20),
+              symbol: String(body.crest.symbol ?? 'miecz').slice(0, 20),
+              color: String(body.crest.color ?? 'mosiadz').slice(0, 20) }
+          : null;
+        const ch = newCharacter(name, klasa, cr);
         const t = DB.newToken();
         DB.save(t, name, ch);
         return json(res, 200, { token: t, state: view(ch) });

@@ -34,7 +34,7 @@ export function save(token, name, ch) {
 export function roster() {
   return qList.all().map(r => {
     const ch = JSON.parse(r.data);
-    return { name: r.name, klasa: ch.klasa, floor: ch.maxFloor, updated: r.updated };
+    return { name: r.name, klasa: ch.klasa, crest: ch.crest, floor: ch.maxFloor, updated: r.updated };
   });
 }
 

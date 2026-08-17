@@ -189,6 +189,29 @@ button.card:active{background:#26211B}
 
 /* ---------- start ---------- */
 .start{padding:28px 20px;max-width:520px;margin:0 auto}
+/* generator herbu */
+.maker{display:flex;gap:14px;align-items:flex-start;margin-bottom:6px}
+.maker-preview{flex:none;width:110px;text-align:center}
+.maker-preview svg{display:block;margin:0 auto}
+.maker-name{font-family:var(--display);font-size:14px;margin-top:8px;color:var(--ink-dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.maker-controls{flex:1;min-width:0}
+.maker-controls .sec{margin-top:0}
+
+.picker{display:flex;flex-wrap:wrap;gap:6px}
+.picker button{background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
+  padding:5px;cursor:pointer;line-height:0;display:grid;place-items:center;
+  width:46px;height:46px}
+.picker button.on{border-color:var(--brass);background:rgba(200,154,74,.12)}
+.picker .glyph{font-family:var(--display);font-size:21px;line-height:1;color:var(--ink-dim)}
+.picker button.on .glyph{color:var(--brass)}
+.picker.colors button i{display:block;width:26px;height:26px;border-radius:50%}
+
+.hdr-crest{flex:none;width:30px;height:30px;line-height:0}
+.hdr-crest svg{display:block}
+.unit .png svg{display:block}
+.icon svg{display:block}
+
 .start h1{font-family:var(--display);font-size:34px;font-weight:400;margin:0 0 4px}
 .start .sub{font-family:var(--mono);font-size:10px;letter-spacing:.16em;
   text-transform:uppercase;color:var(--brass);margin:0 0 26px}

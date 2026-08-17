@@ -19,13 +19,28 @@
   <h1>RaidFolk Idle</h1>
   <p class="sub">Wieża · wersja testowa 0.1</p>
 
-  <div class="sec">Imię postaci</div>
-  <input type="text" id="name" maxlength="20" placeholder="Halgar" autocomplete="off">
+  <div class="maker">
+    <div class="maker-preview">
+      <div id="crestPreview"></div>
+      <div class="maker-name" id="crestName">—</div>
+    </div>
+    <div class="maker-controls">
+      <div class="sec">Imię</div>
+      <input type="text" id="name" maxlength="20" placeholder="Halgar" autocomplete="off">
+      <button class="btn ghost wide" id="roll" style="margin-top:8px">Losuj herb</button>
+    </div>
+  </div>
 
-  <div class="sec">Klasa</div>
-  <div id="classes"></div>
+  <div class="sec">Kształt</div>
+  <div class="picker" id="pickShape"></div>
 
-  <button class="btn solid big wide" id="create" style="margin-top:14px">Wejdź do wieży</button>
+  <div class="sec">Symbol</div>
+  <div class="picker" id="pickSymbol"></div>
+
+  <div class="sec">Kolor</div>
+  <div class="picker colors" id="pickColor"></div>
+
+  <button class="btn solid big wide" id="create" style="margin-top:16px">Wejdź do wieży</button>
 
   <div class="sec" style="margin-top:26px">Masz już postać?</div>
   <div class="card">
@@ -40,6 +55,7 @@
 
 <div id="app" hidden>
   <div class="topbar">
+    <div id="hdrCrest" class="hdr-crest"></div>
     <div class="who">
       <div class="n" id="hdrName">—</div>
       <div class="m" id="hdrMeta">—</div>
