@@ -1379,3 +1379,51 @@ Mocy zamiast zwykłej. Docelowo pójdą też w magię.
 
 Receptura pokazuje wsad **także pod kłódką**. Gracz musi wiedzieć, na co zbiera,
 zanim odblokuje poziom — inaczej zbieranie jest ślepe.
+
+---
+
+## 22. MAGIA — RUNY I ZAKLĘCIA (17 sierpnia 2026)
+
+Zastępuje wcześniejszy zapis o runach z sekcji 21.6.
+
+### 22.1 Łańcuch
+
+```
+GÓRNICTWO      →  ESENCJA (jedna wspólna, poziom 5)
+                  + KRYSZTAŁY ŻYWIOŁÓW (Ognia 3, Mrozu 6, Ziemi 8, Wichru 10)
+RUNECRAFTING   →  esencja + kryształ = RUNA
+POSTAĆ         →  PODPINASZ jedną runę
+SKILL MAGIA    →  jego poziom decyduje, które zaklęcia tej runy umiesz
+```
+
+**Esencja jest jedna dla wszystkich żywiołów.** To kryształ decyduje, co wyjdzie.
+
+### 22.2 Pierwszy czar to Fireball
+
+Runa Ognia + Magia 1. Nic więcej. Pożoga tej samej runy czeka do Magii 8 —
+tak wygląda rozwój wewnątrz żywiołu: **jedna runa, kilka zaklęć, otwierane expem**.
+
+### 22.3 Zaklęcia nie są przedmiotem ani nauką
+
+Nie siedzą w `ch.abilities`. Liczą się **przy każdym wejściu do walki**
+z podpiętej runy i poziomu Magii (`zaklecia()` w `game/character.js`).
+
+Skutek: zmiana runy natychmiast zmienia zestaw czarów, a wbicie Magii otwiera
+nowe bez żadnego „odbierania nagrody". Nowa postać ma trzy zwykłe umiejętności
+i **zero czarów**.
+
+### 22.4 Runa się nie zużywa
+
+Podpięcie to wybór, nie koszt. Runa zostaje w zapasach; można ją odpiąć
+i podpiąć inną w każdej chwili poza walką.
+
+### 22.5 Kopanie run dzieli exp
+
+Esencja i kryształy dają **50% expa Górnictwu i 50% RuneCraftingowi** —
+należą do obu profesji, więc obie rosną, gdy kopiesz pod magię.
+
+### 22.6 Kontroler spójności składników
+
+Przebudowa run raz zostawiła Eliksir wskazujący na nieistniejący składnik.
+Każdy koszt receptury i każda runa czaru muszą wskazywać na istniejący surowiec —
+sprawdzane skryptem przy zmianach w `config.skills`.

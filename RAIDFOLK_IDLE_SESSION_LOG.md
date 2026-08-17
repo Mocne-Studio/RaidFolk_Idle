@@ -363,3 +363,40 @@ pokazują składniki pod kłódką; ekran Skilli się nie przewija.
 ### NEXT
 
 Werdykt właściciela, potem umiejętności.
+
+---
+
+## 2026-08-17 (ósma sesja) — magia z run
+
+**START HEAD:** `f2666c5`
+**END HEAD:** `755524f`
+
+### DONE
+
+- **Łańcuch magii:** Górnictwo (esencja + kryształy żywiołów) → RuneCrafting
+  (runa) → podpięcie runy → poziom Magii otwiera zaklęcia.
+- **Fireball** jako pierwszy czar: Runa Ognia + Magia 1.
+- Zaklęcia liczone przy wejściu do walki, nie trzymane w `ch.abilities`.
+- **Kopanie run dzieli exp 50/50** między Górnictwo i RuneCrafting.
+- Panel „Runa magii" w Skille → Bojowe: podpięta runa, posiadane runy,
+  ich zaklęcia i to, które już umiesz.
+- Składniki receptur widoczne także pod kłódką (poprawka z poprzedniej sesji).
+
+### POPRAWKI
+
+- Edycja configu zjadła bloki `combatSkills`, `formation` i `allies` —
+  przywrócone z commita, potwierdzone testami.
+- Eliksir wskazywał na nieistniejący składnik po przebudowie run.
+  Dodany kontroler spójności wszystkich kosztów.
+
+### TESTS
+
+`combat.js`, `character.js`, `expedition.test.js` — przechodzą.
+Ręcznie: wykucie Runy Ognia (esencja 1 + kryształ 2), podpięcie, Fireball
+w umiejętnościach walki; kryształ dał 16 expa → 8 Górnictwo + 8 Runy.
+Na 375×812 ekran Skilli się nie przewija.
+
+### NEXT
+
+Werdykt właściciela. Otwarte: co dają runy poza czarami, drugie zaklęcia
+pozostałych żywiołów, rzadsze runy z dropu.
