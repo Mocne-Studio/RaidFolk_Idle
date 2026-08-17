@@ -76,6 +76,15 @@ export function migrate(ch) {
   }
   ch.unlocked ??= {};
   ch.expedition ??= null;
+  // Zaklęcia nie siedzą w ch.abilities — biorą się z podpiętej runy.
+  // Postacie sprzed tej zmiany zrzucają je bez śladu.
+  ch.abilities = (ch.abilities ?? []).filter(id => C.abilities[id] && !C.abilities[id].czar);
+  for (const [id, a] of Object.entries(C.abilities)) {
+    if (!a.czar && !ch.abilities.includes(id)) ch.abilities.push(id);
+  }
+  ch.runa ??= null;
+  // Podpięta runa, której już nie masz w zapasach, odpina się sama.
+  if (ch.runa && !(ch.materials?.[ch.runa] > 0)) ch.runa = null;
   ch.cskills ??= freshCombatSkills();
   for (const id of Object.keys(C.combatSkills.list)) ch.cskills[id] ??= { lvl: 1, xp: 0 };
 
@@ -146,7 +155,10 @@ export function newCharacter(name, crest = null) {
     potions: C.healing.startingPotions,
     mode: 'auto',          // 'auto' | 'turowa'
     activeFight: null,
-    abilities: Object.keys(C.abilities),   // docelowo wychodzone w drzewku
+    // Umiejętności zwykłe dostajesz na start. ZAKLĘCIA nie są tu trzymane —
+    // wynikają z podpiętej runy i poziomu Magii, patrz zaklecia().
+    abilities: Object.entries(C.abilities).filter(([, a]) => !a.czar).map(([id]) => id),
+    runa: null,            // podpięta runa: 'runaognia' | ... | null
     equipped,              // slot -> item
     backpack: [],          // item[]
     hpLost: 0,             // ile HP brakuje (utrzymuje się między walkami)
@@ -408,6 +420,19 @@ export function combatSkillBonus(ch) {
   }
   return out;
 }
+
+// Zaklęcia, które postać UMIE w tej chwili: podpięta runa daje żywioł,
+// poziom skilla Magia decyduje, jak daleko w tym żywiole sięgasz.
+export function zaklecia(ch) {
+  if (!ch.runa) return [];
+  const lvl = ch.cskills?.magia?.lvl ?? 1;
+  return Object.entries(C.abilities)
+    .filter(([, a]) => a.czar && a.czar.runa === ch.runa && lvl >= a.czar.magia)
+    .map(([id]) => id);
+}
+
+// Wszystko, czym można zagrać w walce: zwykłe umiejętności + dostępne zaklęcia.
+export const bojowe = (ch) => [...(ch.abilities ?? []), ...zaklecia(ch)];
 
 // ---------------------------------------------------------------- drużyna
 

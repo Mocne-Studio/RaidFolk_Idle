@@ -1062,6 +1062,55 @@ function sekcjaBojowe() {
     </div>`;
   }
 
+  // ---- RUNA I ZAKLĘCIA ----
+  // Runę wykuwasz w RuneCraftingu, podpinasz tutaj, a poziom Magii decyduje,
+  // jak daleko w jej żywiole sięgasz.
+  h += `<div class="sec">Runa magii</div>`;
+  const mam = Object.fromEntries((S.materials ?? []).map(m => [m.id, m.count]));
+  const nazwy = S.matNames ?? {};
+  const dostepne = Object.keys(S.runy ?? {}).filter(id => (mam[id] ?? 0) > 0);
+
+  h += `<div class="card ${S.runa ? 'hi' : ''}">
+    <div class="row"><div class="grow">
+      <div class="t1">${S.runa ? esc(nazwy[S.runa] ?? S.runa) : 'Brak podpiętej runy'}</div>
+      <div class="t2">${S.runa
+        ? `Magia ${S.magiaLvl} — decyduje, które zaklęcia tej runy umiesz`
+        : 'Wykuj runę w RuneCraftingu i podepnij ją tutaj, żeby rzucać czary'}</div>
+    </div>${S.runa ? `<button class="btn ghost" data-act="runa" data-id="">Odepnij</button>` : ''}</div>
+  </div>`;
+
+  if (!dostepne.length && !S.runa) {
+    h += `<div class="card"><div class="t2">Nie masz jeszcze żadnej runy.
+      Kop <b>Esencję</b> i <b>kryształy żywiołów</b> w Górnictwie, potem połącz je w Runach.</div></div>`;
+  }
+
+  for (const id of dostepne) {
+    const lista = S.runy[id] ?? [];
+    const podpieta = S.runa === id;
+    h += `<button class="card row compact ${podpieta ? 'hi' : ''}" data-act="runa" data-id="${id}">
+      <div class="icon">${podpieta ? '✦' : '·'}</div>
+      <div class="grow">
+        <div class="t1">${esc(nazwy[id] ?? id)} <span class="num">×${mam[id]}</span></div>
+        <div class="t2">${lista.map(z => `${z.label} (Magia ${z.magia})`).join(' · ')}</div>
+      </div>
+      <span class="badge ${podpieta ? 'on' : ''}">${podpieta ? 'PODPIĘTA' : 'PODEPNIJ'}</span>
+    </button>`;
+  }
+
+  if (S.runa) {
+    const lista = S.runy?.[S.runa] ?? [];
+    h += `<div class="sec">Zaklęcia tej runy</div>`;
+    for (const z of lista) {
+      const umiesz = S.magiaLvl >= z.magia;
+      h += `<div class="card compact ${umiesz ? '' : 'locked'}">
+        <div class="row"><div class="grow">
+          <div class="t1">${esc(z.label)}</div>
+          <div class="t2">${umiesz ? esc(z.desc) : `Wymaga Magii ${z.magia} — masz ${S.magiaLvl}`}</div>
+        </div><span class="badge ${umiesz ? 'on' : ''}">${umiesz ? 'UMIESZ' : `Lv.${z.magia}`}</span></div>
+      </div>`;
+    }
+  }
+
   h += `<div class="card" style="margin-top:8px"><div class="t2">
     Skille <b>nie bramkują sprzętu</b> — jedyną bramką zostaje poziom postaci.
     Dają wyłącznie bonusy, więc noszenie czegoś nowego nigdy nie jest zablokowane.</div></div>`;
@@ -2154,6 +2203,13 @@ document.addEventListener('click', async (ev) => {
       const r = S.skills[skillOpen].resources.find(x => x.id === res);
       render();
       startMineLoop(skillOpen, res, r.ms);
+    } else if (act === 'runa') {
+      const d = await api('runa', { id: btn.dataset.id || null });
+      if (!d.error) {
+        toast(d.runa ? `Podpięta · ${d.zaklecia.length} zaklęć` : 'Runa odpięta');
+        render();
+      }
+
     } else if (act === 'eat') {
       const d = await api('eat', { id: btn.dataset.id });
       if (!d.error) { toast(`${d.buff.label}: ${opisBuffa(d.buff)}`); render(); }

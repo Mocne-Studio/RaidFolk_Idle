@@ -50,6 +50,50 @@ export const CONFIG = {
       desc: 'Trzy ciosy po 60% obrażeń we wszystkich przeciwników.',
       hits: 3, dmgMult: 0.60,
     },
+    // ---- ZAKLĘCIA ----
+    // Zaklęcie odpalasz, gdy spełnisz DWA warunki:
+    //   1. masz PODPIĘTĄ esencję jego żywiołu (RuneCrafting ją wykuwa)
+    //   2. Twój skill bojowy MAGIA jest na dość wysokim poziomie
+    //
+    // Dlatego pierwszy czar to Fireball na poziomie 1 — wystarczy podpiąć
+    // Esencję Ognia. Reszta przychodzi z expem w Magii.
+    fireball: {
+      label: 'Fireball', cd: 3, charge: 2, target: 'one',
+      czar: { runa: 'runaognia', magia: 1 },
+      desc: '210% obrażeń w jeden cel. Ignoruje jedną trzecią pancerza.',
+      dmgMult: 2.10, armorPierce: 0.33,
+    },
+    pozoga: {
+      label: 'Pożoga', cd: 5, charge: 3, target: 'all',
+      czar: { runa: 'runaognia', magia: 8 },
+      desc: 'Trzy uderzenia po 130% we wszystkich przeciwników.',
+      hits: 3, dmgMult: 1.30,
+    },
+    falachlodu: {
+      label: 'Fala Chłodu', cd: 5, charge: 2, target: 'self',
+      czar: { runa: 'runamrozu', magia: 1 },
+      desc: 'Leczy 25% zdrowia i zbija otrzymywane obrażenia o 15% na 3 tury.',
+      heal: 0.25, buff: { id: 'falachlodu', turns: 3, takenMult: 0.85 },
+    },
+    kamiennaskora: {
+      label: 'Kamienna Skóra', cd: 5, charge: 1, target: 'self',
+      czar: { runa: 'runaziemi', magia: 1 },
+      desc: 'Pancerz +60% przez 4 tury.',
+      buff: { id: 'kamiennaskora', turns: 4, armorMult: 1.60 },
+    },
+    podmuch: {
+      label: 'Podmuch', cd: 4, charge: 2, target: 'all',
+      czar: { runa: 'runawichru', magia: 1 },
+      desc: 'Cztery uderzenia po 70% obrażeń we wszystkich.',
+      hits: 4, dmgMult: 0.70,
+    },
+    burzazywiolow: {
+      label: 'Burza Żywiołów', cd: 6, charge: 3, target: 'all',
+      czar: { runa: 'runapradawna', magia: 5 },
+      desc: 'Trzy uderzenia po 210% we wszystkich. Wymaga Runy Pradawnej.',
+      hits: 3, dmgMult: 2.10,
+    },
+
     ogluszenie: {
       label: 'Cios ogłuszający', cd: 4, charge: 2, target: 'one',
       desc: '150% obrażeń, 50% szans na ogłuszenie. Ogłuszony traci turę i obrywa krytyki 2× częściej.',
@@ -415,19 +459,25 @@ export const CONFIG = {
       label: 'Górnictwo', ic: '⛏', daje: 'ruda i kryształy', zasila: 'Kowalstwo',
       grywalne: true,
       xpBase: 20,
+      // Górnictwo wydobywa trzy rzeczy: RUDY pod Kowalstwo, jedną wspólną
+      // ESENCJĘ i KRYSZTAŁY ŻYWIOŁÓW. Esencja jest jedna dla wszystkich —
+      // to kryształ decyduje, jaki żywioł wyjdzie w RuneCraftingu.
+      //
+      // Kopanie esencji i kryształów dzieli exp po połowie z RuneCraftingiem.
       resources: [
-        { id: 'miedz',   label: 'Miedź',   lvl: 1,  xp: 8,  ms: 3000 },
-        { id: 'esiskry', label: 'Esencja Iskry', lvl: 2, xp: 11, ms: 3400 },
-        { id: 'cyna',    label: 'Cyna',    lvl: 3,  xp: 14, ms: 3800 },
-        { id: 'esognia', label: 'Esencja Ognia', lvl: 4, xp: 20, ms: 4200 },
-        { id: 'zelazo',  label: 'Żelazo',  lvl: 5,  xp: 24, ms: 4600 },
-        { id: 'esmrozu', label: 'Esencja Mrozu', lvl: 7, xp: 33, ms: 5000 },
-        { id: 'wegiel',  label: 'Węgiel',  lvl: 8,  xp: 38, ms: 5400 },
-        { id: 'esburzy', label: 'Esencja Burzy', lvl: 10, xp: 50, ms: 5900 },
-        { id: 'mithril', label: 'Mithril', lvl: 12, xp: 60, ms: 6500 },
-        { id: 'esotchlani', label: 'Esencja Otchłani', lvl: 15, xp: 82, ms: 7200 },
+        { id: 'miedz',     label: 'Miedź',            lvl: 1,  xp: 8,  ms: 3000 },
+        { dzieliXp: 'runy', id: 'krysztalognia', label: 'Kryształ Ognia', lvl: 3, xp: 16, ms: 3800 },
+        { id: 'cyna',      label: 'Cyna',             lvl: 3,  xp: 14, ms: 3800 },
+        { dzieliXp: 'runy', id: 'esencja',      label: 'Esencja',        lvl: 5, xp: 26, ms: 4400 },
+        { id: 'zelazo',    label: 'Żelazo',           lvl: 5,  xp: 24, ms: 4600 },
+        { dzieliXp: 'runy', id: 'krysztalmrozu', label: 'Kryształ Mrozu', lvl: 6, xp: 32, ms: 5000 },
+        { id: 'wegiel',    label: 'Węgiel',           lvl: 8,  xp: 38, ms: 5400 },
+        { dzieliXp: 'runy', id: 'krysztalziemi', label: 'Kryształ Ziemi', lvl: 8, xp: 42, ms: 5400 },
+        { dzieliXp: 'runy', id: 'krysztalwichru',label: 'Kryształ Wichru',lvl: 10, xp: 52, ms: 5900 },
+        { id: 'mithril',   label: 'Mithril',          lvl: 12, xp: 60, ms: 6500 },
       ],
     },
+
     // KOWALSTWO PRZETWARZA. Zjada rudę z Górnictwa i wypluwa sztaby,
     // a sztabami ulepsza się noszony sprzęt (+1, +2, ...).
     kowalstwo: {
@@ -499,38 +549,31 @@ export const CONFIG = {
         { id: 'mocnamikstura', label: 'Mocna mikstura', lvl: 9,  xp: 38, ms: 5200,
           koszt: { ziologorzk: 2, korzennocny: 1 },daje: { potion: 3 } },
         { id: 'eliksir',       label: 'Eliksir',        lvl: 14, xp: 60, ms: 6200,
-          koszt: { korzennocny: 2, kwiatciern: 1, mocyiskry: 1 }, daje: { potion: 5 } },
+          koszt: { korzennocny: 2, kwiatciern: 1, runapradawna: 1 }, daje: { potion: 5 } },
       ],
     },
-    // RUNY PRZETWARZAJĄ. Dwa stopnie:
-    //   1. runa zwykła = ESENCJA z Górnictwa + ruda
-    //   2. runa mocy   = runa zwykła + KRYSZTAŁ MAGII, który wypada tylko
-    //      z wypraw. Bez zejścia po kryształ runy zostają bezsilne.
+    // RUNECRAFTING ŁĄCZY ESENCJĘ Z KRYSZTAŁEM w RUNĘ. Runę PODPINASZ
+    // do postaci — dopiero wtedy umiesz rzucać magią jej żywiołu.
+    // Które zaklęcie faktycznie odpalisz, decyduje poziom skilla MAGIA.
+    //
+    //   Górnictwo → esencja + kryształ  →  RuneCrafting → RUNA
+    //   podpięta runa + poziom Magii    →  zaklęcie
     runy: {
-      label: 'Runy', ic: '✦', daje: 'runy i runy mocy', zasila: 'Magia',
+      label: 'Runy', ic: '✦', daje: 'runy do podpięcia', zasila: 'Magia',
       grywalne: true, przetwarza: true,
       xpBase: 26,
       resources: [
-        { id: 'runaiskry',   label: 'Runa iskry',   lvl: 1,  xp: 9,  ms: 3600,
-          koszt: { esiskry: 2, miedz: 1 } },
-        { id: 'runaognia',   label: 'Runa ognia',   lvl: 4,  xp: 18, ms: 4400,
-          koszt: { esognia: 2, cyna: 1 } },
-        { id: 'runamrozu',   label: 'Runa mrozu',   lvl: 7,  xp: 30, ms: 5200,
-          koszt: { esmrozu: 2, zelazo: 1 } },
-        { id: 'runaburzy',   label: 'Runa burzy',   lvl: 10, xp: 47, ms: 6000,
-          koszt: { esburzy: 2, wegiel: 1 } },
-        { id: 'runaotchlani',label: 'Runa otchłani',lvl: 14, xp: 72, ms: 7000,
-          koszt: { esotchlani: 2, mithril: 1 } },
-
-        // ---- runy mocy: tu wchodzi kryształ z wyprawy ----
-        { id: 'mocyiskry',   label: 'Runa Mocy — Iskra', lvl: 3,  xp: 26, ms: 5000,
-          koszt: { runaiskry: 2, krysztalmagii: 1 } },
-        { id: 'mocyognia',   label: 'Runa Mocy — Ogień', lvl: 6,  xp: 40, ms: 5800,
-          koszt: { runaognia: 2, krysztalmagii: 1 } },
-        { id: 'mocymrozu',   label: 'Runa Mocy — Mróz',  lvl: 9,  xp: 58, ms: 6600,
-          koszt: { runamrozu: 2, krysztalmagii: 2 } },
-        { id: 'mocyburzy',   label: 'Runa Mocy — Burza', lvl: 12, xp: 80, ms: 7400,
-          koszt: { runaburzy: 2, krysztalmagii: 2 } },
+        { id: 'runaognia',  label: 'Runa Ognia',  lvl: 1, xp: 24, ms: 4600,
+          koszt: { esencja: 1, krysztalognia: 2 } },
+        { id: 'runamrozu',  label: 'Runa Mrozu',  lvl: 3, xp: 38, ms: 5200,
+          koszt: { esencja: 1, krysztalmrozu: 2 } },
+        { id: 'runaziemi',  label: 'Runa Ziemi',  lvl: 5, xp: 54, ms: 5800,
+          koszt: { esencja: 1, krysztalziemi: 2 } },
+        { id: 'runawichru', label: 'Runa Wichru', lvl: 7, xp: 74, ms: 6400,
+          koszt: { esencja: 1, krysztalwichru: 2 } },
+        // Jedyna runa, która wymaga Kryształu Magii z wyprawy.
+        { id: 'runapradawna', label: 'Runa Pradawna', lvl: 10, xp: 115, ms: 7400,
+          koszt: { esencja: 3, krysztalmagii: 2 } },
       ],
     },
   },

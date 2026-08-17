@@ -19,6 +19,7 @@ import {
   treeOf, nodeState, spendTreePoint, resetTree, respecCost,
   xpNeed, profOf, addSkillXp, canGather, teamUnits, allyStats,
   addCombatXp, skillSplit, cskillNeed, canSummon, slotOpen, petSlotOpen, baseOf,
+  zaklecia, bojowe,
 } from './game/character.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -249,7 +250,15 @@ function view(ch) {
     strengths: Object.fromEntries(Object.entries(STRENGTHS).map(([k, v]) => [k, {
       ...v, chance: hitChance(st.accuracy, k, makeEnemy(ch.floor, ch.fight).evasion ?? 0),
     }])),
-    abilities: (ch.abilities ?? Object.keys(C.abilities)).map(id => ({ id, ...C.abilities[id] })),
+    abilities: bojowe(ch).filter(id => C.abilities[id]).map(id => ({ id, ...C.abilities[id] })),
+    // Runy: co masz w zapasach, co podpięte, co by to dało.
+    runa: ch.runa,
+    runy: Object.entries(C.abilities).filter(([, a]) => a.czar)
+      .reduce((acc, [id, a]) => {
+        (acc[a.czar.runa] ??= []).push({ id, label: a.label, magia: a.czar.magia, desc: a.desc });
+        return acc;
+      }, {}),
+    magiaLvl: ch.cskills?.magia?.lvl ?? 1,
     ultimate: { ...(ULTIMATES[st.wtype] ?? ULTIMATES.mele), wtype: st.wtype },
     chargeMax: C.combat.chargeMax,
     activeFight: ch.activeFight && !ch.activeFight.over ? summary(ch.activeFight) : null,
@@ -552,7 +561,7 @@ function startFight(ch) {
       ? Math.min(ch.potions, Math.max(0, C.expedition.potionCap - ch.expedition.potionsUsed))
       : Math.min(ch.potions, C.healing.carryTower),
     wtype: st.wtype,
-    abilities: ch.abilities ?? Object.keys(ABILITIES),
+    abilities: bojowe(ch),
   }, seed, fightMode(ch));
   F.enemyMeta = { variant: enemy.variant,
                   gold: wrogowie.reduce((s, w) => s + w.gold, 0),
@@ -808,11 +817,22 @@ function doMineTick(ch) {
   if (res.daje?.potion) {
     ch.potions += res.daje.potion;
     out.gained.potions = res.daje.potion;
+
   } else {
     ch.materials[res.id] = (ch.materials[res.id] ?? 0) + 1;
   }
 
-  out.awans = addSkillXp(ch, a.skill, res.xp);
+  // Kopanie run i esencji karmi DWA skille po połowie: to, czym kopiesz,
+  // i RuneCrafting, do którego te surowce należą.
+  if (res.dzieliXp) {
+    out.awans = addSkillXp(ch, a.skill, Math.round(res.xp * 0.5));
+    const drugi = addSkillXp(ch, res.dzieliXp, Math.round(res.xp * 0.5));
+    if (drugi) out.awansDrugi = { skill: res.dzieliXp, ile: drugi };
+    out.gained.xpDzielony = res.dzieliXp;
+  } else {
+    out.awans = addSkillXp(ch, a.skill, res.xp);
+  }
+
   a.since = Date.now();
   return out;
 }
@@ -972,6 +992,15 @@ const server = http.createServer(async (req, res) => {
         case '/api/minetick':result = doMineTick(ch); break;
         case '/api/team':    result = doTeam(ch, body.slot, body.idx); break;
         case '/api/eat':     result = doEat(ch, String(body.id)); break;
+        case '/api/runa': {
+          // Podpięcie runy. Runa zostaje w zapasach — nie zużywa się,
+          // podpięcie to wybór, nie koszt.
+          const id = body.id ? String(body.id) : null;
+          if (id && !(ch.materials[id] > 0)) { result = { error: 'Nie masz tej runy' }; break; }
+          ch.runa = id;
+          result = { ok: true, runa: id, zaklecia: zaklecia(ch) };
+          break;
+        }
         case '/api/upgrade': result = doUpgrade(ch, body.itemId); break;
         case '/api/expstart':  result = doExpStart(ch, String(body.id ?? 'puszcza'), String(body.risk), body.mods); break;
         case '/api/expleave':  result = doExpLeave(ch); break;
