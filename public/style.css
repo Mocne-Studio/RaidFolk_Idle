@@ -251,6 +251,13 @@ button.card:active{background:#26211B}
 .eq-doll{flex:none}
 .eq-side{display:flex;flex-direction:column;gap:8px;min-width:0}
 .eq-bag{display:flex;flex-direction:column;flex:1;min-height:0;margin-top:10px}
+/* Na telefonie makieta i panel szczegółu razem potrafią urosnąć (porównanie
+   + ulepszanie). Zamykamy je w jednym przewijanym pudełku, a plecak dostaje
+   resztę ekranu — dzięki temu strona jako całość dalej się nie przewija. */
+@media (max-width:759px){
+  .eq-top{flex:0 1 auto;min-height:0;overflow-y:auto;max-height:52vh}
+  .doll{max-width:240px}
+}
 @media (min-width:760px){
   .eq-top{flex-direction:row;align-items:flex-start}
   .eq-doll{flex:0 0 290px}

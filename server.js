@@ -216,6 +216,12 @@ function view(ch) {
     },
     skills: skillsView(ch),
     materials: materialsView(ch),
+    // Nazwy WSZYSTKICH surowców, nie tylko posiadanych — inaczej koszt
+    // ulepszenia pokazywał surowe id, gdy gracz nie miał ani jednej sztaby.
+    matNames: Object.fromEntries(Object.values(C.skills)
+      .flatMap(sk => sk.resources ?? []).map(r => [r.id, r.label])),
+    buff: ch.buff ?? null,
+    upgrade: C.upgrade,
     activity: ch.activity ?? null,
     keys: ch.currency,
     keyCost: C.summon.keyCost,
@@ -577,6 +583,13 @@ function resolveFight(ch) {
   const meta = F.enemyMeta;
   const info = floorInfo(ch.floor);
 
+  // Buff z jedzenia zużywa się walkami, nie czasem — dzięki temu nie ucieka,
+  // gdy gracz odejdzie od telefonu.
+  if (ch.buff) {
+    ch.buff.walki--;
+    if (ch.buff.walki <= 0) { out.buffKoniec = ch.buff.label; ch.buff = null; }
+  }
+
   // Zużyte mikstury schodzą ze stanu; na wyprawie liczy się też limit noszenia.
   const wypite = res.potionsUsed ?? 0;
   ch.potions = Math.max(0, ch.potions - wypite);
@@ -750,9 +763,17 @@ function doMineStop(ch) {
   return { ok: true };
 }
 
+// Czy stać nas na jeden cykl przetwarzania.
+function maNaKoszt(ch, koszt) {
+  for (const [id, ile] of Object.entries(koszt ?? {})) {
+    if ((ch.materials[id] ?? 0) < ile) return false;
+  }
+  return true;
+}
+
 function doMineTick(ch) {
   const a = ch.activity;
-  if (!a) return { error: 'Nic nie kopiesz' };
+  if (!a) return { error: 'Nic nie robisz' };
   const check = canGather(ch, a.skill, a.res);
   if (!check.ok) { ch.activity = null; return { error: check.reason }; }
 
@@ -760,11 +781,74 @@ function doMineTick(ch) {
   const minelo = Date.now() - a.since;
   if (minelo < res.ms - 250) return { error: 'Jeszcze nie teraz' };   // 250 ms luzu na drogę
 
-  ch.materials[res.id] = (ch.materials[res.id] ?? 0) + 1;
-  const awans = addSkillXp(ch, a.skill, res.xp);
-  a.since = Date.now();
+  // Profesje przetwarzające zjadają surowce. Brak wsadu zatrzymuje pracę —
+  // to nie błąd, tylko koniec zapasów.
+  if (res.koszt) {
+    if (!maNaKoszt(ch, res.koszt)) {
+      ch.activity = null;
+      return { error: 'Skończyły się surowce' };
+    }
+    for (const [id, ile] of Object.entries(res.koszt)) {
+      ch.materials[id] = (ch.materials[id] ?? 0) - ile;
+      if (ch.materials[id] <= 0) delete ch.materials[id];
+    }
+  }
 
-  return { ok: true, gained: { res: res.id, label: res.label, xp: res.xp }, awans };
+  const out = { ok: true, gained: { res: res.id, label: res.label, xp: res.xp } };
+
+  // daje.potion — Alchemia. Mikstury nie są surowcem, tylko osobną liczbą.
+  if (res.daje?.potion) {
+    ch.potions += res.daje.potion;
+    out.gained.potions = res.daje.potion;
+  } else {
+    ch.materials[res.id] = (ch.materials[res.id] ?? 0) + 1;
+  }
+
+  out.awans = addSkillXp(ch, a.skill, res.xp);
+  a.since = Date.now();
+  return out;
+}
+
+// Zjedzenie jedzenia z Gotowania. Buff trzyma się przez kilka walk.
+function doEat(ch, id) {
+  let def = null;
+  for (const s of Object.values(C.skills)) {
+    const r = (s.resources ?? []).find(x => x.id === id && x.buff);
+    if (r) { def = r; break; }
+  }
+  if (!def) return { error: 'Tego nie da się zjeść' };
+  if ((ch.materials[id] ?? 0) < 1) return { error: 'Nie masz tego' };
+
+  ch.materials[id]--;
+  if (ch.materials[id] <= 0) delete ch.materials[id];
+  ch.buff = { ...def.buff, id };
+  return { ok: true, buff: ch.buff };
+}
+
+// Ulepszanie sprzętu sztabami z Kowalstwa. Każdy plus to stały przyrost
+// obrażeń albo pancerza — proste, przewidywalne, bez ryzyka spalenia.
+function doUpgrade(ch, itemId) {
+  const it = ch.equipped[Object.keys(ch.equipped).find(s => ch.equipped[s]?.id === String(itemId))]
+    ?? ch.backpack.find(i => i.id === String(itemId));
+  if (!it) return { error: 'Nie ma takiego przedmiotu' };
+
+  const plus = it.plus ?? 0;
+  if (plus >= C.upgrade.maxPlus) return { error: 'Przedmiot jest już maksymalnie ulepszony' };
+
+  const koszt = { ...C.upgrade.koszt };
+  for (const k of Object.keys(koszt)) koszt[k] = koszt[k] * (plus + 1);
+  if (!maNaKoszt(ch, koszt)) {
+    return { error: `Potrzeba ${Object.entries(koszt).map(([k, v]) => `${k} ×${v}`).join(', ')}` };
+  }
+  for (const [id, ile] of Object.entries(koszt)) {
+    ch.materials[id] -= ile;
+    if (ch.materials[id] <= 0) delete ch.materials[id];
+  }
+
+  it.plus = plus + 1;
+  if (it.damage) it.damage = Math.round(it.damage * (1 + C.upgrade.perPlus));
+  if (it.armor) it.armor = Math.round(it.armor * (1 + C.upgrade.perPlus));
+  return { ok: true, plus: it.plus, name: it.name };
 }
 
 // Przywołanie. Prototyp odczucia: jeden klucz, jedno losowanie, żadnej litości
@@ -879,6 +963,8 @@ const server = http.createServer(async (req, res) => {
         case '/api/minestop':result = doMineStop(ch); break;
         case '/api/minetick':result = doMineTick(ch); break;
         case '/api/team':    result = doTeam(ch, body.slot, body.idx); break;
+        case '/api/eat':     result = doEat(ch, String(body.id)); break;
+        case '/api/upgrade': result = doUpgrade(ch, body.itemId); break;
         case '/api/expstart':  result = doExpStart(ch, String(body.id ?? 'puszcza'), String(body.risk), body.mods); break;
         case '/api/expleave':  result = doExpLeave(ch); break;
         case '/api/expchoose': result = doExpChoose(ch, String(body.opcja)); break;

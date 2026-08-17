@@ -1226,11 +1226,40 @@ function detailHtml() {
 
     ${!eqCheck.ok ? `<div class="t2" style="color:#D9736B;margin-top:8px">${esc(eqCheck.reason)}</div>` : ''}
 
+    ${ulepszHtml(it)}
+
     ${detail.where === 'bag' ? `<div class="actions">
       <button class="btn solid" data-act="equip" data-id="${it.id}" ${eqCheck.ok ? '' : 'disabled'}>Załóż</button>
       <button class="btn ghost" data-act="sell" data-id="${it.id}">Sprzedaj</button>
     </div>` : ''}
   </div>`;
+}
+
+// Ulepszanie sztabami z Kowalstwa. Pokazujemy koszt wprost i blokujemy,
+// gdy brakuje — żeby nie trzeba było zgadywać.
+function ulepszHtml(it) {
+  const U = S.upgrade;
+  if (!U || (!it.damage && !it.armor)) return '';
+  const plus = it.plus ?? 0;
+  if (plus >= U.maxPlus) {
+    return `<div class="stat"><span class="k">Ulepszenie</span>
+      <span class="v" style="color:var(--brass)">+${plus} — maksimum</span></div>`;
+  }
+  const mam = Object.fromEntries((S.materials ?? []).map(m => [m.id, m.count]));
+  const nazwy = S.matNames ?? {};
+  const koszt = Object.entries(U.koszt).map(([k, v]) => [k, v * (plus + 1)]);
+  const stac = koszt.every(([k, v]) => (mam[k] ?? 0) >= v);
+  const txt = koszt.map(([k, v]) => `${nazwy[k] ?? k} ${mam[k] ?? 0}/${v}`).join(' · ');
+
+  return `<div class="sec">Ulepszenie</div>
+    <div class="card row compact">
+      <div class="grow">
+        <div class="t1">+${plus} → +${plus + 1}</div>
+        <div class="t2" style="color:${stac ? 'var(--brass)' : '#D9736B'}">${esc(txt)}</div>
+        <div class="t2">+${Math.round(U.perPlus * 100)}% ${it.damage ? 'obrażeń' : 'pancerza'}</div>
+      </div>
+      <button class="btn" data-act="upgrade" data-id="${it.id}" ${stac ? '' : 'disabled'}>Ulepsz</button>
+    </div>`;
 }
 
 // Porównanie obok siebie: co nosisz kontra co trzymasz. Bez tego gracz musiał
@@ -1463,6 +1492,15 @@ function panelTowarzysza() {
 // niczego nie gubi — timer chodzi dalej, bo to ta sama strona.
 
 let skillOpen = 'gornictwo';
+// Co da się zjeść — czyta się z definicji profesji, żeby lista nie rozjechała
+// się z configiem przy dodaniu nowej potrawy.
+const JEDZENIE = new Set();
+const opisBuffa = (b) => [
+  b.dmgPct ? `obrażenia +${Math.round(b.dmgPct * 100)}%` : null,
+  b.hpPct ? `zdrowie +${Math.round(b.hpPct * 100)}%` : null,
+].filter(Boolean).join(' · ');
+const buffTxt = (b) => `${opisBuffa(b)} przez ${b.walki} walk`;
+
 let MINE = null;         // { skill, res, ms, t0, timer, tick, pauza }
 const PAUZA_MS = 700;    // oddech między cyklami — żeby było widać, że coś padło
 
@@ -1603,18 +1641,32 @@ function sekcjaZbierackie() {
       <div class="bar xp big" style="margin-top:6px"><i style="width:${Math.round(s.xp / s.xpNeed * 100)}%"></i></div>
     </div>`;
 
+    const mam = Object.fromEntries((S.materials ?? []).map(m => [m.id, m.count]));
+    const nazwaMat = S.matNames ?? {};
+
     for (const r of s.resources) {
       const kopie = akt?.res === r.id;
-      h += `<button class="card row res-row ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}"
-        ${r.unlocked ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
-        <div class="icon">${r.unlocked ? '🪨' : '🔒'}</div>
+      // Profesja przetwarzająca potrzebuje wsadu — pokazujemy go wprost
+      // i blokujemy, gdy go brakuje.
+      const koszt = r.koszt ? Object.entries(r.koszt) : null;
+      const staC = !koszt || koszt.every(([id, ile]) => (mam[id] ?? 0) >= ile);
+      const kosztTxt = koszt
+        ? koszt.map(([id, ile]) => `${nazwaMat[id] ?? id} ${mam[id] ?? 0}/${ile}`).join(' · ')
+        : null;
+
+      h += `<button class="card row res-row ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''} ${r.unlocked && !staC ? 'off' : ''}"
+        ${r.unlocked && staC ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
+        <div class="icon">${!r.unlocked ? '🔒' : r.daje?.potion ? '🧪' : koszt ? '🔥' : '🪨'}</div>
         <div class="grow">
-          <div class="t1">${esc(r.label)}</div>
-          <div class="t2">${r.unlocked
-            ? `${r.xp} exp · ${(r.ms / 1000).toFixed(1)} s`
-            : `otwiera się na poziomie ${r.lvl}`}</div>
+          <div class="t1">${esc(r.label)}${r.daje?.potion ? ` ×${r.daje.potion}` : ''}</div>
+          <div class="t2">${!r.unlocked
+            ? `otwiera się na poziomie ${r.lvl}`
+            : `${r.xp} exp · ${(r.ms / 1000).toFixed(1)} s`}</div>
+          ${r.unlocked && kosztTxt
+            ? `<div class="t2" style="color:${staC ? 'var(--brass)' : '#D9736B'}">z: ${esc(kosztTxt)}</div>` : ''}
+          ${r.buff ? `<div class="t2" style="color:var(--heal)">${esc(buffTxt(r.buff))}</div>` : ''}
         </div>
-        <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'KOPIESZ' : `Lv.${r.lvl}`}</span>
+        <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ROBISZ' : !r.unlocked ? `Lv.${r.lvl}` : staC ? 'START' : 'BRAK'}</span>
       </button>`;
     }
   }
@@ -1637,15 +1689,32 @@ function sekcjaZbierackie() {
       <div class="t2">Wybierz surowiec obok. Kolejne cykle lecą same, aż klikniesz Przerwij.</div></div>`;
   }
 
-  h += `<div class="sec">Surowce</div>`;
+  // Buff z jedzenia — widoczny, bo znika po kilku walkach.
+  if (S.buff) {
+    h += `<div class="card hi" style="margin-top:8px">
+      <div class="row"><div class="grow">
+        <div class="t1">${esc(S.buff.label)}</div>
+        <div class="t2">${esc(buffTxt(S.buff))}</div></div>
+        <span class="badge on">${S.buff.walki} walk</span></div>
+    </div>`;
+  }
+
+  h += `<div class="sec">Zapasy</div>`;
   const mats = S.materials ?? [];
   h += mats.length
-    ? `<div class="matlist">${mats.map(m => `<div class="matrow">
-        <span>${esc(m.label)}</span><span class="num">${m.count}</span></div>`).join('')}</div>`
-    : `<div class="card"><div class="t2">Pusto. Wykopane trafia tutaj i do Ekwipunku → Surowce.</div></div>`;
+    ? mats.map(m => {
+        const jedzenie = JEDZENIE.has(m.id);
+        return `<div class="card row compact">
+          <div class="grow"><div class="t1">${esc(m.label)}</div>
+            <div class="t2">${jedzenie ? 'jedzenie — daje buff na kilka walk' : 'surowiec'}</div></div>
+          <span class="num" style="width:34px;text-align:right">${m.count}</span>
+          ${jedzenie ? `<button class="btn" data-act="eat" data-id="${m.id}">Zjedz</button>` : ''}
+        </div>`;
+      }).join('')
+    : `<div class="card"><div class="t2">Pusto. Zebrane trafia tutaj i do Ekwipunku → Surowce.</div></div>`;
 
-  h += `<div class="card" style="margin-top:8px"><div class="t2">Poziom decyduje, <b>co</b> kopiesz.
-    Narzędzie będzie decydować, <b>jak szybko</b>. Postęp po zamknięciu gry jeszcze nie działa.</div></div>`;
+  h += `<div class="card" style="margin-top:8px"><div class="t2">Poziom decyduje, <b>co</b> robisz.
+    Narzędzie będzie decydować, <b>jak szybko</b>. Postęp po zamknięciu gry nie działa.</div></div>`;
   h += `</div>`;
 
   h += `</div>`;
@@ -1855,6 +1924,11 @@ function paintCombatBar() {
 
 function render() {
   header();
+  // Odśwież listę tego, co jadalne — definicje przychodzą z serwera.
+  JEDZENIE.clear();
+  for (const s of Object.values(S.skills ?? {})) {
+    for (const r of s.resources ?? []) if (r.buff) JEDZENIE.add(r.id);
+  }
   // W trakcie walki arena i log mają własny cykl rysowania — nie ruszamy ich,
   // inaczej animacja pasków znika, a ekran skacze pod palcem.
   if (FIGHT) drawFightView();
@@ -2080,6 +2154,14 @@ document.addEventListener('click', async (ev) => {
       const r = S.skills[skillOpen].resources.find(x => x.id === res);
       render();
       startMineLoop(skillOpen, res, r.ms);
+    } else if (act === 'eat') {
+      const d = await api('eat', { id: btn.dataset.id });
+      if (!d.error) { toast(`${d.buff.label}: ${opisBuffa(d.buff)}`); render(); }
+
+    } else if (act === 'upgrade') {
+      const d = await api('upgrade', { itemId: btn.dataset.id });
+      if (!d.error) { toast(`${d.name} +${d.plus}`); render(); }
+
     } else if (act === 'minestop') {
       stopMineLoop();
       await api('minestop', {});

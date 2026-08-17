@@ -9,7 +9,7 @@ const C = CONFIG;
 function starterItem(name, slot, wtype) {
   const def = C.gear.slots[slot];
   const it = {
-    id: null, slot, wtype, name, rarity: 'common', ilvl: 1, plus: 0, energy: 0,
+    id: 'i' + (nastepneId++), slot, wtype, name, rarity: 'common', ilvl: 1, plus: 0, energy: 0,
     reqLevel: 1, damage: 0, armor: 0, affixes: [],
   };
   if (def.base === 'damage' || def.base === 'mixed') {
@@ -20,6 +20,9 @@ function starterItem(name, slot, wtype) {
   }
   return it;
 }
+
+// Licznik id dla przedmiotów, które powstały bez niego (wyprawka startowa).
+let nastepneId = Date.now();
 
 // Profil głównej postaci. GRACZ NIE WYBIERA KLASY — decyzja trwała.
 // Klasy istnieją dalej w config, ale należą do Sojuszników.
@@ -57,6 +60,14 @@ export function migrate(ch) {
   ch.materials ??= {};
   ch.activity ??= null;
   ch.discovered ??= {};
+  ch.buff ??= null;
+
+  // Wyprawka startowa powstawała bez id, więc nic nie mogło jej znaleźć —
+  // ulepszanie odbijało się o „nie ma takiego przedmiotu". Każdy przedmiot
+  // bez id dostaje je przy pierwszym wczytaniu.
+  for (const it of [...ch.backpack, ...Object.values(ch.equipped)]) {
+    if (it && !it.id) it.id = 'i' + (nastepneId++);
+  }
   // Co gracz już ma, jest z definicji odkryte — inaczej po aktualizacji
   // tabela dropów kłamałaby, że nigdy tego nie widział.
   for (const it of [...ch.backpack, ...Object.values(ch.equipped)]) {
@@ -123,6 +134,7 @@ export function newCharacter(name, crest = null) {
     // Bazy przedmiotów, które kiedykolwiek przeszły graczowi przez ręce.
     // Na tym stoi tabela dropów wyprawy i katalog w Kronice.
     discovered: {},
+    buff: null,            // jedzenie z Gotowania: { label, dmgPct, hpPct, walki }
     // Kto stoi w drużynie. Liczby to indeksy w collection.companions / .pets.
     team: { allies: [null, null, null], pet: null },
     unlocked: {},          // co już zostało odblokowane (sojusznik, pet)
@@ -281,9 +293,12 @@ export function computeStats(ch) {
   // schowane z UI, ale liczby zostają — wróci albo nie, kod jest gotowy na oba.
   const K = combatSkillBonus(ch);
 
+  // Buff z jedzenia dokłada się do reszty. Znika po kilku walkach.
+  const B = ch.buff ?? {};
+
   const maxHp = Math.round(
     (cc.startHp + a.wytrzymalosc * cc.hpPerStamina + poziom(ch) * cc.hpPerLevel + hpFlat)
-    * (1 + T.hpPct + K.hpPct)
+    * (1 + T.hpPct + K.hpPct + (B.hpPct ?? 0))
   );
 
   // Obrażenia skalują się z atrybutami KLASY, nie z typu trzymanej broni — inaczej
@@ -296,7 +311,8 @@ export function computeStats(ch) {
   const mainAttr = (cls.dmgAttrs ?? ['sila'])
     .reduce((sum, attr) => sum + (a[attr] ?? 0) * (1 + (T.attrWeight[attr] ?? 0)), 0);
 
-  const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor) * (1 + T.dmgPct + K.dmgPct));
+  const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor)
+    * (1 + T.dmgPct + K.dmgPct + (B.dmgPct ?? 0)));
   const speed = Math.round(C.combat.baseSpeed + speedFlat + T.speed + a.zrecznosc / (cc.agiSpeedDivisor / 100));
   const armor = Math.round((armorFlat + T.armorFlat + a.wytrzymalosc * cc.staArmorPerPoint) * (1 + T.armorPct + K.armorPct));
 

@@ -423,8 +423,20 @@ export const CONFIG = {
         { id: 'mithril', label: 'Mithril', lvl: 12, xp: 60, ms: 6500 },
       ],
     },
-    kowalstwo:   { label: 'Kowalstwo',    ic: '🔨', daje: 'przetapianie i sprzęt', zasila: 'Ekwipunek',
-      ladder: [['Sztaba miedzi', 1], ['Brąz', 15], ['Stal', 30], ['Stal hartowana', 45], ['Mithril', 60]] },
+    // KOWALSTWO PRZETWARZA. Zjada rudę z Górnictwa i wypluwa sztaby,
+    // a sztabami ulepsza się noszony sprzęt (+1, +2, ...).
+    kowalstwo: {
+      label: 'Kowalstwo', ic: '🔨', daje: 'sztaby i ulepszenia', zasila: 'Ekwipunek',
+      grywalne: true, przetwarza: true,
+      xpBase: 30,
+      resources: [
+        { id: 'sztabamiedzi', label: 'Sztaba miedzi', lvl: 1,  xp: 14, ms: 4200, koszt: { miedz: 3 } },
+        { id: 'braz',         label: 'Brąz',          lvl: 4,  xp: 26, ms: 5000, koszt: { miedz: 2, cyna: 2 } },
+        { id: 'stal',         label: 'Stal',          lvl: 7,  xp: 42, ms: 5800, koszt: { zelazo: 3, wegiel: 1 } },
+        { id: 'stalhart',     label: 'Stal hartowana',lvl: 11, xp: 64, ms: 6600, koszt: { zelazo: 4, wegiel: 3 } },
+        { id: 'sztabamithril',label: 'Sztaba mithrilu',lvl: 15, xp: 96, ms: 7600, koszt: { mithril: 3, wegiel: 2 } },
+      ],
+    },
     rybolowstwo: {
       label: 'Rybołówstwo', ic: '🐟', daje: 'ryby', zasila: 'Gotowanie',
       grywalne: true,
@@ -437,12 +449,54 @@ export const CONFIG = {
         { id: 'glebinowa',label: 'Ryba głębin', lvl: 12, xp: 58, ms: 6800 },
       ],
     },
-    rolnictwo:   { label: 'Rolnictwo',    ic: '🌾', daje: 'rośliny i zwierzęta', zasila: 'Gotowanie i Alchemia',
-      ladder: [['Len', 1], ['Zboże', 14], ['Zioła gorzkie', 28], ['Korzeń nocny', 44], ['Kwiat cierniowy', 58]] },
-    gotowanie:   { label: 'Gotowanie',    ic: '🍲', daje: 'buffy przed walką', zasila: 'Drużyna i pet',
-      ladder: [['Placek', 1], ['Zupa', 18], ['Pieczeń', 34], ['Uczta', 50], ['Uczta wieży', 65]] },
-    alchemia:    { label: 'Alchemia',     ic: '⚗', daje: 'mikstury do walki', zasila: 'Walka',
-      ladder: [['Słaba mikstura', 1], ['Mikstura', 20], ['Mocna mikstura', 36], ['Eliksir', 52], ['Eliksir wieży', 68]] },
+    // ROLNICTWO ZBIERA. Karmi Alchemię i Gotowanie — bez niego tamte nie mają z czego.
+    rolnictwo: {
+      label: 'Rolnictwo', ic: '🌾', daje: 'zioła i zboże', zasila: 'Alchemia i Gotowanie',
+      grywalne: true,
+      xpBase: 21,
+      resources: [
+        { id: 'ziolo',      label: 'Zioło polne',    lvl: 1,  xp: 7,  ms: 3200 },
+        { id: 'zboze',      label: 'Zboże',          lvl: 3,  xp: 12, ms: 3900 },
+        { id: 'ziologorzk', label: 'Zioło gorzkie',  lvl: 6,  xp: 23, ms: 4700 },
+        { id: 'korzennocny',label: 'Korzeń nocny',   lvl: 9,  xp: 37, ms: 5500 },
+        { id: 'kwiatciern', label: 'Kwiat cierniowy',lvl: 13, xp: 59, ms: 6400 },
+      ],
+    },
+
+    // GOTOWANIE PRZETWARZA. Ryby i zboże na jedzenie, które daje buff PRZED walką.
+    gotowanie: {
+      label: 'Gotowanie', ic: '🍲', daje: 'jedzenie i buffy', zasila: 'Walka',
+      grywalne: true, przetwarza: true,
+      xpBase: 27,
+      resources: [
+        { id: 'placek',   label: 'Placek',      lvl: 1,  xp: 12, ms: 3800,
+          koszt: { zboze: 2 },                    buff: { label: 'Placek', hpPct: 0.06, walki: 5 } },
+        { id: 'zupa',     label: 'Zupa rybna',  lvl: 4,  xp: 24, ms: 4600,
+          koszt: { plotka: 2, zboze: 1 },         buff: { label: 'Zupa rybna', hpPct: 0.10, walki: 6 } },
+        { id: 'pieczen',  label: 'Pieczeń',     lvl: 8,  xp: 40, ms: 5400,
+          koszt: { pstrag: 2, ziolo: 2 },         buff: { label: 'Pieczeń', dmgPct: 0.08, walki: 6 } },
+        { id: 'uczta',    label: 'Uczta',       lvl: 12, xp: 62, ms: 6400,
+          koszt: { szczupak: 2, zboze: 3 },       buff: { label: 'Uczta', dmgPct: 0.10, hpPct: 0.10, walki: 8 } },
+      ],
+    },
+
+    // ALCHEMIA PRZETWARZA. JEDYNE ŹRÓDŁO MIKSTUR — kupowanie zostało skasowane,
+    // więc to ona trzyma gracza przy życiu po przegranej.
+    alchemia: {
+      label: 'Alchemia', ic: '⚗', daje: 'mikstury', zasila: 'Walka i Wyprawa',
+      grywalne: true, przetwarza: true,
+      xpBase: 24,
+      resources: [
+        { id: 'slabamikstura', label: 'Słaba mikstura', lvl: 1,  xp: 11, ms: 3600,
+          koszt: { ziolo: 2 },                     daje: { potion: 1 } },
+        { id: 'mikstura',      label: 'Mikstura',       lvl: 5,  xp: 22, ms: 4400,
+          koszt: { ziolo: 2, ziologorzk: 1 },      daje: { potion: 2 } },
+        { id: 'mocnamikstura', label: 'Mocna mikstura', lvl: 9,  xp: 38, ms: 5200,
+          koszt: { ziologorzk: 2, korzennocny: 1 },daje: { potion: 3 } },
+        { id: 'eliksir',       label: 'Eliksir',        lvl: 14, xp: 60, ms: 6200,
+          koszt: { korzennocny: 2, kwiatciern: 1, runaiskry: 1 }, daje: { potion: 5 } },
+      ],
+    },
     runy: {
       label: 'Runy', ic: '✦', daje: 'runy dla magii', zasila: 'Magia',
       grywalne: true,
@@ -771,15 +825,14 @@ export const CONFIG = {
     ],
   },
 
-  // ---------- ULEPSZANIE (jeszcze nieaktywne w kawałku 1) ----------
+  // ---------- ULEPSZANIE ----------
+  // Sztabami z Kowalstwa. Świadomie BEZ ryzyka spalenia: koszt rośnie liniowo
+  // z każdym plusem i to jest cała bariera. Hazard z niszczeniem przedmiotu
+  // dojdzie dopiero wtedy, gdy będzie z czego odtwarzać stratę.
   upgrade: {
-    bands: [
-      { to: 6,  fail: 'nic' },
-      { to: 10, fail: 'spadek' },
-      { to: 15, fail: 'spalenie' },
-    ],
-    chances: [null, .95,.92,.88,.84,.80, .70,.62,.55,.45, .25,.20,.15,.10,.05],
-    energyPerPlus: [0, 20,40,70,110,160, 240,340,470,640, 850,1100,1400,1750,2150],
+    maxPlus: 10,
+    perPlus: 0.08,                     // +8% obrażeń albo pancerza za plus
+    koszt: { sztabamiedzi: 2 },        // mnożone przez (obecny plus + 1)
   },
 };
 
