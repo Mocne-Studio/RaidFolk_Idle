@@ -267,8 +267,13 @@ button.akt-chip{cursor:pointer}
      zostaje waskim slupkiem z boku — tam nic sie nie zmienia.
      Siatka obejmuje WYLACZNIE wiersze surowcow: pasek expa, zakladki kategorii
      i filtry ida przez cala szerokosc, bo to naglowki, nie pozycje listy. */
-  .three-col>.skill-mid{flex:2.6;display:grid;align-content:start;
-    grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  /* CZTERY KOLUMNY NA PC. Po usunięciu karty „Zestaw Skill" prawa kolumna
+     stoi pusta przy większości profesji, więc lista dostaje tę szerokość. */
+  .three-col>.skill-mid{flex:3.6;display:grid;align-content:start;
+    grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+  /* Pusta kolumna nie ma prawa zabierać miejsca. Kowalstwo i Gotowanie dalej
+     coś w niej stawiają — tam zostaje. */
+  .three-col>.skill-now:empty{display:none}
   .three-col>.skill-mid>*{grid-column:1/-1}
   .three-col>.skill-mid>.res-row{grid-column:auto;margin:0}
 }
