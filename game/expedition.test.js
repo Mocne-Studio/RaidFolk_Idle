@@ -1,13 +1,13 @@
 // Testy reguł Wyprawy. Uruchamiane przez `node game/expedition.test.js`.
 //
-// Wyprawa jest jedynym źródłem przedmiotów i jedynym miejscem, gdzie da się
-// stracić zdobycz. Te reguły są jej sercem i muszą trzymać:
+// Wyprawa jest źródłem unikalnych materiałów i miejscem, gdzie da się stracić
+// zdobycz. Sprzęt należy wyłącznie do Dungeonów.
 //
 //   1. boss oddaje sakwę do plecaka
 //   2. śmierć niszczy sakwę
 //   3. porzucenie niszczy sakwę
 //   4. NIE MA wcześniejszej ekstrakcji poza wąskim postojem
-//   5. zdrowie nie wraca — ani na wejściu, ani między etapami
+//   5. wejście nie leczy; po zwycięstwie wraca tylko 8% maksymalnego HP
 //   6. wybór na rozdrożu naprawdę zmienia stan runu
 //   7. sprzęt sprzed wyprawy przeżywa porażkę
 //
@@ -77,7 +77,7 @@ async function main() {
       if (f.error) break;
     }
     const przed = (await post('state', { token: t })).state.stats.hp;
-    await post('expstart', { token: t, risk: 'niskie' });
+    await post('expstart', { token: t, id: 'puszcza', risk: 'bezryzyka' });
     const po = (await post('state', { token: t })).state.stats.hp;
     ok(po === przed, `wejscie na wyprawe NIE leczy (${przed} -> ${po})`);
     await post('expleave', { token: t });
@@ -88,7 +88,7 @@ async function main() {
     const t = await nowaPostac('Sakwa');
     const s0 = (await post('state', { token: t })).state;
     for (let i = 0; i < s0.unspentAttr; i++) await post('attr', { token: t, attr: 'sila' });
-    await post('expstart', { token: t, risk: 'niskie' });
+    await post('expstart', { token: t, id: 'puszcza', risk: 'bezryzyka' });
 
     const plecakPrzed = (await post('state', { token: t })).state.backpack.length;
     // przejdź kilka walk
@@ -104,6 +104,7 @@ async function main() {
     ok(s.backpack.length === plecakPrzed,
       `lup z wyprawy NIE trafia od razu do plecaka (${plecakPrzed} -> ${s.backpack.length})`);
     if (s.expedition) ok(s.expedition.sakwaCount >= 0, 'sakwa istnieje jako osobny pojemnik');
+    if (s.expedition) ok(s.expedition.sakwaCount === 0, 'wyprawa nie generuje przedmiotow — tylko materialy');
   }
 
   // ---- 3. Porzucenie niszczy sakwę, ale nie plecak ----
@@ -111,7 +112,7 @@ async function main() {
     const t = await nowaPostac('Porzuc');
     const s0 = (await post('state', { token: t })).state;
     for (let i = 0; i < s0.unspentAttr; i++) await post('attr', { token: t, attr: 'sila' });
-    await post('expstart', { token: t, risk: 'niskie' });
+    await post('expstart', { token: t, id: 'puszcza', risk: 'bezryzyka' });
     for (let i = 0; i < 3; i++) {
       const s = (await post('state', { token: t })).state;
       if (!s.expedition || s.expedition.decyzja || s.expedition.safepoint) break;
@@ -131,7 +132,7 @@ async function main() {
     const t = await nowaPostac('Rozdroze');
     const s0 = (await post('state', { token: t })).state;
     for (let i = 0; i < s0.unspentAttr; i++) await post('attr', { token: t, attr: 'sila' });
-    await post('expstart', { token: t, risk: 'niskie' });
+    await post('expstart', { token: t, id: 'puszcza', risk: 'bezryzyka' });
     // szkielet: walka, walka, rozdroze...
     for (let i = 0; i < 2; i++) await post('fight', { token: t });
     const s = (await post('state', { token: t })).state;

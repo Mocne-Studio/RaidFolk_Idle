@@ -19,7 +19,51 @@ export function nextRandom(state) {
 }
 
 const interval = (speed) => C.combat.speedToInterval / Math.max(1, speed);
-const reduce = (dmg, armor) => dmg * (1 - armor / (armor + C.combat.armorK));
+
+// ATTACK SPEED — ile ciosów na sekundę. JEDNA SKALA DLA WSZYSTKICH: bohatera,
+// sojuszników, petów i mobów. Silnik dalej liczy w `speed`, bo na tym stoi
+// kolejka tur; AS jest tym, co widzi gracz i po czym porównuje.
+//   AS = 1000 / odstęp = speed / 20
+export const attackSpeed = (speed) => Math.max(1, speed) * 1000 / C.combat.speedToInterval;
+// Odwrotnie: ile `speed` daje żądany przyrost AS. Używa tego afiks Attack Speed.
+export const asDoSpeed = (as) => as * C.combat.speedToInterval / 1000;
+
+// Ile pancerza trzeba na tym piętrze, żeby coś znaczył. K rośnie z piętrem,
+// więc pancerz zbija podobny procent na dole i na górze wieży.
+export const armorK = (poziom = 1) =>
+  C.combat.armorKBase + C.combat.armorKPerFloor * Math.max(1, poziom);
+
+// Bonus Obrony jest endgame'owym bezpiecznikiem, nie ułatwieniem pierwszych
+// pięter. Narasta od 25 poziomu i osiąga pełne +25% na poziomie 100.
+export const playerArmorEffect = (poziom = 1) => {
+  const start = C.combat.playerArmorEffectStartLevel ?? 0;
+  const full = Math.max(start + 1, C.combat.playerArmorEffectFullLevel ?? start + 1);
+  const progress = Math.min(1, Math.max(0, (poziom - start) / (full - start)));
+  return 1 + ((C.combat.playerArmorEffectMult ?? 1) - 1) * progress;
+};
+
+const reduce = (F, dmg, armor) => dmg * (1 - armor / (armor + (F.armorK ?? C.combat.armorKBase)));
+
+// Mikstury: dziewięć rodzajów, dwie rodziny. `pct` leczy procent maksymalnego
+// zdrowia (skaluje się z postacią), `flat` stałą liczbę punktów.
+export const MIKSTURY = Object.fromEntries(C.healing.mikstury.map(m => [m.id, m]));
+
+// Ile ta mikstura uleczy TĘ jednostkę, przed osłabieniem za kolejne użycia.
+export const ileLeczy = (id, maxHp) => {
+  const m = MIKSTURY[id];
+  if (!m) return 0;
+  return Math.round(m.pct ? maxHp * m.pct : m.flat);
+};
+
+// Zapas mikstur bywa liczbą (stare zapisy, testy) albo mapą id→sztuki.
+// Jedno miejsce, które sprowadza to do mapy — inaczej każdy wywołujący
+// musiałby pamiętać o obu kształtach.
+export function zapasMikstur(p) {
+  if (!p) return {};
+  if (typeof p === 'number') return p > 0 ? { [C.healing.domyslna]: p } : {};
+  return { ...p };
+}
+export const ilePotek = (p) => Object.values(zapasMikstur(p)).reduce((a, b) => a + b, 0);
 
 export function healEffect(usesSoFar) {
   const h = C.healing;
@@ -40,6 +84,10 @@ export function hitChance(accuracy, strength, evasion = 0) {
 
 const mkUnit = (u, side, idx) => ({
   side, idx, name: u.name, kind: u.kind ?? 'gracz',
+  ic: u.ic ?? null,
+  // Numer miejsca w szeregu. Silnik go nie używa — rysuje z niego arenę klient,
+  // żeby pet stanął na miejscu peta, a nie na pierwszym wolnym.
+  slot: u.slot ?? idx,
   hp: u.hp, maxHp: u.maxHp,
   damage: u.damage, speed: u.speed, armor: u.armor ?? 0,
   crit: u.crit ?? 0, critMult: u.critMult ?? 1.5,
@@ -52,28 +100,70 @@ const mkUnit = (u, side, idx) => ({
   // wyłącznie do tego, żeby log walki miał kolor i żeby było widać, czym bijesz.
   // Wynikają z typu broni: różdżka i kostur to magia, reszta to fizyczne.
   dtype: u.dtype ?? 'fiz',
+  damageType: u.damageType ?? (u.dtype === 'mag' ? 'magic' : 'slash'),
+  resists: { ...(u.resists ?? {}) },
+  reflectByType: { ...(u.reflectByType ?? {}) },
+  reflectCapPct: u.reflectCapPct ?? 0.12,
   // Szyk. row: 1 przód, 2 środek, 3 tył. reach: do którego rzędu sięga broń.
   // advance rośnie, gdy jednostka podchodzi — każde podejście to jedna tura.
   row: u.row ?? 1,
   reach: u.reach ?? C.formation.maxRow,
   advance: 0,
   klasa: u.klasa ?? null,
+  role: u.role ?? null,
+  roleDesc: u.roleDesc ?? null,
+  threatMult: u.threatMult ?? 1,
+  basicHits: u.basicHits ?? 1,
+  basicHitMult: u.basicHitMult ?? 1,
+  armorPierce: u.armorPierce ?? 0,
+  splashMult: u.splashMult ?? 0,
+  supportHealPct: u.supportHealPct ?? 0,
+  supportHealCd: u.supportHealCd ?? 0,
+  exposeArmor: u.exposeArmor ?? 0,
+  bleedMult: u.bleedMult ?? 0,
+  bleedTurns: u.bleedTurns ?? 0,
+  // Ustawiany w trakcie walki kliknięciem gracza. Nie omija zasięgu ani szyku —
+  // jest tylko pierwszym wyborem spośród celów, które ta jednostka może dosięgnąć.
+  preferredTarget: u.preferredTarget ?? null,
   taunt: null,           // { by, turns } — kto go sprowokował i na jak długo
+  // Zdolności przeciwnika (id z config.wrogowie.zdolnosci) i ich odnowienia.
+  // Kolejność listy to priorytet: AI gra pierwszą gotową.
+  skills: u.skills ?? [],
+  cd: {},
+  ataki: u.ataki ?? 1,   // ile ciosów na turę — Kolos bije dwa razy pod rząd
   next: interval(u.speed),
   effects: [],           // [{ id, turns, dmgMult, armorMult, stun, critTakenMult }]
+  damageDone: 0,
+  damageTaken: 0,
+  healingDone: 0,
+  healingReceived: 0,
   alive: true,
 });
 
 export function createFight({ party, enemies, potions = 0, wtype = 'mele', abilities = [],
-                              maxMana = 0, manaRegen = 0 }, seed, mode = 'auto') {
+                              maxMana = 0, manaRegen = 0, poziom = 1,
+                              activeEnemyCap = null, hazard = null }, seed, mode = 'auto') {
+  const wszyscyWrogowie = enemies.map((u, i) => mkUnit({ ...u, kind: 'wrog' }, 'wrog', i));
+  const cap = Math.max(1, Math.min(wszyscyWrogowie.length,
+    activeEnemyCap == null ? wszyscyWrogowie.length : activeEnemyCap));
   return {
     mode, seed, rng: seed >>> 0, t: 0, turn: 0, wtype,
+    // Skala pancerza tej walki. Wyliczona raz, bo stan walki musi zostać
+    // serializowalny — inaczej wznowiona walka liczyłaby inaczej niż zaczęta.
+    armorK: armorK(poziom),
+    playerArmorEffectMult: playerArmorEffect(poziom),
     // Mana pod zaklęcia. Jedyny zasób w walce — pasek ładowania został skasowany.
     // Umiejętności chodzą na cooldownach, zaklęcia na manie.
     mana: maxMana, maxMana, manaRegen,
     party: party.map((u, i) => mkUnit(u, 'gracz', i)),
-    enemies: enemies.map((u, i) => mkUnit({ ...u, kind: 'wrog' }, 'wrog', i)),
-    potions, potionsStart: potions, healUses: 0,
+    enemies: wszyscyWrogowie.slice(0, cap).map((u, i) => ({ ...u, slot: i })),
+    reinforcements: wszyscyWrogowie.slice(cap),
+    enemyHistory: [],
+    enemyTotal: wszyscyWrogowie.length,
+    activeEnemyCap: cap,
+    priorityTarget: null,
+    hazard,
+    potions: zapasMikstur(potions), potionsStart: ilePotek(potions), healUses: 0,
     cooldowns: Object.fromEntries(abilities.map(a => [a, 0])),
     abilities,
     log: [], over: false, win: null, awaiting: false,
@@ -101,7 +191,8 @@ export function reachable(attacker, pool) {
 // Jak groźna jest jednostka. Obrażenia na sekundę ważą najwięcej, bo to one
 // zabijają; niskie HP podbija priorytet, bo taniej ją dobić niż tankować.
 export const groznosc = (u) =>
-  (u.damage * (u.speed || 100) / 100) * (1 + Math.max(0, 1 - u.hp / u.maxHp) * 0.5);
+  (u.damage * (u.speed || 100) / 100) * (u.threatMult ?? 1)
+  * (1 + Math.max(0, 1 - u.hp / u.maxHp) * 0.5);
 
 // Kogo zaatakować. AI nie wali w pierwszego z brzegu:
 //   1. PROWOKACJA ma pierwszeństwo — sprowokowany bije w prowokującego
@@ -116,6 +207,8 @@ export function pickTarget(attacker, pool) {
     const prowokujacy = w.find(u => u.idx === attacker.taunt.by && u.alive);
     if (prowokujacy) return prowokujacy;
   }
+  const wybrany = w.find(u => u.idx === attacker.preferredTarget && u.alive);
+  if (wybrany) return wybrany;
   return w.reduce((a, b) => (groznosc(b) > groznosc(a) ? b : a));
 }
 
@@ -132,12 +225,52 @@ export function stepsNeeded(attacker, pool) {
 // Nazwa jedzie razem z HP. Klient odtwarza arenę wyłącznie z wpisów logu —
 // bez niej rysował „undefined" pod każdym paskiem.
 function snapshot(F) {
-  const u2 = (u) => ({ name: u.name, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive });
+  const u2 = (u) => ({ name: u.name, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive,
+                       idx: u.idx, slot: u.slot, kind: u.kind, row: u.row, advance: u.advance,
+                       role: u.role, klasa: u.klasa, ic: u.ic,
+                       dtype: u.dtype, damageType: u.damageType, resists: { ...u.resists } });
+  const pokonani = (F.enemyHistory?.length ?? 0) + F.enemies.filter(u => !u.alive).length;
   return {
     party: F.party.map(u2),
     enemies: F.enemies.map(u2),
+    enemyProgress: { defeated: pokonani, total: F.enemyTotal ?? F.enemies.length,
+      queued: F.reinforcements?.length ?? 0, active: livingEnemies(F).length },
+    reinforcementPreview: (F.reinforcements ?? []).slice(0, 3).map(u2),
+    priorityTarget: F.priorityTarget ?? null,
     mana: F.mana,
+    combatStats: combatStats(F),
   };
+}
+
+function unitCombatStats(u) {
+  return {
+    name: u.name, side: u.side, idx: u.idx, slot: u.slot, kind: u.kind, role: u.role,
+    damageDone: u.damageDone ?? 0, damageTaken: u.damageTaken ?? 0,
+    healingDone: u.healingDone ?? 0, healingReceived: u.healingReceived ?? 0,
+  };
+}
+
+function combatStats(F) {
+  const party = F.party.map(unitCombatStats);
+  const enemies = [...(F.enemyHistory ?? []), ...F.enemies].map(unitCombatStats);
+  const sum = (arr, key) => arr.reduce((n, u) => n + (u[key] ?? 0), 0);
+  return {
+    party, enemies,
+    totals: {
+      damageDone: sum(party, 'damageDone'),
+      damageTaken: sum(party, 'damageTaken'),
+      healingDone: sum(party, 'healingDone'),
+      enemyDamage: sum(enemies, 'damageDone'),
+    },
+  };
+}
+
+function applyHeal(healer, target, wanted) {
+  const actual = Math.max(0, Math.min(target.maxHp - target.hp, wanted));
+  target.hp += actual;
+  healer.healingDone = (healer.healingDone ?? 0) + actual;
+  target.healingReceived = (target.healingReceived ?? 0) + actual;
+  return actual;
 }
 
 const push = (F, kind, text, extra = {}) =>
@@ -157,6 +290,22 @@ const isStunned = (u) => u.effects.some(e => e.stun);
 function tickEffects(u, F) {
   const expired = [];
   u.effects = u.effects.filter(e => {
+    // Trucizna zbiera swoje na początku tury zatrutego. Liczona z jego
+    // MAKSYMALNEGO zdrowia, więc gruby przeciwnik nie jest na nią odporny.
+    if (e.dmgPerTurn && u.alive) {
+      const d = Math.max(1, Math.round(e.dmgPerTurn));
+      const actual = Math.min(u.hp, d);
+      u.hp = Math.max(0, u.hp - d);
+      u.damageTaken = (u.damageTaken ?? 0) + actual;
+      const sourcePool = e.sourceSide === 'wrog'
+        ? [...(F.enemyHistory ?? []), ...F.enemies] : F.party;
+      const source = sourcePool.find(x => x.idx === e.sourceIdx);
+      if (source) source.damageDone = (source.damageDone ?? 0) + actual;
+      if (u.hp <= 0) u.alive = false;
+      push(F, u.side === 'wrog' ? 'hit' : 'enemy',
+           `☠ ${u.name}: ${e.label ?? e.id} −${d}`, { dmg: d, dtype: 'mag' });
+      if (!u.alive) push(F, u.side === 'wrog' ? 'kill' : 'down', `${u.name} pada`);
+    }
     e.turns--;
     if (e.turns <= 0) { expired.push(e.id); return false; }
     return true;
@@ -171,13 +320,16 @@ function addEffect(u, eff) {
 
 // ---------------------------------------------------------------- cios
 
-function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0, label = null }) {
+function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0,
+                                       label = null, damageType = null }) {
   const chance = strength
     ? hitChance(attacker.accuracy, strength, target.evasion)
     : Math.min(C.combat.accuracyMax, Math.max(C.combat.accuracyMin, attacker.accuracy - target.evasion));
 
   if (rand(F) > chance) {
-    push(F, 'miss', `${attacker.name} → ${target.name}: pudło`);
+    push(F, 'miss', `${attacker.name} → ${target.name}: pudło`, {
+      actor: { side: attacker.side, idx: attacker.idx }, target: { side: target.side, idx: target.idx },
+    });
     return 0;
   }
 
@@ -191,17 +343,50 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0, la
   const blocked = target.block > 0 && rand(F) < target.block;
   if (blocked) dmg *= (1 - Math.min(0.9, target.blockCut));
 
-  const armor = target.armor * effMult(target, 'armorMult') * (1 - pierce);
+  // Obrona gracza ma własny mnożnik skuteczności. Fallback po stronie celu
+  // sprawia, że również wznowione walki zapisane przed patchem liczą się nowo.
+  const zapisanyPoziom = (F.armorK - C.combat.armorKBase) / C.combat.armorKPerFloor;
+  const playerArmor = target.side === 'gracz'
+    ? (F.playerArmorEffectMult ?? playerArmorEffect(zapisanyPoziom)) : 1;
+  const armor = target.armor * playerArmor * effMult(target, 'armorMult') * (1 - pierce);
+  // Odporność typu działa PO pancerzu i ma twarde widełki. Podatność jest
+  // wartością ujemną, więc Smash może naprawdę przebić się tam, gdzie Slash
+  // grzęźnie — bez odporności 100%, która robiłaby z broni martwy przedmiot.
+  const typ = damageType ?? attacker.damageType ?? (attacker.dtype === 'mag' ? 'magic' : 'slash');
+  const resist = Math.min(C.combat.resistanceMax,
+    Math.max(C.combat.resistanceMin, target.resists?.[typ] ?? 0));
   // takenMult zbija to, co zostało po pancerzu — tak działa Obrona z menu tury.
-  dmg = Math.max(1, Math.round(reduce(dmg, armor) * effMult(target, 'takenMult')));
+  dmg = Math.max(1, Math.round(reduce(F, dmg, armor) * effMult(target, 'takenMult') * (1 - resist)));
+  const actual = Math.min(target.hp, dmg);
   target.hp -= dmg;
+  attacker.damageDone = (attacker.damageDone ?? 0) + actual;
+  target.damageTaken = (target.damageTaken ?? 0) + actual;
   if (target.hp <= 0) { target.hp = 0; target.alive = false; }
 
   const who = label ? `${attacker.name} · ${label}` : attacker.name;
-  const znak = attacker.dtype === 'mag' ? '✦' : '⚔';
+  const znak = C.combat.damageTypes?.[typ]?.ic ?? (attacker.dtype === 'mag' ? '✦' : '⚔');
   push(F, isCrit ? 'crit' : (attacker.side === 'wrog' ? 'enemy' : 'hit'),
        `${znak} ${who} → ${target.name}: ${dmg}${isCrit ? ' KRYT' : ''}${blocked ? ' BLOK' : ''}`,
-       { dmg, blocked, dtype: attacker.dtype });
+       { dmg, blocked, dtype: typ === 'magic' ? 'mag' : 'fiz', damageType: typ, resist,
+         actor: { side: attacker.side, idx: attacker.idx }, target: { side: target.side, idx: target.idx } });
+
+  // Hazard elity nie jest ukrytym podatkiem od HP: oddaje wyłącznie wskazany
+  // rodzaj ciosu. Zmiana broni na Smash/Pierce/Magię całkowicie go omija.
+  const reflect = Math.max(0, target.reflectByType?.[typ] ?? 0);
+  if (reflect > 0 && attacker.alive && actual > 0) {
+    const zwrot = Math.max(1, Math.round(Math.min(dmg * reflect,
+      attacker.maxHp * Math.max(0, target.reflectCapPct ?? 0.12))));
+    const real = Math.min(attacker.hp, zwrot);
+    attacker.hp = Math.max(0, attacker.hp - zwrot);
+    attacker.damageTaken = (attacker.damageTaken ?? 0) + real;
+    target.damageDone = (target.damageDone ?? 0) + real;
+    if (attacker.hp <= 0) attacker.alive = false;
+    push(F, attacker.side === 'gracz' ? 'enemy' : 'hit',
+      `🌿 Cierniowy Odwet → ${attacker.name}: ${zwrot}`,
+      { dmg: zwrot, dtype: 'fiz', damageType: 'slash',
+        actor: { side: target.side, idx: target.idx }, target: { side: attacker.side, idx: attacker.idx } });
+    if (!attacker.alive) push(F, attacker.side === 'wrog' ? 'kill' : 'down', `${attacker.name} pada`);
+  }
 
   if (!target.alive) push(F, target.side === 'wrog' ? 'kill' : 'down', `${target.name} pada`);
   return dmg;
@@ -227,6 +412,59 @@ function playerBasic(F, u, strength) {
   const target = target1(u, F.enemies);
   if (!target) { advance(F, u, F.enemies); return; }
   strike(F, u, target, { mult: STRENGTHS[strength].dmg, strength });
+}
+
+// Towarzysz nie jest już słabszą kopią zwykłego ataku bohatera. Każda klasa
+// realizuje swój prosty automat: paladyn leczy, tancerz tnie dwa razy, mag razi
+// grupę, tropiciel odsłania pancerz, a pet zostawia krwawienie.
+function companionTurn(F, u) {
+  if (u.supportHealPct > 0 && (u.cd.wsparcie ?? 0) <= 0) {
+    const ranni = F.party.filter(x => x.alive && x.hp / x.maxHp < 0.75);
+    if (ranni.length) {
+      const cel = ranni.reduce((a, b) => (b.hp / b.maxHp < a.hp / a.maxHp ? b : a));
+      const ile = Math.max(1, Math.round(cel.maxHp * u.supportHealPct));
+      const healed = applyHeal(u, cel, ile);
+      u.cd.wsparcie = u.supportHealCd || 4;
+      push(F, 'heal', `${u.name} · ${u.role}: ${cel.name} +${healed}`, { heal: healed,
+        actor: { side: u.side, idx: u.idx }, target: { side: cel.side, idx: cel.idx } });
+      return;
+    }
+  }
+
+  let pierwszy = target1(u, F.enemies);
+  if (!pierwszy) { advance(F, u, F.enemies); return; }
+
+  for (let i = 0; i < Math.max(1, u.basicHits); i++) {
+    if (!u.alive) break;
+    const cel = target1(u, F.enemies);
+    if (!cel) break;
+    const trafilo = strike(F, u, cel, {
+      mult: u.basicHitMult,
+      pierce: u.armorPierce,
+      label: u.basicHits > 1 ? `${u.role} ${i + 1}/${u.basicHits}` : u.role,
+    });
+    if (!trafilo) continue;
+
+    if (u.exposeArmor > 0 && cel.alive) {
+      addEffect(cel, { id: 'odsloniety_pancerz', label: 'Odsłonięty pancerz', turns: 2,
+                       armorMult: u.exposeArmor });
+      push(F, 'info', `${u.name}: ${cel.name} traci ${Math.round((1 - u.exposeArmor) * 100)}% pancerza`);
+    }
+    if (u.bleedMult > 0 && cel.alive) {
+      addEffect(cel, { id: 'krwawienie_peta', label: 'Krwawienie', turns: u.bleedTurns || 2,
+                       dmgPerTurn: Math.max(1, Math.round(u.damage * u.bleedMult)),
+                       sourceSide: u.side, sourceIdx: u.idx });
+      push(F, 'info', `${u.name}: ${cel.name} krwawi`);
+    }
+
+    if (u.splashMult > 0) {
+      for (const drugi of livingEnemies(F)) {
+        if (!u.alive) break;
+        if (drugi.idx === cel.idx) continue;
+        strike(F, u, drugi, { mult: u.splashMult, pierce: u.armorPierce, label: `${u.role} · fala` });
+      }
+    }
+  }
 }
 
 // Czy umiejętność da się w tej chwili użyć. Powód odmowy wraca tekstem,
@@ -260,8 +498,8 @@ function useAbility(F, u, id) {
 
   if (A.heal) {
     const ile = Math.round(u.maxHp * A.heal);
-    u.hp = Math.min(u.maxHp, u.hp + ile);
-    push(F, 'heal', `${u.name} · ${A.label}: +${ile}`);
+    const healed = applyHeal(u, u, ile);
+    push(F, 'heal', `${u.name} · ${A.label}: +${healed}`, { heal: healed });
   }
 
   if (A.buff) {
@@ -277,7 +515,8 @@ function useAbility(F, u, id) {
   for (let h = 0; h < hits; h++) {
     for (const t of targets) {
       if (!t.alive) continue;
-      strike(F, u, t, { mult: A.dmgMult ?? 1, pierce: A.armorPierce ?? 0, label: A.label });
+      strike(F, u, t, { mult: A.dmgMult ?? 1, pierce: A.armorPierce ?? 0,
+        label: A.label, damageType: A.mana ? 'magic' : null });
     }
   }
   if (A.stun) {
@@ -291,20 +530,36 @@ function useAbility(F, u, id) {
   }
 }
 
-function drinkPotion(F, u) {
-  if (F.potions <= 0) { push(F, 'info', 'brak mikstur'); return; }
+// Którą wypić, gdy gracz nie wskazał. NAJSŁABSZĄ, KTÓRA WYSTARCZY — inaczej
+// automat wypijałby Eliksir Otchłani na zadrapanie. Gdy żadna nie domyka
+// brakującego zdrowia, leci najmocniejsza dostępna.
+function wybierzMiksture(F, u) {
+  const brak = u.maxHp - u.hp;
+  const maja = C.healing.mikstury.filter(m => (F.potions[m.id] ?? 0) > 0);
+  if (!maja.length) return null;
+  const wystarcza = maja.find(m => ileLeczy(m.id, u.maxHp) >= brak);
+  return (wystarcza ?? maja[maja.length - 1]).id;
+}
+
+function drinkPotion(F, u, id = null) {
+  const wybor = id && (F.potions[id] ?? 0) > 0 ? id : wybierzMiksture(F, u);
+  if (!wybor) { push(F, 'info', 'brak mikstur'); return; }
+
+  const M = MIKSTURY[wybor];
   const eff = healEffect(F.healUses);
-  const heal = Math.round(u.maxHp * C.healing.potionHealPct * eff * (1 + (u.potionPct ?? 0)));
-  u.hp = Math.min(u.maxHp, u.hp + heal);
-  F.potions--; F.healUses++;
-  push(F, 'heal', `${u.name}: mikstura +${heal} (×${eff.toFixed(2)})`, { heal });
+  const heal = Math.round(ileLeczy(wybor, u.maxHp) * eff * (1 + (u.potionPct ?? 0)));
+  const healed = applyHeal(u, u, heal);
+  F.potions[wybor]--;
+  if (F.potions[wybor] <= 0) delete F.potions[wybor];
+  F.healUses++;
+  push(F, 'heal', `${u.name}: ${M.label} +${healed} (×${eff.toFixed(2)})`, { heal: healed });
 }
 
 // Mikstury należą do bohatera. Sojusznik ich nie tyka — inaczej pet wypijałby
 // zapas, którego gracz potrzebuje na bossa.
 function autoPotion(F, u) {
   if (u.idx !== 0) return false;
-  if (F.potions <= 0 || u.hp / u.maxHp >= C.healing.autoThreshold) return false;
+  if (!ilePotek(F.potions) || u.hp / u.maxHp >= C.healing.autoThreshold) return false;
   drinkPotion(F, u);
   return true;
 }
@@ -320,6 +575,49 @@ function defend(F, u) {
   push(F, 'buff', `${u.name} staje w obronie — obrażenia mniejsze o ${Math.round(C.combat.defendCut * 100)}%`);
 }
 
+// Zdolność przeciwnika. Gra PIERWSZĄ gotową z listy, więc kolejność w `skills`
+// jest jego priorytetem: healer leczy, zanim zacznie bić.
+// Zwraca true, gdy tura została zużyta.
+function wrogZdolnosc(F, u) {
+  const Z_ALL = C.wrogowie?.zdolnosci ?? {};
+  const swoi = u.side === 'wrog' ? F.enemies : F.party;
+  const obcy = u.side === 'wrog' ? F.party : F.enemies;
+
+  for (const id of u.skills ?? []) {
+    const Z = Z_ALL[id];
+    if (!Z || (u.cd[id] ?? 0) > 0) continue;
+
+    // Leczenie. Bez rannego sojusznika zdolność się nie marnuje — czeka.
+    if (Z.healPctMaxHp) {
+      const ranni = swoi.filter(x => x.alive && x.hp / x.maxHp < (Z.prog ?? 0.85));
+      if (!ranni.length) continue;
+      const cel = ranni.reduce((a, b) => (b.hp / b.maxHp < a.hp / a.maxHp ? b : a));
+      const ile = Math.max(1, Math.round(cel.maxHp * Z.healPctMaxHp));
+      const healed = applyHeal(u, cel, ile);
+      u.cd[id] = Z.cd;
+      push(F, 'heal', `${u.name} · ${Z.label}: ${cel.name} +${healed}`, { heal: healed });
+      return true;
+    }
+
+    const cel = target1(u, obcy);
+    if (!cel) continue;                       // nie dosięga — niech lepiej podejdzie
+    u.cd[id] = Z.cd;
+    strike(F, u, cel, { mult: Z.dmgMult ?? 1, pierce: Z.armorPierce ?? 0, label: Z.label });
+
+    if (Z.stun && cel.alive && rand(F) < Z.stun) {
+      addEffect(cel, { id: 'ogluszenie', turns: Z.stunTurns ?? 1, stun: true });
+      push(F, 'info', `${cel.name} ogłuszony na ${Z.stunTurns ?? 1} tur`);
+    }
+    if (Z.dot && cel.alive) {
+      addEffect(cel, { id: Z.dot.id, label: Z.dot.label, turns: Z.dot.turns,
+                       dmgPerTurn: Math.max(1, Math.round(cel.maxHp * Z.dot.pctMaxHp)) });
+      push(F, 'info', `${cel.name}: ${Z.dot.label}`);
+    }
+    return true;
+  }
+  return false;
+}
+
 function unitTurn(F, u, action) {
   F.turn++;
   tickEffects(u, F);
@@ -327,17 +625,36 @@ function unitTurn(F, u, action) {
   // Prowokacja schodzi z tur na turze sprowokowanego.
   if (u.taunt) { u.taunt.turns--; if (u.taunt.turns <= 0) u.taunt = null; }
 
+  // Trucizna mogła go właśnie dobić — martwy nie bije.
+  if (!u.alive) { u.next += interval(u.speed); return; }
+
   if (isStunned(u)) {
     push(F, 'info', `${u.name} jest ogłuszony i traci turę`);
   } else if (u.side === 'wrog') {
-    const target = target1(u, F.party);
-    if (target) strike(F, u, target, {});
-    // Sprowokowany stoi w miejscu — o to chodzi w prowokacji. Bez niej
-    // podchodzi, żeby dobrać się do tylnych rzędów.
-    else if (!u.taunt) advance(F, u, F.party);
-    else push(F, 'info', `${u.name} stoi sprowokowany`);
+    if (!wrogZdolnosc(F, u)) {
+      const target = target1(u, F.party);
+      if (target) {
+        // Kolos i jemu podobni biją kilka razy pod rząd. Cel wybierany na nowo
+        // przy każdym ciosie, żeby drugi cios nie leciał w trupa.
+        for (let i = 0; i < (u.ataki ?? 1); i++) {
+          const t = target1(u, F.party);
+          if (!t) break;
+          strike(F, u, t, { label: i > 0 ? `cios ${i + 1}` : null });
+        }
+      }
+      // Sprowokowany stoi w miejscu — o to chodzi w prowokacji. Bez niej
+      // podchodzi, żeby dobrać się do tylnych rzędów.
+      else if (!u.taunt) advance(F, u, F.party);
+      else push(F, 'info', `${u.name} stoi sprowokowany`);
+    }
   } else if (action == null) {
     autoPotion(F, u);
+    if (u.idx !== 0) {
+      companionTurn(F, u);
+      u.next += interval(u.speed);
+      for (const k of Object.keys(u.cd)) if (u.cd[k] > 0) u.cd[k]--;
+      return;
+    }
     // Automat rzuca zaklęcie, gdy stać go na najdroższe dostępne — inaczej
     // mana stałaby pełna, a magia byłaby wyłącznie zabawką trybu turowego.
     const czar = u.idx === 0 ? (F.abilities ?? [])
@@ -347,7 +664,7 @@ function unitTurn(F, u, action) {
     else playerBasic(F, u, 'srednio');
   } else {
     switch (action.type) {
-      case 'potion':   drinkPotion(F, u); break;
+      case 'potion':   drinkPotion(F, u, action.id ?? null); break;
       case 'ability':  useAbility(F, u, action.id); break;
       case 'defend':   defend(F, u); break;
       default:         playerBasic(F, u, action.strength ?? 'srednio');
@@ -355,6 +672,9 @@ function unitTurn(F, u, action) {
   }
 
   u.next += interval(u.speed);
+  // Odnowienia zdolności przeciwnika schodzą na JEGO turze — także wtedy,
+  // gdy ją stracił przez ogłuszenie.
+  for (const k of Object.keys(u.cd)) if (u.cd[k] > 0) u.cd[k]--;
   if (u.side === 'gracz' && u.idx === 0) {
     for (const k of Object.keys(F.cooldowns)) if (F.cooldowns[k] > 0) F.cooldowns[k]--;
     // Mana wraca sama co Twoją turę — inaczej długa walka kończyłaby się
@@ -363,8 +683,32 @@ function unitTurn(F, u, action) {
   }
 }
 
+function deployReinforcements(F) {
+  if (!F.reinforcements?.length) return;
+  for (let i = 0; i < F.enemies.length && F.reinforcements.length; i++) {
+    const polegly = F.enemies[i];
+    if (polegly.alive) continue;
+    F.enemyHistory ??= [];
+    F.enemyHistory.push(polegly);
+    const nowy = F.reinforcements.shift();
+    nowy.slot = polegly.slot ?? i;
+    // Posiłek dostaje własny czas wejścia. Bez tego jednostka utworzona na
+    // początku walki próbowałaby „nadrobić" wszystkie zaległe tury naraz.
+    nowy.next = Math.max(nowy.next, F.t + interval(nowy.speed));
+    F.enemies[i] = nowy;
+    push(F, 'info', `↳ ${nowy.name} wchodzi z posiłków`);
+  }
+}
+
 function finish(F) {
   if (F.over) return;
+  deployReinforcements(F);
+  // Zaznaczenie ginie razem z konkretnym przeciwnikiem. Automat wybierze
+  // następnego według zwykłego AI, dopóki gracz ponownie kogoś nie wskaże.
+  if (F.priorityTarget != null && !F.enemies.some(e => e.alive && e.idx === F.priorityTarget)) {
+    F.priorityTarget = null;
+    for (const u of F.party) u.preferredTarget = null;
+  }
   if (!livingEnemies(F).length) { F.over = true; F.win = true; push(F, 'win', 'Wygrana'); }
   else if (!livingParty(F).length) { F.over = true; F.win = false; push(F, 'lose', 'Przegrana'); }
 }
@@ -415,20 +759,61 @@ export function runToEnd(F) {
   return F;
 }
 
+// Jedna porcja automatu. Walka nie jest już liczona w całości przed animacją:
+// serwer rozgrywa najwyżej jeden obieg bohatera, oddaje stan klientowi i dopiero
+// potem liczy następny. Między porcjami można naprawdę zmienić wspólny cel.
+export function autoRound(F) {
+  if (F.over) return F;
+  F.awaiting = false;
+  let guard = 0;
+  let bohaterWykonalRuch = false;
+  while (!F.over && guard++ < 12 && F.turn < C.combat.maxTurns) {
+    const u = nextUp(F);
+    if (bohaterWykonalRuch && u.side === 'gracz' && u.idx === 0) break;
+    F.t = u.next;
+    unitTurn(F, u, null);
+    if (u.side === 'gracz' && u.idx === 0) bohaterWykonalRuch = true;
+    finish(F);
+  }
+  if (!F.over && F.turn >= C.combat.maxTurns) {
+    F.over = true;
+    F.win = livingEnemies(F).length === 0;
+    push(F, F.win ? 'win' : 'lose', F.win ? 'Wygrana' : 'Przegrana — limit tur');
+  }
+  return F;
+}
+
 // ---------------------------------------------------------------- widok
 
 export function summary(F) {
+  const u2 = (u) => ({
+    name: u.name, kind: u.kind, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive,
+    idx: u.idx, slot: u.slot, row: u.row, advance: u.advance, role: u.role, klasa: u.klasa,
+    ic: u.ic, dtype: u.dtype, damageType: u.damageType, resists: { ...u.resists },
+  });
+  const nastepny = !F.over ? nextUp(F) : null;
+  const pula = nastepny ? (nastepny.side === 'wrog' ? F.party : F.enemies) : [];
+  const cel = nastepny ? pickTarget(nastepny, pula) : null;
   return {
     win: !!F.win, over: F.over, awaiting: F.awaiting,
     log: F.log, durationMs: Math.round(F.t), turns: F.turn,
-    party: F.party.map(u => ({ name: u.name, kind: u.kind, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
-    enemies: F.enemies.map(u => ({ name: u.name, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive })),
+    party: F.party.map(u2),
+    enemies: F.enemies.map(u2),
+    enemyProgress: { defeated: (F.enemyHistory?.length ?? 0) + F.enemies.filter(u => !u.alive).length,
+      total: F.enemyTotal ?? F.enemies.length, queued: F.reinforcements?.length ?? 0,
+      active: livingEnemies(F).length },
+    reinforcementPreview: (F.reinforcements ?? []).slice(0, 3).map(u2),
+    priorityTarget: F.priorityTarget ?? null,
+    nextAction: nastepny ? { actor: nastepny.name, actorSide: nastepny.side,
+                              target: cel?.name ?? null, role: nastepny.role ?? null } : null,
     mana: F.mana, maxMana: F.maxMana,
     cooldowns: F.cooldowns,
     // Co da się teraz rzucić i dlaczego nie — klient nie musi znać reguł.
     blokady: Object.fromEntries((F.abilities ?? []).map(id => [id, abilityBlock(F, id)])),
-    potionsLeft: F.potions, potionsUsed: F.potionsStart - F.potions,
+    potions: F.potions,
+    potionsLeft: ilePotek(F.potions), potionsUsed: F.potionsStart - ilePotek(F.potions),
     spellsCast: F.spellsCast ?? 0,
+    combatStats: combatStats(F),
   };
 }
 
@@ -446,6 +831,10 @@ export function demo() {
   const b = summary(runToEnd(mk(12345)));
   console.assert(JSON.stringify(a.log) === JSON.stringify(b.log), 'symulacja deterministyczna');
   console.assert(a.win === true, 'silniejszy wygrywa');
+  console.assert(a.combatStats.totals.damageDone > 0 && a.combatStats.totals.damageTaken > 0,
+    'podsumowanie liczy zadane i wytankowane obrazenia');
+  console.assert(a.combatStats.party[0].damageDone === a.combatStats.totals.damageDone,
+    'podsumowanie przypisuje wynik konkretnej jednostce');
 
   // log niesie stan calej druzyny i wrogow — na tym stoi animacja
   console.assert(a.log.every(l => Array.isArray(l.party) && Array.isArray(l.enemies)),
@@ -479,6 +868,44 @@ export function demo() {
       wtype: 'magia', abilities: [] }, 55)));
   console.assert(magiczny.log.some(l => l.dtype === 'mag'), 'log niesie obrazenia magiczne');
   console.assert(magiczny.log.some(l => l.dtype === 'fiz'), 'wrog bije fizycznie');
+
+  // Odporności wymuszają dobór broni: ten sam cios i ziarno mają być wyraźnie
+  // lepsze jako Smash przeciw podatnemu celowi niż Slash przeciw odpornemu.
+  const ciosTypu = (damageType) => {
+    const F = createFight({
+      party: [{ ...P, damage: 200, accuracy: 5, damageType }],
+      enemies: [{ ...E, hp: 9999, maxHp: 9999, damage: 1,
+        resists: { slash: 0.35, smash: -0.25 } }],
+      potions: 0, abilities: [] }, 8128, 'turowa');
+    beginTurn(F); step(F, { type: 'attack', strength: 'srednio' });
+    return 9999 - F.enemies[0].hp;
+  };
+  console.assert(ciosTypu('smash') > ciosTypu('slash'), 'Smash przebija podatnosc lepiej niz Slash odporność');
+
+  // Posiłki: na arenie nigdy nie ma więcej niż pięciu, ale walka rozlicza
+  // wszystkich z kolejki i nie kończy się po wybiciu pierwszego składu.
+  const posilki = summary(runToEnd(createFight({
+    party: [{ ...P, hp: 9999, maxHp: 9999, damage: 999, accuracy: 5 }],
+    enemies: Array.from({ length: 8 }, (_, i) => ({ ...E, name: `Posiłek ${i + 1}`,
+      hp: 30, maxHp: 30, damage: 1 })), activeEnemyCap: 5,
+    potions: 0, abilities: [],
+  }, 4567)));
+  console.assert(posilki.win && posilki.enemyProgress.defeated === 8,
+    'walka konczy sie dopiero po pokonaniu calej kolejki');
+  console.assert(posilki.log.some(l => /wchodzi z posiłków/.test(l.text)), 'wejscie posilkow jest w logu');
+  console.assert(posilki.log.every(l => l.enemies.length <= 5), 'arena trzyma maksymalnie pieciu wrogow');
+
+  const hpPoCierniach = (damageType) => {
+    const F = createFight({
+      party: [{ ...P, hp: 5000, maxHp: 5000, damage: 200, accuracy: 5, damageType }],
+      enemies: [{ ...E, hp: 9999, maxHp: 9999, damage: 1, speed: 1,
+        reflectByType: { slash: 0.08 } }], potions: 0, abilities: [],
+    }, 7171, 'turowa');
+    beginTurn(F); step(F, { type: 'attack', strength: 'srednio' });
+    return F.party[0].hp;
+  };
+  console.assert(hpPoCierniach('slash') < hpPoCierniach('smash'),
+    'Cierniowy Odwet rani Slash, a Smash go omija');
 
   // SZYK: bron biala nie dosiega tylnego rzedu, trzeba podejsc.
   const melee = { ...P, name: 'Mieczyk', row: 1, reach: 1, accuracy: 5, damage: 1000 };
@@ -632,6 +1059,45 @@ export function demo() {
       potions: 0, wtype: 'mele', abilities: [] }, 777))).party[0].hp;
   console.assert(bity(1) > bity(0), 'blok zmniejsza obrazenia');
   console.assert(bity(0.5) >= bity(0), 'polowiczny blok tez pomaga');
+
+  // ---- ZDOLNOŚCI PRZECIWNIKÓW ----
+
+  // trucizna zabiera zdrowie co ture, takze wtedy, gdy truciciel juz nie bije
+  const truty = createFight(
+    { party: [{ ...P, hp: 5000, maxHp: 5000, armor: 99999, evasion: 0 }],
+      enemies: [{ ...E, hp: 99999, maxHp: 99999, damage: 1, skills: ['zatrucie'] }],
+      potions: 0, wtype: 'mele', abilities: [] }, 4242);
+  for (let i = 0; i < 40; i++) { const u = [...truty.party, ...truty.enemies].filter(x => x.alive)
+    .reduce((a, b) => (b.next < a.next ? b : a)); truty.t = u.next; unitTurn(truty, u, u.side === 'gracz' ? { type: 'defend' } : null); }
+  console.assert(truty.party[0].hp < 5000, 'trucizna przechodzi przez pancerz');
+  console.assert(truty.log.some(l => /trucizna/.test(l.text)), 'trucizna widac w logu');
+
+  // ogluszenie zabiera ture
+  const stun = createFight(
+    { party: [{ ...P, hp: 9000, maxHp: 9000 }],
+      enemies: [{ ...E, hp: 99999, maxHp: 99999, skills: ['zamach'] }],
+      potions: 0, wtype: 'mele', abilities: [] }, 99);
+  runToEnd(stun);
+  console.assert(stun.log.some(l => /ogłuszony/.test(l.text)), 'Zamach Kolosa ogłusza');
+
+  // healer leczy najbardziej poobijanego swojego
+  const heal = createFight(
+    { party: [{ ...P, damage: 40 }],
+      enemies: [{ ...E, name: 'Ranny', hp: 300, maxHp: 3000, damage: 1 },
+                { ...E, name: 'Szeptucha', hp: 3000, maxHp: 3000, damage: 1, row: 2, skills: ['leczenie'] }],
+      potions: 0, wtype: 'mele', abilities: [] }, 31337);
+  runToEnd(heal);
+  console.assert(heal.log.some(l => /Pieśń Kości/.test(l.text)), 'healer leczy swoich');
+
+  // dwa ciosy na ture bija mocniej niz jeden
+  const ile = (ataki) => summary(runToEnd(createFight(
+    { party: [{ ...P, hp: 100000, maxHp: 100000, armor: 0, evasion: 0 }],
+      enemies: [{ ...E, hp: 99999, maxHp: 99999, damage: 50, ataki }],
+      potions: 0, wtype: 'mele', abilities: [] }, 8181))).party[0].hp;
+  console.assert(ile(2) < ile(1), 'dwa ciosy na ture bola bardziej');
+
+  // pancerz skaluje sie z poziomem: to samo 500 pancerza zbija mniej wyzej
+  console.assert(armorK(50) > armorK(1), 'skala pancerza rosnie z pietrem');
 
   console.log('combat.js — wszystkie testy przeszly');
 }

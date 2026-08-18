@@ -1171,16 +1171,27 @@ o 35% słabszy — dwóch pełnych podwajało trudność z piętra na piętro.
 
 - **Piętro 3** — otwiera się pierwszy slot i **przywoływanie sojuszników**
 - **Piętro 10** (walka przed bossem) — otwiera się **przywoływanie petów**
-- **Sloty 2 i 3 zostają zamknięte**, dopóki nie będzie wiadomo, czym je wypełnić
+- **Slot 2** — otwiera ukończenie Puszczy Cierniowej na Profesjonaliście
+- **Slot 3 zostaje zamknięty**, dopóki nie będzie wiadomo, czym go wypełnić
 
 To są progi na **dostęp**, nie darmowi towarzysze. Sojusznika trzeba sobie
 wylosować kluczem.
 
 ### 19.5 Sojusznicy są ułamkiem bohatera
 
-Statystyki liczą się z jego statystyk (`config.allies`), więc nie ma osobnej
-krzywej do strojenia, towarzysz nigdy nie zostaje w tyle i nigdy nie przerasta
-gracza. Rzadkość jest jedyną osią rozwoju — ekwipunku nie noszą.
+Statystyki liczą się ze statystyk bohatera (`config.allies`), więc nie ma osobnej
+krzywej do strojenia. Rzadkość wzmacnia bazę, a klasa nadaje pozycję oraz
+automatyczne zachowanie. Ekwipunku nie noszą.
+
+| Klasa | Rola w walce |
+|---|---|
+| Wojownik | Obrońca — wysokie zagrożenie, HP i pancerz; przejmuje ataki przodu |
+| Paladyn | Strażnik — osłania i co 4 tury leczy najbardziej ranną jednostkę |
+| Tancerz | Siepacz — dwa cięcia na turę |
+| Mag | Arkanista — przebicie pancerza i obrażenia obszarowe |
+| Łowca | Strzelec — krytyki, celność i przebicie z tylnego rzędu |
+| Tropiciel | Osłabia pancerz celu dla całej drużyny |
+| Pet | Drapieżnik — szybkie ataki nakładają krwawienie |
 
 Mikstury należą do bohatera. Sojusznik ich nie tyka.
 
@@ -1481,3 +1492,270 @@ klikania. Pozycje przewijania są zapamiętywane przed renderem i odtwarzane po.
 
 **Zasada:** każdy nowy ekran z własnym przewijaniem musi trafić do selektora
 `PRZEWIJANE` w `public/app.js`, inaczej wróci ten sam błąd.
+
+---
+
+## 24. SZYK, PROWOKACJA I AI (17 sierpnia 2026)
+
+### 24.1 Pasek ładowania i ultimate SKASOWANE
+
+Pasek istniał wyłącznie po to, żeby napędzać ultimate — bez niego był licznikiem
+bez treści. **Nie przywracaj go.**
+
+Zostały dwa zasoby: **cooldowny** na umiejętnościach i **mana** na zaklęciach.
+Znikły też „pudło zeruje pasek" i mnożnik ładowania przy siłach ciosu.
+
+### 24.2 Rząd bohatera bierze się z BRONI
+
+```
+broń biała  → rząd 1    bijesz wręcz, stoisz z przodu, obrywasz pierwszy
+różdżka     → rząd 2    wróg musi zrobić JEDEN krok, żeby Cię dosięgnąć
+łuk         → rząd 3    wróg musi zrobić DWA kroki
+```
+
+**To jest sedno szyku.** Dopiero teraz sojusznik-wojownik naprawdę zasłania maga
+i łucznika — wcześniej bohater zawsze stał z przodu i ochrona nic nie znaczyła.
+
+### 24.3 Prowokacja — narzędzie tanka
+
+Ściąga uwagę **wszystkich** wrogów na siebie na 3 tury i **zatrzymuje ich marsz**:
+sprowokowany bije w prowokującego zamiast iść dalej po tylne rzędy. Pancerz +30%
+na czas trwania.
+
+To jest odpowiedź na szyk: bez prowokacji wróg po prostu przechodzi obok tanka.
+
+### 24.4 AI wrogów jest kumate
+
+Nie wali w pierwszego z tablicy. W zasięgu wybiera **najgroźniejszego**:
+
+```
+groznosc(u) = obrażenia × prędkość × (1 + premia za zbite HP)
+```
+
+Obrażenia na sekundę ważą najwięcej, bo to one zabijają; nisko zbite HP podbija
+priorytet, bo taniej dobić niż tankować. **Prowokacja ma pierwszeństwo** nad tym
+wyborem — to ona jest kontrą na inteligentne AI.
+
+### 24.5 Czary dają exp do Magii
+
+`xpPerSpell` za każde rzucone zaklęcie, obok normalnego podziału według rąk.
+Wcześniej Magia rosła wyłącznie od bicia różdżką — odwrotnie, niż podpowiada intuicja.
+
+---
+
+## 25. SESJA SKALI (17 sierpnia 2026, piąta sesja)
+
+Najdłuższa sesja w projekcie. Zmieniła fundament liczbowy gry, więc wszystko
+poniżej **wygrywa z wcześniejszymi rozdziałami** tam, gdzie się rozjeżdżają.
+
+### 25.1 Skille bojowe to RODZINY BRONI
+
+Pięć skilli zamiast dawnych pięciu, ale rozciętych inaczej:
+
+| Skill | Bronie |
+|---|---|
+| Broń dwuręczna | Topór · Młot · Miecz Dwuręczny |
+| Broń jednoręczna | Miecz · Scimitar · Sztylet |
+| Przyrządy magiczne | Różdżka · Orb · Kostur |
+| Broń dystansowa | Łuk · Kusza · Oszczep |
+| Ekwipunek defensywny | ciuchy · biżuteria · zdrowie |
+
+**Witalność skasowana.** Zdrowie niesie poziom postaci i Wytrzymałość.
+
+`wtype` przedmiotu JEST identyfikatorem skilla. Nie ma drugiej tabeli, która
+mogłaby się rozjechać. **Kostur jest dwuręczny, ale expi Przyrządy magiczne** —
+dwuręczność to liczba rąk, nie rodzina, i test w `character.js` tego pilnuje.
+
+### 25.2 Drzewko na każdy skill
+
+Trzy węzły, ranga do 10, **jeden punkt za poziom skilla**. Węzły rodziny broni
+liczą się TYLKO z tą bronią w ręce; Ekwipunek defensywny zawsze. Reset jednego
+drzewka jest darmowy — skille rosną same z gry, więc kara za zmianę broni byłaby
+karą za granie.
+
+Dawny bonus „za sam poziom" (`perLevel`) skasowany: dawał premię dwa razy.
+
+**Skala zmierzona, nie zgadnięta.** Pierwsze podejście podnosiło szansę na piętro
+50 w legendach z 24% na 75% — ściana znikała. Obecne liczby dają +2 pp na piętrze
+10 i +22 pp na 50.
+
+### 25.3 Pancerz skaluje się z piętrem
+
+`K = armorKBase + armorKPerFloor × piętro` (250 + 45). Stałe K=400 sprawiało,
+że pancerz z piętra 50 zbijał 79% obrażeń, a z piętra 10 tylko 45% — bohater
+na 50 wytrzymywał 66 tur zamiast 25 i uciekał wieży bezpowrotnie.
+
+**Ograniczenie do zapamiętania:** to było strojone DO PIĘTRA 50. Powyżej ~60
+gracz zostaje w tyle, bo sprzęt kończy się na ilvl 80–100 (Kaplica na
+Profesjonaliście), a K rośnie dalej: na piętrze 135 wynosi 6325, więc 2200
+pancerza zbija tylko 26%.
+
+### 25.4 Mob rośnie kwadratowo
+
+`hp = (Base + PerFloor·f + PerFloor2·f²) × Growth^f`, tak samo obrażenia.
+
+Człon `f²` jest tam ze zmierzonego powodu: **obrażenia gracza rosną kwadratowo**
+— broń skaluje się z ilvl, mnożnik z atrybutów rośnie z piętrem, jedno mnoży
+drugie. Zmierzone na sprzęcie pod piętro: 270 ataku na 10, 648 na 20, 2759 na 50.
+Dopasowanie `atak ≈ f² + 5f + 150`. Bez `f²` w HP moba boss z piętra 50 padał
+od dwóch ciosów.
+
+### 25.5 Boss to ściana zdrowia
+
+`bossHpMult 7,0` przy `bossStatMult 1,0`. Boss piętra 20 ma **10 010 zdrowia**.
+Świta skaluje się od ZWYKŁEGO MOBA z piętra, nie od bossa — inaczej każde
+podniesienie bossa mnożyło całą grupę razem z nim.
+
+Świta bije SŁABIEJ niż zwykły mob (0,45–0,55 obrażeń), a ma 0,9–1,8 jego zdrowia.
+Groźne ma być zdrowie bossa, nie sumaryczny dps grupy.
+
+### 25.6 Attack Speed
+
+`AS = speed / 20`, czyli ciosy na sekundę. Jedna skala dla bohatera, sojuszników,
+petów i mobów — widać wprost, kto uderzy ile razy. Baza 5,00.
+
+Rośnie ze Zręczności (+0,025 za punkt) i z afiksu **Attack Speed**, który wypada
+na broni i na każdej części garderoby. Afiks trzymany w setnych AS, bo generator
+pracuje na liczbach całkowitych.
+
+### 25.7 Rzadkości i plus na znalezionej broni
+
+Wagi w setnych procenta, suma 100 000 — inaczej nie da się zapisać 0,001%.
+
+| | wszędzie | tylko skrzynia bossa |
+|---|---|---|
+| unique | 5% | |
+| heroic | 1% | |
+| legendary | | **0,3%** |
+| Mystic | | **0,1%** |
+| God | | **0,001%** |
+
+Poza bossem trzy górne progi mają wagę zero, więc bramka wynika z samych liczb.
+**Bez ryzyka legendy nie wypadają w ogóle** — nawet u bossa.
+
+**Broń może wypaść już z plusem**: 1% broni ma jakikolwiek, rozkład geometryczny
+do `upgrade.maxPlus`, najwyższy stopień to 1% puli plusowanych, czyli 0,01%
+wszystkich broni. Tylko broń — pancerz plusuje kowal.
+
+**Pierścienie i naszyjniki też się ulepsza.** Nie mają bazy, więc `+N` podbija
+u nich wartość afiksów.
+
+### 25.8 Wyprawa: ryzyko ustawia długość i namioty
+
+| Ryzyko | Etapy | Namioty | Nagroda | Legendy | ilvl |
+|---|---|---|---|---|---|
+| Bez ryzyka | 12 | 1 | ×1 | nie | 1–10 |
+| Zaawansowany | 24 | 3 | ×2 | tak | 1–10 |
+| Profesjonalista | 48 | **2** | ×5 | tak | 2–20 |
+
+**Namiotów jest MNIEJ na trudniejszym.** Długi run bez odpoczynku jest tym,
+za co płaci pięciokrotna nagroda.
+
+**To wyprawa, a nie piętro, decyduje o poziomie łupu.** Czternaście wypraw do
+poziomu 200, otwieranych postępem w wieży. **Węzeł decyduje, z której części
+widełek** leci poziom: zwykła walka z dołu, elita ze środka, boss z góry.
+
+**Dziesięć mikstur na cały run**, nie na walkę. **Namiot odnawia zapas** i to
+jedyny sposób. Przy ognisku można też zjeść — jedzenie leczy do pełna i nie
+rusza limitu mikstur.
+
+### 25.9 Dziewięć mikstur
+
+Pięć procentowych (10 / 15 / 25 / 35 / 50% maks. HP) i cztery stałe
+(200 / 500 / 1000 / 2500). Dziewięć przepisów Alchemii, poziomy 1–50.
+Automat pije **najsłabszą, która wystarczy** — inaczej Eliksir Otchłani szedł
+na zadrapanie.
+
+### 25.10 Siły ciosu
+
+| | mnożnik | celność | kiedy najlepszy |
+|---|---|---|---|
+| Lekki | 0,60 | +0,22 | nigdy, to opcja awaryjna |
+| Średni | 1,00 | 0,00 | do ~80 Zręczności |
+| Mocny | **2,60** | −0,55 | powyżej ~80 Zręczności |
+
+Mocny trafia w **15% przy zerowej Zręczności**. Mnożnik podniesiony z 1,75,
+bo przy tamtym był gorszy od Średniego NA KAŻDYM ETAPIE gry — czyli nie ryzyko,
+tylko kara za kliknięcie.
+
+**Średni zostaje na 1,00 i to jest decyzja.** Jest miarą, do której porównują się
+dwa pozostałe, a automat bije właśnie nim; podniesienie go wywindowało bossa 10
+z 70% na 90% i wymagałoby dołożenia mobom tych samych 15%.
+
+### 25.11 Narzędzie do balansu
+
+`tools/balans.js` buduje prawdziwą postać, bierze statystyki z `character.js`
+i puszcza symulację z `combat.js`. Cele siedzą w tablicy `CELE` w tym pliku.
+
+```
+node tools/balans.js --cel     sprawdza cele, kod wyjścia 1 gdy któryś nietrafiony
+node tools/balans.js           tabela pięter 1–50 dla wszystkich buildów
+```
+
+Każda próba losuje INNY zestaw sprzętu tej samej klasy — bez tego wynik mówił
+o jednym losowaniu i skakał z 0% na 100%.
+
+Stan na koniec sesji: boss 10 w heroikach +3 **80%**, z dwiema legendami **95%**,
+boss 20 **78%**, piętro 50 w legendach **53%**. Zwykłe piętra przechodzą się
+w 100% — ścianami są bossy i piętra elit.
+
+### 25.12 Wersje i restart
+
+`WERSJA` w `server.js` i `WERSJA_GRY` w `public/app.js`. Gdy się różnią, nad
+ekranem wisi czerwony pasek z przyciskiem, który **naprawia właściwą stronę**:
+restartuje proces serwera albo czyści pamięć telefonu.
+
+Powód jest praktyczny: pliki z `public/` idą z dysku przy każdym żądaniu, ale
+`server.js` i `game/*` ładują się raz. Bez tego paska cztery zgłoszenia „nie
+działa" pod rząd miały jedną przyczynę — proces sprzed aktualizacji.
+
+### 25.13 Kolos
+
+`config.kolos` — Yeti Zmarzniętych Turni. 500 000 HP, 10 000 ataku, 15 000
+pancerza, dwa ciosy w turze, ogłuszenie na dwie tury. Nagroda: Różdżka Lodowa
+za pierwsze zwycięstwo, złoto za kolejne.
+
+**Liczby są z założenia poza dzisiejszą skalą** i ekran mówi o tym wprost:
+pokazuje, ile ciosów trzeba i ile tur się przeżyje. Bohater z piętra 50
+potrzebuje około 1100 ciosów i ginie w jednej turze. To jest cel na później,
+nie zawartość na dziś.
+
+---
+
+## 26. WYPRAWY DO POZIOMU 200 (17 sierpnia 2026)
+
+### 26.1 Przedziały
+
+Do poziomu 100 Wyprawy idą co 10 poziomów. Powyżej 100 przedział rozszerza się
+do 25 poziomów:
+
+```
+1–10 · 10–20 · 20–30 · 30–40 · 40–50
+50–60 · 60–70 · 70–80 · 80–90 · 90–100
+100–125 · 125–150 · 150–175 · 175–200
+```
+
+Każda otwiera się na dolnej granicy swojego przedziału. Ten sam przedział jest
+źródłem prawdy dla poziomu przedmiotów i bazowego poziomu przeciwników.
+
+### 26.2 Skalowanie przeciwników Wyprawy
+
+Przeciwnik **nie skaluje się już z najwyższym piętrem gracza**. Skaluje się
+z wybraną Wyprawą i miejscem na jej trasie:
+
+- pierwsze spotkanie ma dolny poziom przedziału,
+- kolejne spotkania płynnie rosną wzdłuż trasy,
+- boss ma górny poziom przedziału,
+- ryzyko nakłada dopiero potem swój `floorOffset` i mnożnik statystyk.
+
+Przykład: Prastare Ruiny na Zaawansowanym rosną od poziomu 100 do 125.
+Profesjonalista przesuwa tę samą trasę do 103–128 i dodatkowo mnoży statystyki
+przeciwników przez 1,30. Powrót postaci z poziomu 200 do Puszczy nadal daje
+przeciwników z Puszczy, a nie moby poziomu 200.
+
+### 26.3 Boss Wyprawy jest ścianą zdrowia
+
+Boss ma osobne mnożniki: `bossHpMult: 2,40` i `bossDmgMult: 1,15`.
+Profesjonalista mnoży więc jego obrażenia łącznie przez około **1,495**, nie
+przez 3,12 jak wcześniej. Zdrowie dalej dostaje pełne `1,30 × 2,40`, więc walka
+jest długa, ale gracz nie ginie od dwóch zwykłych ciosów bez utrudnień.

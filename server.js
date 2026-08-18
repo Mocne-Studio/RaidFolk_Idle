@@ -3,28 +3,55 @@
 //   PORT=3000 node server.js
 
 import http from 'node:http';
+import * as childProcess from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, extname, normalize } from 'node:path';
 
 import CONFIG from './game/config.js';
-import { floorInfo, makeEnemy, makeEnemies, rollDrops, actForFloor, ACTS,
+import { floorInfo, makeEnemy, makeEnemies, rollDrops, actForFloor, expeditionEnemyLevel,
+         ACTS, WEAPON_TYPES, nowyWtype, classDamageType,
          rollTrophy, dropsOf, mulberry32 } from './game/content.js';
-import { createFight, step, beginTurn, runToEnd, summary, hitChance,
+import { createFight, step, beginTurn, runToEnd, autoRound, summary, hitChance, armorK, playerArmorEffect, attackSpeed,
          STRENGTHS, ABILITIES } from './game/combat.js';
+import { miningBonuses, miningCycleMs, mineOutcome, qualityChances,
+         craftProduct, equipMining, furnaceCoal, transferFurnaceCoal,
+         consumeFurnaceFuel, professionBonuses, professionCycleMs,
+         fishingOutcome, farmingOutcome, foodEffects, cleanupFoodBuffs,
+         eatFood } from './game/professions.js';
 import * as DB from './game/db.js';
 import {
   newCharacter, computeStats, equip, canEquip,
-  classOf, migrate, poziom,
+  classOf, migrate, poziom, heroUnit, kluczWyprawy,
   treeOf, nodeState, spendTreePoint, resetTree, respecCost,
-  xpNeed, profOf, addSkillXp, canGather, teamUnits, allyStats,
+  xpNeed, profOf, addSkillXp, canGather, teamUnits, allyStats, pveGear, switchPveLoadout,
   addCombatXp, skillSplit, cskillNeed, canSummon, slotOpen, petSlotOpen, baseOf,
+  ilePotek, zabierzMikstury, zuzyjMikstury,
+  punktySkilla, wolnePunkty, wydajPunktSkilla, resetDrzewkaSkilla,
   zaklecia, bojowe,
 } from './game/character.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = join(here, 'public');
 const PORT = Number(process.env.PORT ?? 8080);
+
+// ZNACZNIK WERSJI SERWERA.
+// Pliki z `public/` idą do przeglądarki Z DYSKU przy każdym żądaniu, ale
+// `server.js` i `game/*` ładują się RAZ, przy starcie procesu. Po aktualizacji
+// bez restartu gracz widzi nowe ekrany i stare liczby — i słusznie uznaje,
+// że nic nie działa. Klient porównuje ten znacznik ze swoim i mówi wprost,
+// że trzeba zrestartować serwer.
+// ZMIENIAJ RAZEM z WERSJA_GRY w public/app.js.
+// Wersja plików leżących na dysku — czytana z public/app.js, bo to jedyne
+// miejsce, w którym klient trzyma swój znacznik.
+async function wersjaZDysku() {
+  try {
+    const txt = await readFile(join(here, 'public', 'app.js'), 'utf8');
+    return txt.match(/const WERSJA_GRY = '([^']+)'/)?.[1] ?? null;
+  } catch { return null; }
+}
+
+export const WERSJA = '2026-08-18.1710';
 const C = CONFIG;
 
 // ---------------------------------------------------------------- regeneracja
@@ -38,7 +65,8 @@ function applyRegen(ch) {
   ch.lastSeen = now;
   if (mins <= 0 || !ch.hpLost) return;
   const st = computeStats(ch);
-  const back = Math.floor(st.maxHp * REGEN_PCT_PER_MIN * mins);
+  const regenFood = Math.max(0, foodEffects(ch).hpRegenPct ?? 0);
+  const back = Math.floor(st.maxHp * REGEN_PCT_PER_MIN * (1 + regenFood) * mins);
   if (back > 0) ch.hpLost = Math.max(0, ch.hpLost - back);
 }
 
@@ -96,9 +124,19 @@ function skillsView(ch) {
     const p = profOf(ch, id);
     return [id, {
       label: s.label, ic: s.ic, daje: s.daje, zasila: s.zasila,
-      grywalne: !!s.grywalne,
+      grywalne: !!s.grywalne, domain: s.domain ?? null,
+      categories: s.categories ?? null,
+      mastery: p.lvl >= 100 ? s.mastery ?? null : null,
       lvl: p.lvl, xp: p.xp, xpNeed: xpNeed(id, p.lvl),
-      resources: (s.resources ?? []).map(r => ({ ...r, unlocked: p.lvl >= r.lvl })),
+      resources: [...(s.resources ?? [])]
+        .sort((a, b) => s.domain ? a.lvl - b.lvl || a.label.localeCompare(b.label, 'pl') : 0)
+        .map(r => ({
+        ...r, unlocked: p.lvl >= r.lvl,
+        catchTable: r.catchTable?.map(x => ({ ...x, unlocked: p.lvl >= x.lvl })),
+        effectiveMs: professionCycleMs(ch, id, r),
+        qualityChances: id === 'kowalstwo' && r.output && r.output.type !== 'material' && !r.special
+          ? qualityChances(p.lvl, r.lvl) : null,
+      })),
       ladder: s.ladder ?? null,
     }];
   }));
@@ -107,8 +145,13 @@ function skillsView(ch) {
 // Surowce w plecaku, z nazwami. Klient nie musi znać tabel z config.
 function materialsView(ch) {
   const nazwy = {};
-  for (const s of Object.values(C.skills)) for (const r of s.resources ?? []) nazwy[r.id] = r.label;
+  for (const s of Object.values(C.skills)) for (const r of s.resources ?? []) {
+    nazwy[r.id] = r.label;
+    for (const x of r.catchTable ?? []) nazwy[x.id] = x.label;
+    for (const x of r.outputs ?? []) nazwy[x.id] = x.label;
+  }
   for (const [id, m] of Object.entries(C.materialy)) nazwy[id] = m.label;
+  for (const [id, m] of Object.entries(C.mining.gems)) nazwy[id] = m.label;
   return Object.entries(ch.materials ?? {})
     .filter(([, n]) => n > 0)
     .map(([id, n]) => ({ id, label: nazwy[id] ?? id, count: n }));
@@ -117,14 +160,36 @@ function materialsView(ch) {
 // Widok wyprawy: gdzie stoisz, co masz w sakwie, czy run czeka na decyzję.
 function expView(ch) {
   const X = ch.expedition;
+  ensureDungeonNodes(ch);
+  const dungeon = X.kind === 'dungeon';
+  const runCfg = dungeon ? C.dungeons : C.expedition;
+  const runDef = dungeon ? C.dungeons.lista[X.id] : C.expedition.lista[X.id];
   const w = expNode(ch);
-  const pula = w?.typ === 'rozdroze' ? C.expedition.rozdroza
+  const pula = !dungeon && w?.typ === 'rozdroze' ? C.expedition.rozdroza
              : w?.typ === 'event' ? C.expedition.eventy : null;
   const def = pula?.find(x => x.id === w.ref) ?? null;
+  const przeciwnicy = ['walka', 'elita', 'boss'].includes(w?.typ ?? '') ? expEnemies(ch) : [];
+  const dungeonRoom = dungeon && w ? {
+    label: w.label ?? `Komnata ${X.at + 1}`,
+    enemies: w.enemies ?? przeciwnicy.length,
+    active: Math.min(w.active ?? przeciwnicy.length, w.enemies ?? przeciwnicy.length),
+    queued: Math.max(0, (w.enemies ?? przeciwnicy.length) - (w.active ?? przeciwnicy.length)),
+    hazard: w.hazard ? { id: w.hazard.id, label: w.hazard.label, desc: w.hazard.desc } : null,
+    resists: runDef?.resists ? { ...runDef.resists } : null,
+    damageTypes: C.combat.damageTypes,
+  } : null;
 
   return {
+    kind: dungeon ? 'dungeon' : 'expedition',
+    id: X.id,
+    runLabel: runDef?.label ?? (dungeon ? 'Dungeon' : 'Wyprawa'),
     risk: X.risk,
-    riskLabel: C.expedition.risks[X.risk]?.label,
+    riskLabel: dungeon ? '5 komnat' : C.expedition.risks[X.risk]?.label,
+    // Co da się zjeść przy ognisku — leczy do pełna i zostawia buff.
+    jedzenie: Object.entries(ch.materials ?? {})
+      .filter(([id, n]) => n > 0 && JADALNE[id])
+      .map(([id, n]) => ({ id, label: JADALNE[id].label, count: n, buff: JADALNE[id].buff })),
+    postojLeczy: !dungeon && !!C.expedition.postojLeczy,
     at: X.at,
     total: X.nodes.length,
     // Ścieżka runu do narysowania paska postępu.
@@ -132,44 +197,112 @@ function expView(ch) {
     node: w ? { typ: w.typ } : null,
     // Czekamy na gracza? Wtedy nic samo nie ruszy.
     decyzja: def ? { pytanie: def.pytanie, opcje: def.opcje.map(o => ({ id: o.id, label: o.label, desc: o.desc })) } : null,
-    safepoint: w?.typ === 'safepoint' && !X.safepointDone,
+    // `safepointDone` jest LISTĄ wykorzystanych ognisk, nie flagą. Puste `[]`
+    // jest prawdziwe, więc dawne `!X.safepointDone` zawsze dawało false —
+    // klient nie pokazywał postoju, a serwer nie puszczał dalej. Zakleszczenie.
+    safepoint: w?.typ === 'safepoint'
+      && !(Array.isArray(X.safepointDone) ? X.safepointDone : []).includes(X.at),
+    // Podgląd przeciwnika ma sens TYLKO na węźle, na którym się bije.
+    enemy: przeciwnicy[0] ?? null,
+    enemies: przeciwnicy,
+    encounter: dungeonRoom,
     sakwa: X.sakwa,
     sakwaCount: X.sakwa.length,
-    mats: Object.entries(X.mats).map(([id, n]) => ({ id, count: n })),
+    mats: Object.entries(X.mats).map(([id, n]) => ({ id, label: C.materialy[id]?.label ?? id, count: n })),
     gold: X.gold,
     efekty: X.efekty,
     lootMult: Math.round(X.lootMult * 100) / 100,
-    potionsLeft: Math.max(0, C.expedition.potionCap - X.potionsUsed),
-    enemy: ['walka', 'elita', 'boss'].includes(w?.typ) ? expEnemy(ch) : null,
+    mobDropChance: dungeon ? C.dungeons.mobDropChance : null,
+    eliteMobDropChance: dungeon ? C.dungeons.eliteMobDropChance : null,
+    potionsLeft: Math.max(0, runCfg.potionCap - X.potionsUsed),
+    potionCap: runCfg.potionCap,
+    healAfterWinPct: runCfg.healAfterWinPct,
   };
 }
 
 // Lista wypraw z tabelą dropów. Przedmiot jest ZNANY, jeśli gracz kiedykolwiek
 // go miał albo ma go teraz przy sobie — reszta stoi pod znakiem zapytania.
+// Co w ogóle da się zjeść. Zbierane raz z config, bo definicje jedzenia siedzą
+// rozsypane po profesjach (Gotowanie), a postój i tak musi je znać.
+const JADALNE = Object.fromEntries((C.skills.gotowanie.resources ?? [])
+  .filter(r => r.food)
+  .map(r => [r.id, { ...r, buff: { ...r.food.effects, walki: r.food.walki,
+                                    buffSlot: r.food.buffSlot } }]));
+
 function expLista(ch) {
-  const maByc = new Set(Object.keys(ch.discovered ?? {}));
-  for (const it of [...ch.backpack, ...Object.values(ch.equipped)]) {
-    const b = baseOf(it); if (b) maByc.add(b);
-  }
   return Object.entries(C.expedition.lista).map(([id, def]) => ({
     id, label: def.label, ic: def.ic, opis: def.opis,
     unlockFloor: def.unlockFloor,
     otwarta: poziom(ch) >= def.unlockFloor,
-    dlugosc: expDlugosc(def, poziom(ch)),
-    dlugoscMax: def.dlugosc[def.dlugosc.length - 1].nodes,
-    // Ile w ogóle jest do odkrycia i co z tego już znasz.
-    dropsTotal: def.drops.length,
-    dropsZnane: def.drops.filter(d => maByc.has(d.base)).length,
-    drops: def.drops.map(d => ({
-      base: maByc.has(d.base) ? d.base : null,
-      slot: d.slot,
-      hands: d.hands ?? null,
-    })),
+    // Widełki poziomu łupu dla KAŻDEGO ryzyka — gracz ma wiedzieć, po co tu wchodzi,
+    // zanim wybierze. Nazwy ryzyk już raz się zmieniły, więc nie wpisujemy ich tu na sztywno.
+    ilvl: def.ilvl ?? null,
+    ilvlRyzyka: Object.fromEntries(Object.keys(C.expedition.risks).map(k => [k, widelkiIlvl(def, k)])),
+    // Przeciwnicy mają zakres wyprawy, a nie aktualny poziom gracza. Ryzyko
+    // przesuwa poziom trasy swoim offsetem; mnożnik statystyk nakłada się osobno.
+    poziomyWrogow: Object.fromEntries(Object.entries(C.expedition.risks).map(([k, r]) => [k, [
+      expeditionEnemyLevel(def.ilvl, 0, 2, r.floorOffset),
+      expeditionEnemyLevel(def.ilvl, 1, 2, r.floorOffset),
+    ]])),
+    // Długość runu ustawia RYZYKO — lista podaje ją dla każdego progu naraz.
+    dlugosci: Object.fromEntries(Object.entries(C.expedition.risks).map(([k, r]) => [k, r.tury])),
+    // Wyprawy są źródłem materiałów, których nie da się wydobyć ani wytworzyć.
+    materials: (def.mats ?? []).map(m => ({ ...m, label: C.materialy[m.id]?.label ?? m.id,
+      ic: C.materialy[m.id]?.ic ?? '🪨', boss: false })),
+    bossMaterials: (def.bossMats ?? []).map(m => ({ ...m, label: C.materialy[m.id]?.label ?? m.id,
+      ic: C.materialy[m.id]?.ic ?? '🏆', boss: true })),
   }));
 }
 
+function dungeonLista(ch) {
+  const wagi = C.loot.weightsBoss;
+  return Object.entries(C.dungeons.lista).map(([id, def]) => ({
+    id, label: def.label, ic: def.ic, opis: def.opis, ilvl: def.ilvl,
+    unlockFloor: def.unlockFloor, otwarty: poziom(ch) >= def.unlockFloor,
+    ukonczony: ch.dungeonyZrobione?.[id] ?? 0,
+    rooms: (def.rooms ?? C.dungeons.nodes.map(typ => ({ typ }))).map(r => r.typ),
+    encounters: (def.rooms ?? []).map(r => ({
+      typ: r.typ, label: r.label, enemies: r.enemies, active: r.active,
+      hazard: r.hazard ? { id: r.hazard.id, label: r.hazard.label, desc: r.hazard.desc } : null,
+    })),
+    enemyTotal: (def.rooms ?? []).reduce((n, r) => n + (r.enemies ?? 0), 0) || null,
+    resists: def.resists ? { ...def.resists } : null,
+    prototype: !!def.prototype,
+    damageTypes: C.combat.damageTypes,
+    normalChance: C.dungeons.normalDropChance,
+    eliteChance: C.dungeons.eliteDropChance,
+    mobChance: C.dungeons.mobDropChance,
+    eliteMobChance: C.dungeons.eliteMobDropChance,
+    partyScaling: {
+      hp: C.dungeons.partyHpPerExtra,
+      damage: C.dungeons.partyDmgPerExtra,
+    },
+    bossCount: [...C.loot.bossDropCount],
+    rarity: Object.fromEntries(Object.entries(wagi).map(([k, v]) => [k, v / 1000])),
+    drops: def.drops.map(d => ({ base: d.base, slot: d.slot, hands: d.hands ?? null })),
+  }));
+}
+
+// Efekt węzła po ludzku. Generowany Z LICZB, więc zmiana balansu nie wymaga
+// poprawiania tekstu w drugim miejscu.
+const PROCENTOWE = new Set(['dmgPct', 'armorPct', 'hpPct', 'bizuPct', 'critChance',
+                            'critPower', 'accuracy', 'evasion', 'block']);
+const NAZWA_EFEKTU = {
+  dmgPct: 'obrażenia', armorPct: 'pancerz', hpPct: 'zdrowie', bizuPct: 'wartość biżuterii',
+  critChance: 'szansa na kryt', critPower: 'siła kryta', accuracy: 'celność',
+  evasion: 'unik', block: 'blok', speed: 'prędkość', manaFlat: 'mana',
+};
+const opisEfektu = (k, v) => `+${PROCENTOWE.has(k) ? (v * 100).toFixed(1) + '%' : v}`
+  + ` ${NAZWA_EFEKTU[k] ?? k} za rangę`;
+
 function view(ch) {
   const st = computeStats(ch);
+  const teamBase = computeStats(ch, { food: false });
+  const pvpStats = computeStats({ ...ch, equipped: ch.pvpEquipment ?? {} });
+  const pveA = pveGear(ch, 'a');
+  const pveB = pveGear(ch, 'b');
+  const pveAStats = ch.pveLoadout === 'a' ? st : computeStats({ ...ch, equipped: pveA });
+  const pveBStats = ch.pveLoadout === 'b' ? st : computeStats({ ...ch, equipped: pveB });
   const info = floorInfo(ch.floor);
   const act = actForFloor(ch.floor);
   const isShield = ch.equipped.offhand?.wtype === 'tarcza';
@@ -184,62 +317,140 @@ function view(ch) {
     teamStats: {
       allies: (ch.team?.allies ?? []).map(i => {
         const w = ch.collection?.companions?.[i];
-        return w ? { idx: i, ...allyStats(st, w, 'ally') } : null;
+        return w ? { idx: i, ...allyStats(teamBase, w, 'ally') } : null;
       }),
       pet: ch.collection?.pets?.[ch.team?.pet]
-        ? { idx: ch.team.pet, ...allyStats(st, ch.collection.pets[ch.team.pet], 'pet') } : null,
+        ? { idx: ch.team.pet, ...allyStats(teamBase, ch.collection.pets[ch.team.pet], 'pet') } : null,
     },
     allySlots: C.allies.slots,
     slotOpen: Array.from({ length: C.allies.slots }, (_, i) => slotOpen(ch, i)),
     petOpen: petSlotOpen(ch),
     unlockAt: C.allies.unlock,
     formation: C.formation,
-    // Wyprawa — jedyne źródło przedmiotów.
+    damageTypes: C.combat.damageTypes,
+    allyRoles: C.allies.roles,
+    petRole: C.allies.petRole,
+    // Wyprawy dają materiały, Dungeony wyposażenie.
     expedition: ch.expedition ? expView(ch) : null,
     expRisks: Object.entries(C.expedition.risks).map(([id, r]) => ({ id, ...r })),
     expLista: expLista(ch),
+    dungeonLista: dungeonLista(ch),
     expMods: Object.entries(C.expedition.modyfikatory).map(([id, m]) => ({
       id, ...m, otwarty: poziom(ch) >= m.unlockFloor,
     })),
-    potionCarry: { wieza: C.healing.carryTower, wyprawa: C.expedition.potionCap },
+    potionCarry: { wieza: C.healing.carryTower, wyprawa: C.expedition.potionCap,
+                   dungeon: C.dungeons.potionCap },
     alwaysAuto: !!ch.alwaysAuto,
+    kolos: kolosWidok(ch),
+    powtarzaj: !!ch.powtarzaj,
+    powtarzanieOd: C.tower.powtarzanieOd,
+    powtarzanieOtwarte: poziom(ch) >= C.tower.powtarzanieOd,
     summonOdds: C.summon.weights,
     lastDefeat: ch.lastDefeat ?? null,
     // Skille bojowe policzone dla klienta: poziom, exp, próg i aktualny udział
     // w podziale expa. Udział bierze się z tego, co masz w rękach.
+    // Skille bojowe = rodziny broni. Każdy niesie SWOJE drzewko: pulę punktów
+    // z poziomów, ile z niej wydane i stan każdego węzła.
     cskills: Object.entries(C.combatSkills.list).map(([id, def]) => {
-      const s = ch.cskills[id] ?? { lvl: 1, xp: 0 };
-      return { id, ...def, lvl: s.lvl, xp: s.xp, need: cskillNeed(s.lvl),
-               udzial: id === 'witalnosc' ? 1 : (skillSplit(ch)[id] ?? 0) };
+      const sk = ch.cskills[id] ?? { lvl: 1, xp: 0 };
+      const aktywny = id === 'obrona' || id === (nowyWtype(ch.equipped?.bron) ?? 'jednoreczna');
+      return {
+        id, ...def, lvl: sk.lvl, xp: sk.xp, need: cskillNeed(sk.lvl),
+        udzial: skillSplit(ch)[id] ?? 0,
+        aktywny,
+        punkty: punktySkilla(ch, id),
+        wolne: wolnePunkty(ch, id),
+        rangaMax: C.combatSkills.rangaMax,
+        wezly: (C.combatSkills.drzewka[id] ?? []).map(n => ({
+          id: n.id, label: n.label, opis: n.opis,
+          ranga: ch.ctree?.[n.id] ?? 0,
+          // Opis efektu generuje się z liczb — nie ma drugiego miejsca do poprawiania.
+          efekt: Object.entries(n.eff).map(([k, v]) => opisEfektu(k, v)).join(' · '),
+        })),
+      };
     }),
+    weaponTypes: Object.fromEntries(Object.entries(WEAPON_TYPES)
+      .map(([k, v]) => [k, { label: v.label, names: v.names.map(n => n[0]) }])),
     hands: {
       bron: ch.equipped.bron?.hands ?? 1,
       offBlocked: (ch.equipped.bron?.hands ?? 1) === 2,
     },
+    pvpHands: {
+      bron: ch.pvpEquipment?.bron?.hands ?? 1,
+      offBlocked: (ch.pvpEquipment?.bron?.hands ?? 1) === 2,
+    },
+    pveHands: {
+      a: { bron: pveA?.bron?.hands ?? 1, offBlocked: (pveA?.bron?.hands ?? 1) === 2 },
+      b: { bron: pveB?.bron?.hands ?? 1, offBlocked: (pveB?.bron?.hands ?? 1) === 2 },
+    },
     skills: skillsView(ch),
     materials: materialsView(ch),
+    mining: {
+      slots: C.mining.slots,
+      categories: C.mining.categories,
+      bonusLabels: C.mining.bonusLabels,
+      bonuses: miningBonuses(ch),
+      equipment: ch.miningEquipment,
+      inventory: ch.miningInventory,
+      inventoryMax: C.mining.inventorySize,
+      baseGemChance: C.mining.baseGemChance,
+    },
+    smithing: {
+      categories: C.smithing.categories,
+      qualities: C.smithing.qualities,
+      furnace: { coal: furnaceCoal(ch), looseCoal: Math.max(0, Math.floor(ch.materials?.wegiel ?? 0)) },
+    },
     // Nazwy WSZYSTKICH surowców, nie tylko posiadanych — inaczej koszt
     // ulepszenia pokazywał surowe id, gdy gracz nie miał ani jednej sztaby.
     matNames: {
       ...Object.fromEntries(Object.values(C.skills)
         .flatMap(sk => sk.resources ?? []).map(r => [r.id, r.label])),
+      ...Object.fromEntries(Object.values(C.skills)
+        .flatMap(sk => sk.resources ?? []).flatMap(r => r.catchTable ?? []).map(x => [x.id, x.label])),
+      ...Object.fromEntries(Object.values(C.skills)
+        .flatMap(sk => sk.resources ?? []).flatMap(r => r.outputs ?? []).map(x => [x.id, x.label])),
       ...Object.fromEntries(Object.entries(C.materialy).map(([id, m]) => [id, m.label])),
+      ...Object.fromEntries(Object.entries(C.mining.gems).map(([id, m]) => [id, m.label])),
     },
     buff: ch.buff ?? null,
+    foodBuffs: cleanupFoodBuffs(ch),
     upgrade: C.upgrade,
     activity: ch.activity ?? null,
     keys: ch.currency,
     keyCost: C.summon.keyCost,
     forcedTurn: info.isBoss,
+    bossOdkrywaOd: C.tower.bossOdkrywaOd,
     name: ch.name, klasa: ch.klasa, klasaLabel: classOf(ch.klasa).label, crest: ch.crest,
+    // Karta gracza i ustawienia. Motyw i jakość niesie serwer, żeby przetrwały
+    // zmianę urządzenia — localStorage trzyma je tylko po to, żeby nie mrugały
+    // przy starcie, zanim wróci stan.
+    wersja: WERSJA,
+    ranking: (() => { const R = ranking(); return { pietro: R.pietro, moc: R.moc, ilu: R.ilu }; })(),
+    mojeMiejsce: mojeMiejsce(ch, st),
+    createdAt: ch.createdAt ?? null,
+    bio: ch.bio ?? '',
+    guild: ch.guild ?? null,
+    settings: ch.settings ?? C.ui.domyslne,
+    ui: { themes: C.ui.themes, quality: C.ui.quality, bioMax: C.ui.bioMax },
     floor: ch.floor, maxFloor: ch.maxFloor, fight: ch.fight,
     fightsOnFloor: info.fights, isBoss: info.isBoss, isPlus: info.isPlus,
     actName: act.name, actId: act.id, bossName: info.bossName,
     stats: st, poziom: poziom(ch), shield: isShield,
     tree: treeView(ch), treeRespec: respecCost(ch),
     attrs: ch.attrs, unspentAttr: ch.unspentAttr, treePoints: ch.treePoints,
-    gold: ch.gold, currency: ch.currency, potions: ch.potions,
-    equipped: ch.equipped, backpack: ch.backpack,
+    gold: ch.gold, currency: ch.currency,
+    // `potions` zostaje jako SUMA — na niej stoi pół UI. Rozbicie na rodzaje
+    // idzie obok, bo dopiero ono mówi, czym gracz się właściwie leczy.
+    potions: ilePotek(ch),
+    mikstury: C.healing.mikstury.map(m => ({
+      ...m, count: ch.mikstury?.[m.id] ?? 0,
+      // Ile uleczy TĘ postać — procent i liczba punktów w jednym miejscu.
+      heal: Math.round(m.pct ? st.maxHp * m.pct : m.flat),
+    })).filter(m => m.count > 0),
+    equipped: ch.equipped,
+    pveEquipment: { a: pveA, b: pveB }, pveStats: { a: pveAStats, b: pveBStats },
+    pveLoadout: ch.pveLoadout ?? 'a',
+    pvpEquipment: ch.pvpEquipment, pvpStats, backpack: ch.backpack,
     backpackMax: C.gear.backpackSize,
     nextEnemy: makeEnemy(ch.floor, ch.fight),
     nextEnemies: makeEnemies(ch.floor, ch.fight),
@@ -260,6 +471,56 @@ function view(ch) {
       }, {}),
     magiaLvl: ch.cskills?.magia?.lvl ?? 1,
     activeFight: ch.activeFight && !ch.activeFight.over ? summary(ch.activeFight) : null,
+    combatRunStats: combatRunView(ch.combatRunStats),
+  };
+}
+
+// ---------------------------------------------------------------- RANKING
+// Top 3 po piętrze i top 3 po mocy. Liczone ze wszystkich zapisów, więc
+// wymaga policzenia statystyk każdej postaci — stąd krótki cache. Bez niego
+// ranking przeliczałby się przy KAŻDYM zapytaniu do API.
+const RANK_CACHE_MS = 15000;
+let rankCache = { t: 0, data: null };
+
+function ranking() {
+  if (rankCache.data && Date.now() - rankCache.t < RANK_CACHE_MS) return rankCache.data;
+  const lista = [];
+  for (const r of DB.all()) {
+    // Zapis, którego nie da się wczytać, nie ma prawa wywalić rankingu wszystkim.
+    try {
+      const ch = migrate(r.ch);
+      lista.push({ name: ch.name, crest: ch.crest, floor: ch.maxFloor ?? 1, power: computeStats(ch).power });
+    } catch { /* pomijamy */ }
+  }
+  const posortowane = (klucz) => [...lista].sort((a, b) => b[klucz] - a[klucz]);
+  const wPietrach = posortowane('floor');
+  const wMocy = posortowane('power');
+  const top = (arr, klucz) => arr.slice(0, 3)
+    .map((w, i) => ({ miejsce: i + 1, name: w.name, crest: w.crest, wynik: w[klucz] }));
+
+  rankCache = { t: Date.now(), data: {
+    pietro: top(wPietrach, 'floor'),
+    moc: top(wMocy, 'power'),
+    ilu: lista.length,
+    // Pełne listy zostają w cache — na nich liczy się miejsce gracza także wtedy,
+    // gdy jest sto dwudziesty, a nie w pierwszej trójce.
+    _pietro: wPietrach.map(w => w.floor),
+    _moc: wMocy.map(w => w.power),
+  } };
+  return rankCache.data;
+}
+
+// Które miejsce zajmuje TA postać — także poza podium. Liczone z jej ŻYWEGO
+// stanu, nie z zapisu: inaczej własny awans byłby widoczny dopiero po
+// piętnastu sekundach, a gracz uznałby, że ranking nie działa.
+function mojeMiejsce(ch, st) {
+  const R = ranking();
+  // Miejsce = ilu ma WIĘCEJ, plus jeden. Remisy dzielą to samo miejsce.
+  const gdzie = (wyniki, moj) => wyniki.filter(w => w > moj).length + 1;
+  return {
+    pietro: gdzie(R._pietro ?? [], ch.maxFloor),
+    moc: gdzie(R._moc ?? [], st.power),
+    ilu: R.ilu ?? 0,
   };
 }
 
@@ -273,50 +534,180 @@ function view(ch) {
 // nie zdecyduje, nic się nie dzieje. Automat nie wybiera drogi za niego.
 const expNode = (ch) => ch.expedition?.nodes?.[ch.expedition.at] ?? null;
 
-function expEnemy(ch) {
-  const E = C.expedition;
+// Trwający run ze starej wersji miał tylko `{typ,i}` i po patchu nadal
+// pokazywał dwóch przeciwników. Uzupełniamy go w miejscu, zachowując numer
+// osiągniętej komnaty, skrzynię, HP i zużyte mikstury.
+function ensureDungeonNodes(ch) {
   const X = ch.expedition;
-  const r = E.risks[X.risk] ?? E.risks.rowne;
-  const wezel = expNode(ch);
-  const pietro = Math.max(1, ch.maxFloor + r.floorOffset);
-  const e = makeEnemy(pietro, X.at);
+  if (X?.kind !== 'dungeon') return;
+  const def = C.dungeons.lista[X.id];
+  if (!def?.rooms?.length) return;
+  const targetBalance = def.balanceVersion ?? 1;
+  const balanceChanged = X.balanceVersion !== targetBalance;
+  if (!X.nodes?.some(n => n.enemies) || balanceChanged) {
+    X.nodes = def.rooms.map((room, i) => ({ ...room, i, hazard: room.hazard ? { ...room.hazard,
+      reflectByType: { ...(room.hazard.reflectByType ?? {}) } } : null }));
+    X.at = Math.min(X.at ?? 0, X.nodes.length - 1);
+    X.balanceVersion = targetBalance;
+    // Nie przenosimy starej paczki przeciwników w połowie walki. Postęp runu,
+    // HP, mikstury i skrzynia zostają; odświeża się tylko bieżąca komnata.
+    if (balanceChanged && ch.activeFight && !ch.activeFight.over) ch.activeFight = null;
+  }
+  // Walka zapisana przed patchem niesie dwóch starych przeciwników. Nie da się
+  // dopisać jej kolejki w połowie bez zmiany wyniku, więc bezpiecznie wracamy
+  // do początku tej samej komnaty (HP, skrzynia i mikstury zostają).
+  const expected = X.nodes?.[X.at]?.enemies;
+  if (expected && ch.activeFight && !ch.activeFight.over && ch.activeFight.enemyTotal !== expected) {
+    ch.activeFight = null;
+  }
+}
 
-  const M = modSuma(X.mods ?? []);
-  let m = r.mob;
-  if (wezel?.typ === 'elita') m *= E.elitaMult;
-  if (wezel?.typ === 'boss') m *= E.bossMult;
+function expEnemy(ch) {
+  const X = ch.expedition;
+  const dungeon = X.kind === 'dungeon';
+  const E = dungeon ? C.dungeons : C.expedition;
+  const r = dungeon ? { mob: 1, floorOffset: 0 } : (E.risks[X.risk] ?? E.risks.bezryzyka);
+  const wezel = expNode(ch);
+  const def = E.lista[X.id] ?? Object.values(E.lista)[0];
+  const pietro = expeditionEnemyLevel(def.ilvl, X.at, X.nodes.length, r.floorOffset);
+  // Wyprawa sama nadaje wariant węzła. Bez wymuszenia `normal` poziom 10, 20...
+  // przypadkiem wnosił mnożnik bossa Wieży do zwykłego spotkania Wyprawy.
+  const e = makeEnemy(pietro, X.at, 'normal');
+
+  const M = dungeon ? { hp: 1, dmg: 1 } : modSuma(X.mods ?? []);
+  let hpMult = r.mob;
+  let dmgMult = r.mob;
+  if (wezel?.typ === 'elita') { hpMult *= E.elitaMult; dmgMult *= E.elitaMult; }
+  if (wezel?.typ === 'boss') {
+    hpMult *= E.bossHpMult;
+    dmgMult *= E.bossDmgMult;
+  }
   // Klątwy z eventów podbijają obrażenia wroga na resztę runu.
   const klatwaDmg = (X.efekty ?? []).reduce((a, e2) => a * (e2.mobDmg ?? 1), 1);
 
-  e.hp = Math.max(1, Math.round(e.hp * m * M.hp)); e.maxHp = e.hp;
-  e.damage = Math.max(1, Math.round(e.damage * m * klatwaDmg * M.dmg));
+  e.hp = Math.max(1, Math.round(e.hp * hpMult * M.hp)); e.maxHp = e.hp;
+  e.damage = Math.max(1, Math.round(e.damage * dmgMult * klatwaDmg * M.dmg));
   e.gold = Math.round(e.gold * E.goldMult);
   e.expFloor = pietro;
   if (wezel?.typ === 'elita') e.name = `${e.name} — Elita`;
-  if (wezel?.typ === 'boss') { e.name = `Pan ${actForFloor(pietro).name}`; e.variant = 'boss'; }
+  if (wezel?.typ === 'boss') { e.name = `Strażnik — ${def.label}`; e.variant = 'boss'; }
   return e;
 }
 
+// Pełna grupa w komnacie Dungeonu. Wyprawy pozostają pojedynczymi spotkaniami
+// materiałowymi; tylko Dungeon ma być próbą ustawienia całej drużyny.
+function expEnemies(ch, all = false) {
+  const main = expEnemy(ch);
+  if (ch.expedition?.kind !== 'dungeon') return [main];
+  const typ = expNode(ch)?.typ ?? 'walka';
+  const def = C.dungeons.lista[ch.expedition.id];
+  const room = expNode(ch);
+
+  // Pionowy prototyp Dungeonu: generator tworzy CAŁĄ kolejkę spotkania, ale
+  // podgląd przed walką pokazuje tylko pięciu aktywnych. Silnik dostaje pełną
+  // listę i sam uzupełnia zwolnione miejsca bez tworzenia kolejnych ekranów fal.
+  if (def?.prototype && room?.enemies) {
+    const templates = C.dungeons.reinforcementTemplates;
+    const partySize = 1
+      + (ch.team?.allies ?? []).filter(x => x !== null && x !== undefined).length
+      + (ch.team?.pet !== null && ch.team?.pet !== undefined ? 1 : 0);
+    const extraParty = Math.max(0, partySize - 1);
+    const partyHpScale = 1 + extraParty * C.dungeons.partyHpPerExtra;
+    const partyDmgScale = 1 + extraParty * C.dungeons.partyDmgPerExtra;
+    const hazardReflect = room.hazard?.reflectByType ?? {};
+    const reflectCapPct = room.hazard?.reflectCapPct ?? 0.12;
+    const makeAdd = (i) => {
+      if (typ === 'boss' && i === 0) {
+        return {
+          ...main, name: room.label ?? main.name, ic: '👑',
+          damageType: 'pierce', resists: { ...def.resists }, reflectByType: { ...hazardReflect }, reflectCapPct,
+        };
+      }
+      const t = templates[(typ === 'boss' ? i - 1 : i) % templates.length];
+      const hpBase = typ === 'boss' ? room.addHp : room.unitHp;
+      const dmgBase = typ === 'boss' ? room.addDmg : room.unitDmg;
+      const armorBase = typ === 'boss' ? room.addArmor : room.unitArmor;
+      const hp = Math.max(1, Math.round(main.maxHp * hpBase * t.hp * partyHpScale));
+      const speed = Math.max(1, Math.round(main.speed + t.speed));
+      return {
+        ...main,
+        name: t.label,
+        family: main.family,
+        variant: typ === 'elita' ? 'elita' : 'normal',
+        klasa: t.klasa, row: t.row,
+        reach: t.row === 1 ? C.formation.reach.jednoreczna : C.formation.maxRow,
+        dtype: t.damageType === 'magic' ? 'mag' : 'fiz',
+        damageType: t.damageType ?? classDamageType(t.klasa),
+        resists: { ...def.resists }, reflectByType: { ...hazardReflect }, reflectCapPct,
+        hp, maxHp: hp,
+        damage: Math.max(1, Math.round(main.damage * dmgBase * t.dmg * partyDmgScale)),
+        armor: Math.max(0, Math.round(main.armor * armorBase * t.armor)),
+        speed, attackSpeed: attackSpeed(speed),
+        gold: Math.max(0, Math.round(main.gold * hpBase * 0.5)),
+        ic: t.ic,
+        packIndex: i,
+      };
+    };
+    const wszyscy = Array.from({ length: room.enemies }, (_, i) => makeAdd(i));
+    return all ? wszyscy : wszyscy.slice(0, room.active ?? C.dungeons.activeEnemyCap);
+  }
+
+  const pack = C.dungeons.packs?.[typ] ?? [];
+  const support = pack.map((p, i) => ({
+    ...main,
+    name: p.label,
+    // Rodzina zostaje wspólna z komnatą, żeby obstawa nie tworzyła sztucznych
+    // wpisów w Kronice. Każda zabita jednostka nadal liczy się jako zabicie.
+    family: main.family,
+    variant: 'normal',
+    klasa: p.klasa,
+    row: p.row,
+    reach: p.row === 1 ? C.formation.reach.jednoreczna : C.formation.maxRow,
+    dtype: p.klasa === 'mag' ? 'mag' : 'fiz',
+    hp: Math.max(1, Math.round(main.maxHp * p.hp)),
+    maxHp: Math.max(1, Math.round(main.maxHp * p.hp)),
+    damage: Math.max(1, Math.round(main.damage * p.dmg)),
+    armor: Math.max(0, Math.round(main.armor * p.armor)),
+    speed: Math.max(1, Math.round(main.speed + p.speed)),
+    attackSpeed: attackSpeed(Math.max(1, Math.round(main.speed + p.speed))),
+    gold: 0,
+    packIndex: i,
+  }));
+  return [main, ...support];
+}
+
 // Buduje węzły runu z szkieletu i ziarna. Ten sam seed = ten sam run.
-function expNodes(seed, dlugosc = null, M = null) {
+function expNodes(seed, dlugosc = null, M = null, namioty = 1) {
   const rng = mulberry32(seed);
   const E = C.expedition;
 
-  // Szkielet rozciąga się albo skraca do zadanej długości: boss zawsze na końcu,
-  // brakujące miejsca dosypują się zwykłymi walkami przed elitą.
+  // Szkielet rozciąga się albo skraca do zadanej długości. Boss zawsze na końcu,
+  // elita tuż przed nim, a ŚRODEK POWTARZA WZÓR ZE SZKIELETU — nie dosypuje
+  // czterdziestu walk pod rząd. Przy 48 etapach dostajesz kilka rozdroży,
+  // zdarzeń i ognisk rozłożonych równo, a nie jeden ogon walk.
   let szk = [...E.szkielet];
   if (dlugosc && dlugosc !== szk.length) {
     const ogon = szk.slice(-2);                 // elita, boss
-    let srodek = szk.slice(0, -2);
-    while (srodek.length + 2 < dlugosc) srodek.splice(srodek.length - 1, 0, 'walka');
-    while (srodek.length + 2 > dlugosc && srodek.length > 3) {
-      const i = srodek.lastIndexOf('walka');
-      if (i < 0) break;
-      srodek.splice(i, 1);
-    }
+    const wzor = szk.slice(0, -2);
+    const ile = Math.max(1, dlugosc - ogon.length);
+    const srodek = [];
+    for (let i = 0; i < ile; i++) srodek.push(wzor[i % wzor.length]);
     szk = [...srodek, ...ogon];
   }
-  if (M?.bezPostoju) szk = szk.filter(t => t !== 'safepoint');
+  // NAMIOTY LICZY RYZYKO, nie wzór szkieletu. Wyrzucamy wszystkie, które
+  // przyszły z powtarzania wzoru, i wstawiamy dokładnie tyle, ile trzeba —
+  // rozłożone równo po drodze. Trudniejszy run ma ich MNIEJ, nie więcej.
+  const ile = M?.bezPostoju ? 0 : Math.max(0, namioty);
+  szk = szk.map(t => (t === 'safepoint' ? 'walka' : t));
+  const ogonOd = szk.length - 2;                 // elita i boss zostają na końcu
+  for (let n = 1; n <= ile; n++) {
+    const poz = Math.round((ogonOd * n) / (ile + 1));
+    // Nie nadpisujemy rozdroża ani zdarzenia — szukamy najbliższej zwykłej walki.
+    let i = poz;
+    while (i < ogonOd && szk[i] !== 'walka') i++;
+    if (i >= ogonOd) { i = poz; while (i > 0 && szk[i] !== 'walka') i--; }
+    if (szk[i] === 'walka') szk[i] = 'safepoint';
+  }
   // Łowy na elity zamieniają zwykłe walki w elity.
   for (let n = M?.elity ?? 0; n > 0; n--) {
     const i = szk.indexOf('walka', 2);
@@ -339,10 +730,10 @@ function expNodes(seed, dlugosc = null, M = null) {
 
 // Ile etapów ma run tej wyprawy przy obecnym poziomie. Dalej w wieży —
 // dłuższa droga, więcej łupu i więcej okazji, żeby zginąć z pełną sakwą.
-function expDlugosc(def, poziomGracza) {
-  let n = def.dlugosc[0].nodes;
-  for (const prog of def.dlugosc) if (poziomGracza >= prog.floor) n = prog.nodes;
-  return n;
+// DŁUGOŚĆ RUNU BIERZE SIĘ Z RYZYKA, nie z wyprawy i nie z poziomu gracza.
+// Wybierasz, jak długo chcesz siedzieć, i tyle dostajesz z powrotem.
+function expDlugosc(risk) {
+  return C.expedition.risks[risk]?.tury ?? 12;
 }
 
 // Suma efektów wybranych modyfikatorów.
@@ -378,16 +769,38 @@ function doExpStart(ch, id, risk, mods) {
   const seed = (Date.now() ^ (ch.maxFloor * 7919) ^ Math.floor(Math.random() * 1e9)) >>> 0;
   const M = modSuma(wybrane);
   ch.expedition = {
-    id, risk, mods: wybrane, seed,
-    nodes: expNodes(seed, expDlugosc(def, poziom(ch)), M),
+    kind: 'expedition', id, risk, mods: wybrane, seed,
+    nodes: expNodes(seed, expDlugosc(risk), M, C.expedition.risks[risk]?.namioty ?? 1),
     at: 0,
     sakwa: [], mats: {}, gold: 0,
     efekty: [],            // klątwy i błogosławieństwa na ten run
-    lootMult: M.reward,    // modyfikatory od razu podbijają nagrodę
+    // Nagrodę mnoży ryzyko RAZY modyfikatory — jedno i drugie od razu.
+    lootMult: M.reward * (C.expedition.risks[risk]?.reward ?? 1),
     potionsUsed: 0,
-    safepointDone: false,
+    safepointDone: [],     // indeksy wykorzystanych ognisk
     // ZDROWIE NIE WRACA. Wchodzisz z tym, co masz — lecz się przed wyjściem.
   };
+  ch.combatRunStats = null;
+  return { ok: true };
+}
+
+function doDungeonStart(ch, id) {
+  if (ch.activeFight && !ch.activeFight.over) return { error: 'Najpierw dokończ albo porzuć walkę' };
+  if (ch.expedition) return { error: 'Inna przygoda już trwa' };
+  const def = C.dungeons.lista[id];
+  if (!def) return { error: 'Nie ma takiego Dungeonu' };
+  if (poziom(ch) < def.unlockFloor) return { error: `Otwiera się na piętrze ${def.unlockFloor}` };
+  const seed = (Date.now() ^ (ch.maxFloor * 3571) ^ Math.floor(Math.random() * 1e9)) >>> 0;
+  ch.expedition = {
+    kind: 'dungeon', id, risk: null, mods: [], seed,
+    balanceVersion: def.balanceVersion ?? 1,
+    nodes: (def.rooms ?? C.dungeons.nodes.map(typ => ({ typ })))
+      .map((room, i) => ({ ...room, i, hazard: room.hazard ? { ...room.hazard,
+        reflectByType: { ...(room.hazard.reflectByType ?? {}) } } : null })), at: 0,
+    sakwa: [], mats: {}, gold: 0, efekty: [], lootMult: 1,
+    potionsUsed: 0, safepointDone: [],
+  };
+  ch.combatRunStats = null;
   return { ok: true };
 }
 
@@ -399,6 +812,7 @@ function doExpLeave(ch) {
   const matStracone = Object.values(ch.expedition.mats).reduce((a, b) => a + b, 0);
   ch.expedition = null;
   ch.activeFight = null;
+  ch.combatRunStats = null;
   return { ok: true, stracone, matStracone };
 }
 
@@ -424,7 +838,7 @@ function doExpChoose(ch, opcjaId) {
     out.efekty.push(`+${ile} zdrowia`);
   }
   if (s.potion) {
-    ch.potions = Math.max(0, ch.potions + s.potion);
+    ch.mikstury[C.healing.startowa] = (ch.mikstury[C.healing.startowa] ?? 0) + s.potion;
     out.efekty.push(s.potion > 0 ? '+1 mikstura' : '−1 mikstura');
   }
   if (s.material) {
@@ -449,13 +863,35 @@ function doExpChoose(ch, opcjaId) {
 
 // SAFEPOINT — jedyne wcześniejsze wyjście dla łupu i celowo wąskie:
 // jeden przedmiot i jeden rodzaj surowca (cały stos).
-function doExpSafepoint(ch, itemId, matId) {
+function doExpSafepoint(ch, itemId, matId, jedzenie) {
   const X = ch.expedition;
   if (!X) return { error: 'Nie jesteś na wyprawie' };
   if (expNode(ch)?.typ !== 'safepoint') return { error: 'Nie stoisz w bezpiecznym miejscu' };
-  if (X.safepointDone) return { error: 'Ten postój już wykorzystany' };
+  // Długi run ma kilka ognisk. Każde da się wykorzystać RAZ — stąd lista indeksów
+  // zamiast jednej flagi na cały run.
+  X.safepointDone = Array.isArray(X.safepointDone) ? X.safepointDone : [];
+  if (X.safepointDone.includes(X.at)) return { error: 'Ten postój już wykorzystany' };
 
   const out = { ok: true, wyniesione: [] };
+
+  // NAMIOT ODNAWIA ZAPAS MIKSTUR. Limit `potionCap` liczy się na CAŁĄ wyprawę,
+  // nie na walkę — bez tego długi run kończył się na sucho w połowie drogi,
+  // a namiot jest jedynym miejscem, w którym da się go zresetować.
+  if (X.potionsUsed > 0) {
+    out.odnowione = X.potionsUsed;
+    X.potionsUsed = 0;
+  }
+
+  // PRZY OGNISKU MOŻNA ZJEŚĆ. Jedzenie z Gotowania leczy DO PEŁNA i zostawia
+  // swój buff na kolejne walki. To jedyny PEŁNY odpoczynek w środku runu;
+  // zwycięska walka oddaje tylko 8%, mikstury liczą się z limitu wyprawy.
+  if (jedzenie && C.expedition.postojLeczy) {
+    const r = doEat(ch, String(jedzenie));
+    if (r.error) return r;
+    ch.hpLost = 0;
+    out.zjedzone = r.buff.label;
+    out.uleczony = true;
+  }
 
   if (itemId) {
     const i = X.sakwa.findIndex(x => x.id === String(itemId));
@@ -474,15 +910,49 @@ function doExpSafepoint(ch, itemId, matId) {
     out.wyniesione.push(`${matId} ×${ile}`);
   }
 
-  X.safepointDone = true;
+  X.safepointDone.push(X.at);
   X.at++;
   return out;
+}
+
+// Widełki poziomu przedmiotów tej wyprawy przy tym ryzyku.
+// Wysokie ryzyko MNOŻY cały przedział — z Puszczy da się wtedy wynieść ilvl 20.
+export function widelkiIlvl(def, risk) {
+  const z = def.ilvl ?? [1, 10];
+  const m = C.expedition.risks[risk]?.ilvlMult ?? 1;
+  return [Math.max(1, Math.round(z[0] * m)), Math.max(1, Math.round(z[1] * m))];
+}
+
+// Wagi rzadkości dla skrzyni bossa TEJ wyprawy. Bez ryzyka nie ma legend —
+// trzy górne progi lecą do zera, zamiast pilnować tego warunkiem w kodzie.
+function wagiBossa(risk) {
+  if (C.expedition.risks[risk]?.legendy) return C.loot.weightsBoss;
+  const w = { ...C.loot.weightsBoss };
+  const oddane = w.legendary + w.mystic + w.god;
+  w.legendary = 0; w.mystic = 0; w.god = 0;
+  w.uncommon += oddane;                  // pula musi dalej sumować się do 100%
+  return w;
 }
 
 // Ukończona wyprawa oddaje sakwę i surowce do plecaka.
 function expFinish(ch, out) {
   const X = ch.expedition;
+  const dungeon = X.kind === 'dungeon';
   out.expDone = true;
+  out.runKind = dungeon ? 'dungeon' : 'expedition';
+  out.runLabel = (dungeon ? C.dungeons.lista[X.id] : C.expedition.lista[X.id])?.label;
+  // Ukończona wyprawa zostaje zapisana razem z ryzykiem — na tym stoi
+  // odblokowanie drugiego slotu drużyny (Puszcza na wysokim).
+  if (dungeon) {
+    ch.dungeonyZrobione ??= {};
+    ch.dungeonyZrobione[X.id] = (ch.dungeonyZrobione[X.id] ?? 0) + 1;
+  } else {
+    const klucz = kluczWyprawy(X.id, X.risk);
+    ch.wyprawyZrobione ??= {};
+    const przed = slotOpen(ch, 1);
+    ch.wyprawyZrobione[klucz] = (ch.wyprawyZrobione[klucz] ?? 0) + 1;
+    if (!przed && slotOpen(ch, 1)) out.nowySlot = 'Drugi slot sojusznika otwarty';
+  }
   out.expLoot = [];
   out.expMats = { ...X.mats };
   for (const d of X.sakwa) {
@@ -514,10 +984,57 @@ function fightMode(ch) {
   return (bossWiezy || bossWyprawy) ? 'turowa' : (ch.mode ?? 'auto');
 }
 
+function combatRunKey(ch) {
+  if (ch.expedition) return `${ch.expedition.kind === 'dungeon' ? 'dungeon' : 'expedition'}:${ch.expedition.id}`;
+  return `tower:${ch.floor}`;
+}
+
+function ensureCombatRunStats(ch, forcedKey = null) {
+  const key = forcedKey ?? combatRunKey(ch);
+  if (ch.combatRunStats?.key === key) return ch.combatRunStats;
+  ch.combatRunStats = {
+    key, waves: 0,
+    totals: { damageDone: 0, damageTaken: 0, healingDone: 0 },
+    party: {},
+  };
+  return ch.combatRunStats;
+}
+
+function combatRunView(run) {
+  if (!run) return null;
+  return {
+    key: run.key, waves: run.waves, totals: { ...run.totals },
+    party: Object.values(run.party ?? {}).sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99)),
+  };
+}
+
+function addCombatRunStats(ch, fightStats, forcedKey = null) {
+  const run = ensureCombatRunStats(ch, forcedKey);
+  run.waves++;
+  for (const key of ['damageDone', 'damageTaken', 'healingDone']) {
+    run.totals[key] += fightStats?.totals?.[key] ?? 0;
+  }
+  for (const u of fightStats?.party ?? []) {
+    const id = String(u.slot ?? u.idx ?? u.name);
+    const dst = run.party[id] ??= {
+      name: u.name, slot: u.slot, role: u.role,
+      damageDone: 0, damageTaken: 0, healingDone: 0,
+    };
+    dst.name = u.name; dst.role = u.role;
+    dst.damageDone += u.damageDone ?? 0;
+    dst.damageTaken += u.damageTaken ?? 0;
+    dst.healingDone += u.healingDone ?? 0;
+  }
+  return combatRunView(run);
+}
+
 // Rozpoczyna walkę. W trybie auto od razu ją rozgrywa,
 // w turowym zapisuje stan i oddaje sterowanie graczowi.
 function startFight(ch) {
   const naWyprawie = !!ch.expedition;
+  ensureDungeonNodes(ch);
+  ensureCombatRunStats(ch);
+  const runCfg = ch.expedition?.kind === 'dungeon' ? C.dungeons : C.expedition;
   const info = floorInfo(ch.floor);
   if (!naWyprawie && ch.fight >= info.fights) return { error: 'Piętro zdobyte — idź wyżej' };
   if (naWyprawie) {
@@ -533,43 +1050,43 @@ function startFight(ch) {
   // „Walka już trwa" i gracz zostawał z nią na zawsze, bo ekran jej nie pokazywał.
   // Teraz „Walcz" po prostu do niej WRACA.
   if (ch.activeFight && !ch.activeFight.over) {
-    return { fight: summary(ch.activeFight), enemy: ch.activeFight.enemies[0], awaiting: true, resumed: true };
+    const aktywna = ch.activeFight;
+    // Auto dogrywa się po stronie serwera i oddaje pełny log — bez tego resume
+    // wracał do klienta pusty log i ekran zamarzał.
+    if (aktywna.mode === 'auto') { runToEnd(aktywna); return resolveFight(ch); }
+    return { fight: summary(aktywna), enemy: aktywna.enemies[0], awaiting: true, resumed: true };
   }
 
   // Od piętra 3 wychodzą we dwóch — dopiero wtedy szyk ma sens.
-  const wrogowie = naWyprawie ? [expEnemy(ch)] : makeEnemies(ch.floor, ch.fight);
+  const wrogowie = naWyprawie ? expEnemies(ch, true) : makeEnemies(ch.floor, ch.fight);
   const enemy = wrogowie[0];
   const st = computeStats(ch);
   const seed = (Date.now() ^ (ch.floor * 7919) ^ (ch.fight * 104729)) >>> 0;
 
-  // HP NIE wraca między falami. Wchodzisz w falę drugą z tym, co zostało po pierwszej —
-  // na tym wyczerpaniu stoi całe napięcie piętra. Pełne HP oddaje dopiero wejście
-  // na nowe piętro albo przegrana (bo inaczej nie dałoby się powtórzyć).
+  // Wieża nie leczy między falami. Wyprawa po zwycięstwie odda 8% maksymalnego
+  // HP w resolveFight — tutaj zawsze wchodzimy z faktycznym zapisanym stanem.
   const F = createFight({
-    party: [{
-      name: ch.name, kind: 'gracz', hp: Math.max(1, st.hp), maxHp: st.maxHp,
-      damage: st.damage, speed: st.speed, armor: st.armor,
-      crit: st.crit, critMult: st.critMult, accuracy: st.accuracy, evasion: st.evasion,
-      block: st.block, blockCut: st.blockCut, potionPct: st.potionPct,
-      // Rodzaj obrażeń bierze się z broni w ręce. Log walki koloruje po tym.
-      dtype: st.wtype === 'magia' ? 'mag' : 'fiz',
-      // Szyk: bohater stoi z przodu, ale zasięg ma z broni.
-      row: st.row, reach: st.reach,
-    },
     // Sojusznicy i pet wchodzą do walki na tych samych prawach co bohater.
     // Ich HP nie przenosi się między falami — wyczerpanie dotyczy gracza.
-    ...teamUnits(ch, st)],
+    party: [heroUnit(ch, st), ...teamUnits(ch, computeStats(ch, { food: false }))],
     enemies: wrogowie,
     // Ile mikstur masz PRZY SOBIE. Wieża to wypad na chwilę (3), wyprawa
     // wyjście na długo (10 na cały run, nie na walkę).
-    potions: naWyprawie
-      ? Math.min(ch.potions, Math.max(0, C.expedition.potionCap - ch.expedition.potionsUsed))
-      : Math.min(ch.potions, C.healing.carryTower),
+    potions: zabierzMikstury(ch, naWyprawie
+      ? Math.max(0, runCfg.potionCap - ch.expedition.potionsUsed)
+      : C.healing.carryTower),
     wtype: st.wtype,
     abilities: bojowe(ch),
     maxMana: st.maxMana,
     manaRegen: st.manaRegen,
+    activeEnemyCap: ch.expedition?.kind === 'dungeon'
+      ? (expNode(ch)?.active ?? Math.min(C.dungeons.activeEnemyCap, wrogowie.length)) : null,
+    hazard: ch.expedition?.kind === 'dungeon' ? (expNode(ch)?.hazard ?? null) : null,
+    // Skala pancerza rośnie z piętrem — patrz armorK() w combat.js.
+    poziom: naWyprawie ? (enemy.expFloor ?? ch.maxFloor) : ch.floor,
   }, seed, fightMode(ch));
+  // Co poszło do walki — po niej odejmujemy dokładnie tę różnicę.
+  F.potionsWziete = { ...F.potions };
   F.enemyMeta = { variant: enemy.variant,
                   gold: wrogowie.reduce((s, w) => s + w.gold, 0),
                   floor: naWyprawie ? enemy.expFloor : ch.floor,
@@ -577,10 +1094,15 @@ function startFight(ch) {
                   family: enemy.family,
                   families: wrogowie.map(w => w.family),
                   wyprawa: naWyprawie,
+                  runKind: ch.expedition?.kind ?? null,
                   wezel: naWyprawie ? expNode(ch).typ : null };
+  F.enemyMeta.enemyCount = wrogowie.length;
   ch.activeFight = F;
 
-  if ((naWyprawie ? (ch.mode ?? 'auto') : fightMode(ch)) === 'auto') { runToEnd(F); return resolveFight(ch); }
+  // Automat rozgrywa całe piętro po stronie serwera i oddaje pełny log do
+  // animacji. Klient odtwarza log przez startPlayback — bez tego (porcje przez
+  // /api/autotick) startFight zwracał pusty log i walka się nie zaczynała.
+  if (fightMode(ch) === 'auto') { runToEnd(F); return resolveFight(ch); }
 
   beginTurn(F);           // przewiń wrogie ciosy do pierwszej decyzji gracza
   if (F.over) return resolveFight(ch);
@@ -596,6 +1118,126 @@ function actFight(ch, action) {
   return { fight: summary(F), enemy: F.enemies[0], awaiting: true };
 }
 
+// Następny krótki obieg walki automatycznej.
+function tickAutoFight(ch) {
+  const F = ch.activeFight;
+  if (!F || F.over) return { error: 'Nie ma trwającej walki automatycznej' };
+  if (F.mode !== 'auto') return { error: 'Ta walka nie jest automatyczna' };
+  autoRound(F);
+  if (F.over) return resolveFight(ch);
+  return { fight: summary(F), enemy: F.enemies[0], auto: true };
+}
+
+// Wspólny priorytet celu dla bohatera, sojuszników i peta. `idx` jest trwałym
+// numerem przeciwnika, a nie pozycją karty — posiłek nie odziedziczy znacznika.
+function setFightTarget(ch, idx) {
+  const F = ch.activeFight;
+  if (!F || F.over) return { error: 'Nie ma trwającej walki' };
+  const n = idx === null || idx === undefined || idx === '' ? null : Number(idx);
+  if (n !== null && !F.enemies.some(e => e.alive && e.idx === n)) {
+    return { error: 'Tego przeciwnika nie ma już na polu walki' };
+  }
+  F.priorityTarget = n;
+  for (const u of F.party) u.preferredTarget = n;
+  return { ok: true, fight: summary(F) };
+}
+
+// ---------------------------------------------------------------- KOLOS
+// Przeciwnik spoza wieży. Jedna walka, zawsze turowa, bez fal i bez postępu.
+// Nie rusza piętra, nie rusza wyprawy — wchodzisz, bijesz się, wychodzisz.
+
+function kolosWidok(ch) {
+  const K = C.kolos;
+  const st = computeStats(ch);
+  // Ile ciosów potrzeba PRZY TWOIM ATAKU. Liczone tą samą formułą co walka,
+  // żeby liczba na ekranie nie kłamała.
+  const kA = armorK(K.poziom);
+  const naCios = Math.max(1, Math.round(st.damage * (1 - K.armor / (K.armor + kA))));
+  const efektywnaObrona = st.armor * playerArmorEffect(K.poziom);
+  const jegoCios = Math.max(1, Math.round(K.damage * (1 - efektywnaObrona / (efektywnaObrona + kA))));
+  return {
+    ...K,
+    otwarty: poziom(ch) >= K.unlockFloor,
+    pokonany: !!ch.kolosPokonany,
+    // Prawda o dystansie, jaki dzieli gracza od tego przeciwnika.
+    twojCios: naCios,
+    ciosowPotrzeba: Math.ceil(K.hp / naCios),
+    jegoCios,
+    ciosowNaCiebie: Math.max(1, Math.ceil(st.maxHp / (jegoCios * K.ataki))),
+  };
+}
+
+function startKolos(ch) {
+  const K = C.kolos;
+  if (poziom(ch) < K.unlockFloor) return { error: `Kolos otwiera się na piętrze ${K.unlockFloor}` };
+  if (ch.expedition) return { error: 'Najpierw skończ wyprawę' };
+  if (ch.activeFight && !ch.activeFight.over) {
+    return { fight: summary(ch.activeFight), enemy: ch.activeFight.enemies[0], awaiting: true, resumed: true };
+  }
+
+  const st = computeStats(ch);
+  ensureCombatRunStats(ch, `kolos:${K.id}`);
+  const F = createFight({
+    party: [heroUnit(ch, st), ...teamUnits(ch, st)],
+    enemies: [{
+      name: K.label, family: K.id, variant: 'kolos', level: K.poziom,
+      klasa: 'wojownik', row: 1, reach: 1, dtype: 'fiz', ic: K.ic,
+      hp: K.hp, maxHp: K.hp, damage: K.damage, armor: K.armor, speed: K.speed,
+      crit: C.combat.critBase, critMult: C.combat.critMultBase,
+      accuracy: 0.92, evasion: 0,
+      ataki: K.ataki, skills: K.skills,
+    }],
+    potions: zabierzMikstury(ch, C.expedition.potionCap),
+    wtype: st.wtype,
+    abilities: bojowe(ch),
+    maxMana: st.maxMana, manaRegen: st.manaRegen,
+    poziom: K.poziom,
+  }, (Date.now() ^ 0x5EED) >>> 0, 'turowa');
+
+  // Kolos NIE jest falą piętra ani węzłem wyprawy — rozliczenie idzie własną drogą.
+  F.potionsWziete = { ...F.potions };
+  F.enemyMeta = { variant: 'kolos', kolos: true, gold: 0, floor: K.poziom,
+                  fightIdx: 0, family: K.id, families: [K.id], wyprawa: false, wezel: null };
+  ch.activeFight = F;
+
+  beginTurn(F);
+  if (F.over) return resolveFight(ch);
+  return { fight: summary(F), enemy: F.enemies[0], awaiting: true, kolos: true };
+}
+
+// Rozliczenie Kolosa. Pierwsze zwycięstwo oddaje Różdżkę Lodową, kolejne złoto.
+function kolosNagroda(ch, out) {
+  const K = C.kolos;
+  if (!ch.kolosPokonany) {
+    ch.kolosPokonany = Date.now();
+    const it = {
+      id: null, slot: K.nagroda.slot, wtype: K.nagroda.wtype, hands: K.nagroda.hands,
+      base: K.nagroda.base, name: K.nagroda.base,
+      rarity: K.nagroda.rarity, ilvl: K.nagroda.ilvl, plus: 0, energy: 0,
+      reqLevel: K.nagroda.ilvl, damage: 0, armor: 0, affixes: [],
+    };
+    const def = C.gear.slots[it.slot];
+    const rar = C.rarities[it.rarity];
+    it.damage = Math.round((C.gear.weaponDamageBase + C.gear.weaponDamagePerIlvl * it.ilvl)
+      * def.mult * rar.mult);
+    giveId(it);
+    if (ch.backpack.length < C.gear.backpackSize) {
+      ch.backpack.push(it);
+      ch.discovered[it.base] = true;
+      out.loot.push(it);
+      out.kolosNagroda = it.name;
+    } else {
+      out.backpackFull = true;
+    }
+  } else {
+    ch.gold += K.zlotoZaPowtorke;
+    out.gold = K.zlotoZaPowtorke;
+    out.kolosZloto = K.zlotoZaPowtorke;
+  }
+  out.kolos = true;
+  return out;
+}
+
 // Rozliczenie zakończonej walki: exp, złoto, łup, postęp piętra.
 function resolveFight(ch) {
   const F = ch.activeFight;
@@ -603,33 +1245,62 @@ function resolveFight(ch) {
   const meta = F.enemyMeta;
   const info = floorInfo(ch.floor);
 
-  // Buff z jedzenia zużywa się walkami, nie czasem — dzięki temu nie ucieka,
-  // gdy gracz odejdzie od telefonu.
-  if (ch.buff) {
-    ch.buff.walki--;
-    if (ch.buff.walki <= 0) { out.buffKoniec = ch.buff.label; ch.buff = null; }
-  }
-
   // Zużyte mikstury schodzą ze stanu; na wyprawie liczy się też limit noszenia.
   const wypite = res.potionsUsed ?? 0;
-  ch.potions = Math.max(0, ch.potions - wypite);
+  zuzyjMikstury(ch, F.potionsWziete ?? {}, res.potions ?? {});
   if (ch.expedition) ch.expedition.potionsUsed += wypite;
   ch.activeFight = null;
 
   const out = { ...res, enemy: F.enemies[0], loot: [], gold: 0,
                 floorCleared: false, awaiting: false, trophy: null };
+  out.runStats = addCombatRunStats(ch, res.combatStats, meta.kolos ? `kolos:${C.kolos.id}` : null);
+
+  // Jedzenie schodzi tylko jednostkom, które rzeczywiście weszły do tej walki.
+  // Każda ma własne trzy sloty, więc posiłek sojusznika nie wzmacnia bohatera.
+  const uczestnicy = new Set((F.party ?? []).map(u => u.slot));
+  const zuzyjJedzenie = (unit) => {
+    if (!unit) return;
+    for (const slot of ['main_meal', 'drink', 'dessert']) {
+      const b = unit.foodBuffs?.[slot];
+      if (!b) continue;
+      b.walki = Math.max(0, (b.walki ?? 1) - 1);
+      if (b.walki <= 0) unit.foodBuffs[slot] = null;
+    }
+  };
+  if (uczestnicy.has(0)) zuzyjJedzenie(ch);
+  for (let i = 0; i < (ch.team?.allies?.length ?? 0); i++) {
+    if (uczestnicy.has(i + 1)) zuzyjJedzenie(ch.collection?.companions?.[ch.team.allies[i]]);
+  }
+  if (uczestnicy.has(4)) zuzyjJedzenie(ch.collection?.pets?.[ch.team?.pet]);
 
   if (res.win) {
     // HP zostaje takie, jakie wyszło z walki — następna fala zaczyna się stąd.
     const me = res.party[0];
     ch.hpLost = Math.max(0, me.maxHp - me.hp);
 
+    // Wyprawa oddaje 8% maksymalnego HP po KAŻDEJ wygranej walce. Leczymy
+    // dopiero po zapisaniu faktycznych obrażeń, a wynik walki aktualizujemy,
+    // żeby ekran pokazał dokładnie tyle HP, z iloma ruszy następny etap.
+    const runCfg = meta.runKind === 'dungeon' ? C.dungeons : C.expedition;
+    if (meta.wyprawa && runCfg.healAfterWinPct > 0) {
+      const brakPrzed = ch.hpLost;
+      const porcja = Math.round(me.maxHp * runCfg.healAfterWinPct);
+      ch.hpLost = Math.max(0, ch.hpLost - porcja);
+      out.expHeal = brakPrzed - ch.hpLost;
+      me.hp = me.maxHp - ch.hpLost;
+    }
+
     out.gold = meta.gold;
     ch.gold += meta.gold;
 
     // Skille bojowe rosną z tego, CZYM bijesz. Podział rąk siedzi w skillSplit().
+    // Jedna komnata z 20 posiłkami nie może płacić jak pojedynczy mob, ale też
+    // nie mnoży XP 1:1 (loot nadal wypada za komnatę). Pięciu zabitych to jeden
+    // pełny mnożnik treningu — długi Dungeon jest uczciwym miejscem grindu.
+    const enemyXpMult = meta.runKind === 'dungeon'
+      ? Math.max(1, (meta.enemyCount ?? 1) / C.dungeons.activeEnemyCap) : 1;
     const pula = C.combatSkills.xpPerFloor * meta.floor
-      * (meta.variant === 'boss' ? 6 : meta.variant === 'plus' ? 2 : 1);
+      * (meta.variant === 'boss' ? 6 : meta.variant === 'plus' ? 2 : 1) * enemyXpMult;
     out.skillXp = pula;
     out.skillAwans = addCombatXp(ch, pula);
 
@@ -650,32 +1321,54 @@ function resolveFight(ch) {
       if (trofeum) { wpis.drops.push(trofeum); out.trophy = trofeum; }
     }
 
-    // ŁUP TYLKO Z WYPRAWY. Wieża daje złoto, exp skilli i wpisy w Kronice,
-    // ale przedmiotów nie daje — to są dwie różne decyzje, nie jedna pętla.
+    // Wyprawy dają wyłącznie materiały; Dungeony wyłącznie sprzęt.
     if (meta.wyprawa) {
       const X = ch.expedition;
-      const r = C.expedition.risks[X.risk] ?? C.expedition.risks.rowne;
-      const mnoznik = r.lootMult * X.lootMult
-        * (meta.wezel === 'elita' ? 1.6 : meta.wezel === 'boss' ? 3 : 1);
-      const szansa = Math.min(0.95, C.loot.dropChance * mnoznik);
-      const def = C.expedition.lista[X.id] ?? C.expedition.lista.puszcza;
-      const drops = Math.random() < szansa
-        ? rollDrops((F.seed ^ 31337) >>> 0,
-            { floor: meta.floor, variant: meta.wezel === 'boss' ? 'boss' : 'plus',
-              pool: def.drops })
-        : [];
-      for (const d of drops) { giveId(d); X.sakwa.push(d); out.loot.push(d); }
+      const dungeon = X.kind === 'dungeon';
+      if (dungeon) {
+        const def = C.dungeons.lista[X.id] ?? Object.values(C.dungeons.lista)[0];
+        const variant = meta.wezel === 'boss' ? 'boss' : 'plus';
+        const chance = meta.wezel === 'elita' ? C.dungeons.eliteDropChance : C.dungeons.normalDropChance;
+        // Każdy zwykły przeciwnik ma własną, deterministyczną szansę na sprzęt.
+        // Boss jest pomijany w tej pętli, bo otwiera osobną skrzynię 3–6 sztuk;
+        // jego obstawa nadal może coś upuścić. Rzut kończy się na Unique.
+        const mobCount = Math.max(0, (meta.enemyCount ?? 1) - (meta.wezel === 'boss' ? 1 : 0));
+        const mobChance = (meta.wezel === 'elita'
+          ? C.dungeons.eliteMobDropChance : C.dungeons.mobDropChance) * X.lootMult;
+        let mobLoot = 0;
+        for (let i = 0; i < mobCount; i++) {
+          const mobDrops = rollDrops((F.seed ^ 0x0D06E000 ^ Math.imul(i + 1, 0x9E3779B1)) >>> 0, {
+            floor: meta.floor, variant: 'normal', pool: def.drops, zakres: def.ilvl,
+            customWeights: C.dungeons.weightsMob, dropChance: Math.min(1, mobChance),
+            wezel: meta.wezel === 'elita' ? 'elita' : 'walka',
+          });
+          for (const d of mobDrops) { giveId(d); X.sakwa.push(d); out.loot.push(d); mobLoot++; }
+        }
+        out.mobLoot = mobLoot;
 
-      // Materiały też lecą do sakwy — i też przepadają razem z nią.
-      // Tabela jest w definicji wyprawy; Kryształ Magii jest tu jedynym źródłem.
-      out.mats = {};
-      for (const m of def.mats ?? []) {
-        if (Math.random() >= m.szansa * (1 + (mnoznik - 1) * 0.4)) continue;
-        const ile = m.ile[0] + Math.floor(Math.random() * (m.ile[1] - m.ile[0] + 1));
-        X.mats[m.id] = (X.mats[m.id] ?? 0) + ile;
-        out.mats[m.id] = ile;
+        // Osobny bonus za oczyszczenie komnaty zostaje bez zmian: 30% dla
+        // zwykłej, gwarancja dla elity, a boss otwiera pełną skrzynię.
+        const drops = rollDrops((F.seed ^ 31337) >>> 0, {
+          floor: meta.floor, variant, pool: def.drops, zakres: def.ilvl,
+          wagiBoss: C.loot.weightsBoss, dropChance: chance,
+          wezel: meta.wezel === 'boss' ? 'boss' : meta.wezel === 'elita' ? 'elita' : 'walka',
+        });
+        for (const d of drops) { giveId(d); X.sakwa.push(d); out.loot.push(d); }
+      } else {
+        const r = C.expedition.risks[X.risk] ?? C.expedition.risks.bezryzyka;
+        const mnoznik = r.lootMult * X.lootMult
+          * (meta.wezel === 'elita' ? 1.6 : meta.wezel === 'boss' ? 3 : 1);
+        const def = C.expedition.lista[X.id] ?? C.expedition.lista.puszcza;
+        out.mats = {};
+        const materialPool = [...(def.mats ?? []), ...(meta.wezel === 'boss' ? (def.bossMats ?? []) : [])];
+        for (const m of materialPool) {
+          if (Math.random() >= Math.min(1, m.szansa * (1 + (mnoznik - 1) * 0.4))) continue;
+          const ile = m.ile[0] + Math.floor(Math.random() * (m.ile[1] - m.ile[0] + 1));
+          X.mats[m.id] = (X.mats[m.id] ?? 0) + ile;
+          out.mats[m.id] = ile;
+        }
+        if (!Object.keys(out.mats).length) delete out.mats;
       }
-      if (!Object.keys(out.mats).length) delete out.mats;
 
       X.gold += meta.gold;
       X.at++;
@@ -685,6 +1378,9 @@ function resolveFight(ch) {
       out.sakwaMats = Object.values(X.mats).reduce((a, b) => a + b, 0);
       // Dopiero BOSS oddaje sakwę. Wcześniej nie ma wyjścia poza safepointem.
       if (meta.wezel === 'boss') expFinish(ch, out);
+    } else if (meta.kolos) {
+      // Kolos nie jest falą piętra — nie rusza postępu, ma własną nagrodę.
+      kolosNagroda(ch, out);
     } else {
       ch.fight++;
       if (ch.fight >= info.fights) {
@@ -705,12 +1401,29 @@ function resolveFight(ch) {
           ch.currency += g.currency;
           out.nagroda = g;
         }
+
+        // POWTARZANIE PIĘTRA. Zdobyte piętro nie wypuszcza wyżej, tylko startuje
+        // od pierwszej fali z pełnym zdrowiem — automat leci dalej bez pytania.
+        // To jest cały tryb farmienia: złoto, exp skilli i Kronika w kółko.
+        if (ch.powtarzaj && poziom(ch) >= C.tower.powtarzanieOd) {
+          ch.fight = 0;
+          ch.hpLost = 0;
+          out.floorCleared = false;
+          out.powtorka = meta.floor;
+        }
       }
     }
+  } else if (meta.kolos) {
+    // Przegrana z Kolosem nie kosztuje nic poza zdrowiem — nie ma piętra,
+    // które można by cofnąć.
+    out.kolos = true;
   } else if (meta.wyprawa) {
     // Śmierć na wyprawie zabiera CAŁĄ sakwę — przedmioty i surowce zdobyte
     // w tym runie. Twój noszony sprzęt i plecak sprzed wyprawy są nietknięte.
     out.expFailed = true;
+    out.runKind = ch.expedition.kind === 'dungeon' ? 'dungeon' : 'expedition';
+    out.runLabel = (out.runKind === 'dungeon' ? C.dungeons.lista[ch.expedition.id]
+      : C.expedition.lista[ch.expedition.id])?.label;
     out.expLost = ch.expedition.sakwa.map(i => i.name);
     out.expLostMats = { ...ch.expedition.mats };
     out.expReached = ch.expedition.at;
@@ -738,6 +1451,9 @@ function resolveFight(ch) {
     ch.fight = 0;
   }
 
+  if (!res.win || out.floorCleared || out.expDone || out.expFailed || out.kolos || out.powtorka) {
+    ch.combatRunStats = null;
+  }
   return out;
 }
 
@@ -746,11 +1462,13 @@ function doAdvance(ch) {
   if (ch.fight < info.fights) return { error: 'Piętro jeszcze niezdobyte' };
 
   // Nagrody NIE lecą tutaj — wypłaca je resolveFight, zaraz po ostatnim mobie.
+  const trzeciSlotPrzed = slotOpen(ch, 2);
   ch.floor++;
   ch.fight = 0;
   ch.hpLost = 0;              // nowe piętro to czysta karta — wyczerpanie liczy się w obrębie piętra
   ch.maxFloor = Math.max(ch.maxFloor, ch.floor);
-  return { ok: true, floor: ch.floor };
+  return { ok: true, floor: ch.floor,
+    nowySlot: !trzeciSlotPrzed && slotOpen(ch, 2) ? 'Trzeci slot sojusznika otwarty' : null };
 }
 
 // Skok na zdobyte piętro. Wieża jest liniowa tylko w górę — w dół można wracać,
@@ -772,12 +1490,28 @@ function doGoto(ch, floor) {
 // postępu offline (którego świadomie jeszcze nie chcemy), a przełączenie
 // zakładki niczego nie gubi, bo timer klienta chodzi dalej.
 
-function doMine(ch, skill, resId) {
+function doMine(ch, skill, resId, mode = 'all') {
   const s = C.skills[skill];
   if (!s?.grywalne) return { error: 'Ta profesja jeszcze nie działa' };
   const check = canGather(ch, skill, resId);
   if (!check.ok) return { error: check.reason };
-  ch.activity = { skill, res: resId, since: Date.now() };
+  if (check.res.koszt && !maNaKoszt(ch, check.res.koszt)) {
+    const brak = Object.entries(check.res.koszt)
+      .filter(([id, n]) => (ch.materials[id] ?? 0) < n)
+      .map(([id, n]) => `${C.materialy[id]?.label ?? C.mining.gems[id]?.label ?? id} ×${n}`);
+    return { error: `Brak materiałów: ${brak.join(', ')}` };
+  }
+  if (skill === 'kowalstwo' && check.res.fuel && furnaceCoal(ch) < check.res.fuel) {
+    return { error: `Brak paliwa w Piecu — potrzeba Węgla ×${check.res.fuel}` };
+  }
+  const ms = professionCycleMs(ch, skill, check.res);
+  const since = Date.now();
+  ch.activity = {
+    skill, res: resId, since, ms, finishAt: since + ms,
+    mode: ['gotowanie', 'kowalstwo'].includes(skill) && mode === 'once' ? 'once' : 'all',
+    seed: (Date.now() ^ Math.floor(Math.random() * 0xFFFFFFFF)) >>> 0,
+    cycles: 0,
+  };
   return { ok: true, activity: ch.activity };
 }
 
@@ -787,6 +1521,7 @@ function doTeam(ch, slot, idx) {
   if (ch.activeFight && !ch.activeFight.over) return { error: 'Najpierw dokończ albo porzuć walkę' };
 
   if (slot === 'pet') {
+    if (i !== null && !petSlotOpen(ch)) return { error: `Slot peta otwiera się na poziomie ${C.allies.unlock.pet}` };
     if (i !== null && !ch.collection.pets[i]) return { error: 'Nie ma takiego peta' };
     ch.team.pet = i;
     return { ok: true };
@@ -794,6 +1529,7 @@ function doTeam(ch, slot, idx) {
 
   const n = Number(slot);
   if (!Number.isInteger(n) || n < 0 || n >= C.allies.slots) return { error: 'Nie ma takiego slotu' };
+  if (i !== null && !slotOpen(ch, n)) return { error: 'Ten slot sojusznika nie jest jeszcze otwarty' };
   if (i !== null && !ch.collection.companions[i]) return { error: 'Nie ma takiego sojusznika' };
   // Ten sam sojusznik nie może stać w dwóch slotach naraz.
   if (i !== null) ch.team.allies = ch.team.allies.map(x => (x === i ? null : x));
@@ -804,6 +1540,11 @@ function doTeam(ch, slot, idx) {
 function doMineStop(ch) {
   ch.activity = null;
   return { ok: true };
+}
+
+function doFurnace(ch, action, amount) {
+  const direction = action === 'withdraw' ? 'withdraw' : 'deposit';
+  return transferFurnaceCoal(ch, direction, amount === 'all' ? 'all' : amount);
 }
 
 // Czy stać nas na jeden cykl przetwarzania.
@@ -822,26 +1563,135 @@ function doMineTick(ch) {
 
   const res = check.res;
   const minelo = Date.now() - a.since;
-  if (minelo < res.ms - 250) return { error: 'Jeszcze nie teraz' };   // 250 ms luzu na drogę
+  const cycleMs = a.ms ?? professionCycleMs(ch, a.skill, res);
+  if (minelo < cycleMs - 250) return { error: 'Jeszcze nie teraz' };   // 250 ms luzu na drogę
 
-  // Profesje przetwarzające zjadają surowce. Brak wsadu zatrzymuje pracę —
-  // to nie błąd, tylko koniec zapasów.
+  // Pełny magazyn jest sprawdzany przed pobraniem kosztów receptury.
+  if (a.skill === 'kowalstwo' && res.output?.type === 'mining'
+      && ch.miningInventory.length >= C.mining.inventorySize) {
+    ch.activity = null; return { error: 'Magazyn górniczy jest pełny' };
+  }
+  if (a.skill === 'kowalstwo' && res.output?.type === 'combat'
+      && ch.backpack.length >= C.gear.backpackSize) {
+    ch.activity = null; return { error: 'Plecak bojowy jest pełny' };
+  }
+
+  // Profesje przetwarzające zjadają surowce. Wytapianie ma dodatkowo osobny
+  // zasobnik paliwa — oba warunki sprawdzamy przed pobraniem czegokolwiek.
+  if (res.koszt && !maNaKoszt(ch, res.koszt)) {
+    ch.activity = null;
+    return { error: 'Skończyły się surowce' };
+  }
+  if (a.skill === 'kowalstwo' && res.fuel && furnaceCoal(ch) < res.fuel) {
+    ch.activity = null;
+    return { error: 'W Piecu skończył się węgiel' };
+  }
   if (res.koszt) {
-    if (!maNaKoszt(ch, res.koszt)) {
-      ch.activity = null;
-      return { error: 'Skończyły się surowce' };
-    }
     for (const [id, ile] of Object.entries(res.koszt)) {
       ch.materials[id] = (ch.materials[id] ?? 0) - ile;
       if (ch.materials[id] <= 0) delete ch.materials[id];
     }
   }
+  if (a.skill === 'kowalstwo' && res.fuel) consumeFurnaceFuel(ch, res.fuel);
 
+  const rng = mulberry32((a.seed ^ Math.imul((a.cycles ?? 0) + 1, 0x9E3779B1)) >>> 0);
   const out = { ok: true, gained: { res: res.id, label: res.label, xp: res.xp } };
 
-  // daje.potion — Alchemia. Mikstury nie są surowcem, tylko osobną liczbą.
-  if (res.daje?.potion) {
-    ch.potions += res.daje.potion;
+  if (a.skill === 'rybolowstwo') {
+    const gear = professionBonuses(ch, a.skill);
+    const food = foodEffects(ch);
+    const result = fishingOutcome(res, profOf(ch, a.skill).lvl, {
+      fishingXp: (gear.fishingXp ?? 0) + (food.professionXpPct ?? 0),
+      rareCatchChance: (gear.rareCatchChance ?? 0) + (food.luckPct ?? 0),
+      doubleCatchChance: gear.doubleCatchChance ?? 0,
+    }, rng);
+    if (!result) { ch.activity = null; return { error: 'W tym łowisku nie ma dostępnych ryb' }; }
+    ch.materials[result.id] = (ch.materials[result.id] ?? 0) + result.count;
+    out.gained = { res: result.id, label: result.label, count: result.count,
+                   rarity: result.rarity, xp: result.xp };
+    out.awans = addSkillXp(ch, a.skill, result.xp);
+    a.cycles = (a.cycles ?? 0) + 1;
+    a.since = Date.now(); a.ms = professionCycleMs(ch, a.skill, res); a.finishAt = a.since + a.ms;
+    return out;
+  }
+
+  if (a.skill === 'rolnictwo') {
+    const gear = professionBonuses(ch, a.skill);
+    const food = foodEffects(ch);
+    const result = farmingOutcome(res, {
+      farmingXp: (gear.farmingXp ?? 0) + (food.professionXpPct ?? 0),
+      yieldPct: (gear.yieldPct ?? 0) + (food.yieldPct ?? 0)
+        + (profOf(ch, a.skill).lvl >= 100 ? 0.05 : 0),
+      animalProductYield: gear.animalProductYield ?? 0,
+    }, rng);
+    for (const item of result.outputs) ch.materials[item.id] = (ch.materials[item.id] ?? 0) + item.count;
+    out.gained = { res: res.id, label: res.label, outputs: result.outputs, xp: result.xp,
+                   count: result.outputs.reduce((sum, x) => sum + x.count, 0) };
+    out.awans = addSkillXp(ch, a.skill, result.xp);
+    a.cycles = (a.cycles ?? 0) + 1;
+    a.since = Date.now(); a.ms = professionCycleMs(ch, a.skill, res); a.finishAt = a.since + a.ms;
+    return out;
+  }
+
+  if (a.skill === 'gotowanie' && res.food) {
+    ch.materials[res.id] = (ch.materials[res.id] ?? 0) + 1;
+    const food = foodEffects(ch);
+    const xp = Math.max(1, Math.round(res.xp * (1 + (food.professionXpPct ?? 0))));
+    out.gained = { res: res.id, label: res.label, count: 1, xp, food: true };
+    out.awans = addSkillXp(ch, a.skill, xp);
+    a.cycles = (a.cycles ?? 0) + 1;
+    if (a.mode === 'once' || !maNaKoszt(ch, res.koszt)) ch.activity = null;
+    else {
+      a.since = Date.now(); a.ms = professionCycleMs(ch, a.skill, res); a.finishAt = a.since + a.ms;
+    }
+    return out;
+  }
+
+  if (a.skill === 'gornictwo' && ['ore', 'magic'].includes(res.kind)) {
+    const result = mineOutcome(res, miningBonuses(ch), rng);
+    ch.materials[res.id] = (ch.materials[res.id] ?? 0) + result.ore;
+    if (result.gem) ch.materials[result.gem] = (ch.materials[result.gem] ?? 0) + result.gems;
+    out.gained.count = result.ore;
+    out.gained.gem = result.gem ? { id: result.gem, label: C.mining.gems[result.gem].label, count: result.gems } : null;
+    out.gained.xp = result.xp;
+    out.awans = addSkillXp(ch, a.skill, result.xp);
+    a.cycles = (a.cycles ?? 0) + 1;
+    a.since = Date.now(); a.finishAt = a.since + (a.ms ?? res.ms);
+    a.ms = miningCycleMs(ch, res);
+    return out;
+  }
+
+  if (a.skill === 'kowalstwo' && res.output) {
+    if (res.output.type === 'material') {
+      ch.materials[res.output.id] = (ch.materials[res.output.id] ?? 0) + 1;
+      out.gained.res = res.output.id;
+    } else {
+      const item = craftProduct(res, profOf(ch, 'kowalstwo').lvl, rng, String(nextItemId++));
+      if (item.profession === 'mining') ch.miningInventory.push(item);
+      else { ch.backpack.push(item); ch.discovered[item.base] = true; }
+      out.gained.item = item;
+      out.gained.quality = C.smithing.qualities[item.quality].label;
+    }
+    out.awans = addSkillXp(ch, a.skill, res.xp);
+    a.cycles = (a.cycles ?? 0) + 1;
+    const dalej = a.mode !== 'once' && maNaKoszt(ch, res.koszt)
+      && (!res.fuel || furnaceCoal(ch) >= res.fuel);
+    if (!dalej) ch.activity = null;
+    else { a.since = Date.now(); a.finishAt = a.since + (a.ms ?? res.ms); }
+    return out;
+  }
+
+  // daje.mikstura — Alchemia. Mikstury nie są surowcem, tylko osobnym zapasem
+  // z podziałem na dziewięć rodzajów.
+  if (res.daje?.mikstura) {
+    const id = res.daje.mikstura;
+    ch.mikstury[id] = (ch.mikstury[id] ?? 0) + 1;
+    out.gained.mikstura = C.healing.mikstury.find(m => m.id === id)?.label ?? id;
+    out.gained.potions = 1;
+
+  } else if (res.daje?.potion) {
+    // stary kształt przepisu — zostaje, żeby nic nie wybuchło po aktualizacji
+    ch.mikstury[C.healing.startowa] = (ch.mikstury[C.healing.startowa] ?? 0) + res.daje.potion;
     out.gained.potions = res.daje.potion;
 
   } else {
@@ -859,30 +1709,22 @@ function doMineTick(ch) {
     out.awans = addSkillXp(ch, a.skill, res.xp);
   }
 
-  a.since = Date.now();
+  a.since = Date.now(); a.finishAt = a.since + (a.ms ?? res.ms);
+  a.cycles = (a.cycles ?? 0) + 1;
   return out;
 }
 
 // Zjedzenie jedzenia z Gotowania. Buff trzyma się przez kilka walk.
-function doEat(ch, id) {
-  let def = null;
-  for (const s of Object.values(C.skills)) {
-    const r = (s.resources ?? []).find(x => x.id === id && x.buff);
-    if (r) { def = r; break; }
-  }
-  if (!def) return { error: 'Tego nie da się zjeść' };
-  if ((ch.materials[id] ?? 0) < 1) return { error: 'Nie masz tego' };
-
-  ch.materials[id]--;
-  if (ch.materials[id] <= 0) delete ch.materials[id];
-  ch.buff = { ...def.buff, id };
-  return { ok: true, buff: ch.buff };
+function doEat(ch, id, target) {
+  return eatFood(ch, id, target);
 }
 
 // Ulepszanie sprzętu sztabami z Kowalstwa. Każdy plus to stały przyrost
 // obrażeń albo pancerza — proste, przewidywalne, bez ryzyka spalenia.
 function doUpgrade(ch, itemId) {
   const it = ch.equipped[Object.keys(ch.equipped).find(s => ch.equipped[s]?.id === String(itemId))]
+    ?? ch.pveEquipmentB?.[Object.keys(ch.pveEquipmentB ?? {}).find(s => ch.pveEquipmentB[s]?.id === String(itemId))]
+    ?? ch.pvpEquipment?.[Object.keys(ch.pvpEquipment ?? {}).find(s => ch.pvpEquipment[s]?.id === String(itemId))]
     ?? ch.backpack.find(i => i.id === String(itemId));
   if (!it) return { error: 'Nie ma takiego przedmiotu' };
 
@@ -937,7 +1779,8 @@ function doSummon(ch, rodzaj) {
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
                '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
-               '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+               '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+               '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
 const json = (res, code, body) => {
   const s = JSON.stringify(body);
@@ -963,6 +1806,31 @@ const server = http.createServer(async (req, res) => {
       const token = body.token || url.searchParams.get('token');
 
       if (path === '/api/roster') return json(res, 200, { roster: DB.roster() });
+
+      // RESTART Z TELEFONU. Działa TYLKO wtedy, gdy na dysku leżą nowsze pliki
+      // niż kod, na którym chodzi ten proces — po restarcie wersje się zgadzają
+      // i endpoint sam się zamyka. Dzięki temu nie da się nim ubić serwera
+      // w kółko: żeby zadziałał, musi istnieć realna aktualizacja do wgrania.
+      // Wymaga też ważnego tokenu, więc nie jest otwarty na świat.
+      if (path === '/api/restart') {
+        const tok = body.token || url.searchParams.get('token');
+        if (!tok || !DB.load(tok)) return json(res, 401, { error: 'Zła sesja' });
+        const naDysku = await wersjaZDysku();
+        if (!naDysku || naDysku === WERSJA) {
+          return json(res, 200, { ok: false, aktualny: true, error: 'Serwer jest już aktualny' });
+        }
+        json(res, 200, { ok: true, z: WERSJA, na: naDysku });
+        // Odpowiedź musi wyjść PRZED wyjściem z procesu. Nowy startuje odłączony,
+        // żeby nie zginął razem ze starym.
+        setTimeout(() => {
+          const { spawn } = childProcess;
+          spawn(process.argv[0], process.argv.slice(1), {
+            cwd: here, detached: true, stdio: 'ignore', env: process.env,
+          }).unref();
+          process.exit(0);
+        }, 400);
+        return;
+      }
 
       // /api/classes skasowane razem z ekranem wyboru klasy.
       // Główna postać nie ma klasy — klasy należą do Sojuszników.
@@ -993,6 +1861,8 @@ const server = http.createServer(async (req, res) => {
       switch (path) {
         case '/api/state':   break;
         case '/api/fight':   result = startFight(ch); break;
+        case '/api/autotick':result = tickAutoFight(ch); break;
+        case '/api/fighttarget': result = setFightTarget(ch, body.idx); break;
         case '/api/act':     result = actFight(ch, body.action ?? { type: 'attack', strength: 'srednio' }); break;
         case '/api/mode': {
           // Zmiana trybu PORZUCA niedokończoną walkę zamiast jej bronić.
@@ -1013,11 +1883,13 @@ const server = http.createServer(async (req, res) => {
         case '/api/advance': result = doAdvance(ch); break;
         case '/api/goto':    result = doGoto(ch, body.floor); break;
         case '/api/summon':  result = doSummon(ch, body.kind); break;
-        case '/api/mine':    result = doMine(ch, String(body.skill ?? 'gornictwo'), String(body.res)); break;
+        case '/api/mine':    result = doMine(ch, String(body.skill ?? 'gornictwo'), String(body.res), body.mode); break;
         case '/api/minestop':result = doMineStop(ch); break;
         case '/api/minetick':result = doMineTick(ch); break;
+        case '/api/mineequip':result = equipMining(ch, body.itemId ?? null, body.slot ?? null); break;
+        case '/api/furnace': result = doFurnace(ch, body.action, body.amount ?? 'all'); break;
         case '/api/team':    result = doTeam(ch, body.slot, body.idx); break;
-        case '/api/eat':     result = doEat(ch, String(body.id)); break;
+        case '/api/eat':     result = doEat(ch, String(body.id), body.target); break;
         case '/api/runa': {
           // Podpięcie runy. Runa zostaje w zapasach — nie zużywa się,
           // podpięcie to wybór, nie koszt.
@@ -1029,21 +1901,79 @@ const server = http.createServer(async (req, res) => {
         }
         case '/api/upgrade': result = doUpgrade(ch, body.itemId); break;
         case '/api/expstart':  result = doExpStart(ch, String(body.id ?? 'puszcza'), String(body.risk), body.mods); break;
+        case '/api/dungeonstart': result = doDungeonStart(ch, String(body.id ?? 'gniazdocierni')); break;
         case '/api/expleave':  result = doExpLeave(ch); break;
         case '/api/expchoose': result = doExpChoose(ch, String(body.opcja)); break;
-        case '/api/expsafe':   result = doExpSafepoint(ch, body.itemId ?? null, body.matId ?? null); break;
+        case '/api/expsafe':   result = doExpSafepoint(ch, body.itemId ?? null, body.matId ?? null, body.jedzenie ?? null); break;
+        // Karta gracza: herb i opis. Imienia nie ruszamy — na nim stoi kod postaci
+        // i wpisy w Kronice.
+        case '/api/profil': {
+          if (body.crest && typeof body.crest === 'object') {
+            const c = body.crest;
+            ch.crest = { shape: String(c.shape), symbol: String(c.symbol),
+                         color: String(c.color), border: String(c.border), ink: String(c.ink) };
+          }
+          if (typeof body.bio === 'string') ch.bio = body.bio.slice(0, C.ui.bioMax);
+          result = { ok: true };
+          break;
+        }
+        case '/api/settings': {
+          const st2 = ch.settings ?? { ...C.ui.domyslne };
+          if (typeof body.theme === 'string' && C.ui.themes.some(t => t.id === body.theme)) st2.theme = body.theme;
+          if (typeof body.quality === 'string' && C.ui.quality.some(q => q.id === body.quality)) st2.quality = body.quality;
+          if (typeof body.sound === 'boolean') st2.sound = body.sound;
+          if (typeof body.volume === 'number') st2.volume = Math.min(1, Math.max(0, body.volume));
+          ch.settings = st2;
+          result = { ok: true, settings: st2 };
+          break;
+        }
+        case '/api/kolos':   result = startKolos(ch); break;
+        case '/api/powtarzaj': {
+          if (poziom(ch) < C.tower.powtarzanieOd) {
+            result = { error: `Powtarzanie otwiera się na piętrze ${C.tower.powtarzanieOd}` };
+            break;
+          }
+          ch.powtarzaj = !!body.on;
+          result = { ok: true, powtarzaj: ch.powtarzaj };
+          break;
+        }
         case '/api/autoboss': {
           ch.alwaysAuto = !!body.on;
           result = { ok: true, alwaysAuto: ch.alwaysAuto };
           break;
         }
-        case '/api/equip':   result = equip(ch, String(body.itemId)); break;
+        case '/api/equip': {
+          const loadout = ['pve_a', 'pve_b', 'pvp'].includes(body.loadout) ? body.loadout : 'pve_a';
+          result = equip(ch, String(body.itemId), loadout);
+          break;
+        }
+        case '/api/pveloadout': {
+          if (ch.activeFight && !ch.activeFight.over) { result = { error: 'Zestaw zmienisz po zakończeniu walki' }; break; }
+          result = switchPveLoadout(ch, body.id);
+          break;
+        }
         case '/api/potion': {
-          if (ch.potions <= 0) { result = { error: 'Brak mikstur' }; break; }
           const st = computeStats(ch);
-          ch.potions--;
-          ch.hpLost = Math.max(0, ch.hpLost - Math.round(st.maxHp * C.healing.potionHealPct * (1 + st.potionPct)));
-          result = { ok: true };
+          // Bez wskazania rodzaju bierzemy NAJSŁABSZĄ, która domknie brak —
+          // ta sama reguła co w walce.
+          const brak = st.maxHp - st.hp;
+          const maja = C.healing.mikstury.filter(m => (ch.mikstury?.[m.id] ?? 0) > 0);
+          // UWAGA NA `??` TUTAJ. Wcześniej stało `(zad && ...) ?? reszta` i przy
+          // pustym `zad` całość dawała '' — wartość FAŁSZYWĄ, ale nie null,
+          // więc `??` nie przepuszczało dalej i picie bez wskazania rodzaju
+          // kończyło się komunikatem „Brak mikstur".
+          const zad = String(body.id ?? '');
+          const wskazana = zad && (ch.mikstury?.[zad] ?? 0) > 0
+            ? C.healing.mikstury.find(m => m.id === zad) : null;
+          const wybor = wskazana
+            || maja.find(m => Math.round(m.pct ? st.maxHp * m.pct : m.flat) >= brak)
+            || maja[maja.length - 1];
+          if (!wybor) { result = { error: 'Brak mikstur' }; break; }
+          ch.mikstury[wybor.id]--;
+          if (ch.mikstury[wybor.id] <= 0) delete ch.mikstury[wybor.id];
+          const ile = Math.round((wybor.pct ? st.maxHp * wybor.pct : wybor.flat) * (1 + st.potionPct));
+          ch.hpLost = Math.max(0, ch.hpLost - ile);
+          result = { ok: true, label: wybor.label, ile };
           break;
         }
         // Kupowanie mikstur SKASOWANE. Mikstury robi się Alchemią — złoto
@@ -1054,6 +1984,16 @@ const server = http.createServer(async (req, res) => {
           if (ch.unspentAttr <= 0) { result = { error: 'Brak punktów' }; break; }
           ch.attrs[a]++; ch.unspentAttr--;
           result = { ok: true };
+          break;
+        }
+        case '/api/cskill': {
+          const r = wydajPunktSkilla(ch, String(body.node));
+          result = r.ok ? { ok: true, ranga: r.ranga, skill: r.skill } : { error: r.reason };
+          break;
+        }
+        case '/api/cskillreset': {
+          const r = resetDrzewkaSkilla(ch, String(body.skill));
+          result = r.ok ? { ok: true, wrocilo: r.wrocilo } : { error: r.reason };
           break;
         }
         case '/api/tree': {
@@ -1080,8 +2020,10 @@ const server = http.createServer(async (req, res) => {
           const scoreOf = (it) => (it.damage ?? 0) * 3 + (it.armor ?? 0) * 1.5
             + (it.affixes ?? []).reduce((n, a) => n + a.value * (a.pct ? 3 : 1.2), 0);
           let gold = 0, n = 0;
+          const gear = body.loadout === 'pvp' ? ch.pvpEquipment
+            : pveGear(ch, body.loadout === 'pve_b' ? 'b' : 'a');
           ch.backpack = ch.backpack.filter(it => {
-            const worn = ch.equipped[it.slot];
+            const worn = gear[it.slot];
             if (worn && scoreOf(worn) >= scoreOf(it)) {
               gold += Math.round(it.ilvl * 4 * C.rarities[it.rarity].mult); n++;
               return false;

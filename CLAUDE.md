@@ -19,9 +19,12 @@ nic wspólnego, nie jest jej trybem ani gałęzią. Nie sięgaj do niej po nic.
 | `makieta_ui.html` | klikalna makieta wszystkich ekranów, także tych niezaimplementowanych |
 | `README.md` | uruchomienie, strojenie, struktura |
 
-**Sekcje 17–23 dokumentu projektowego opisują to, co faktycznie stoi w kodzie.**
+**Sekcje 17–26 dokumentu projektowego opisują to, co faktycznie stoi w kodzie.**
 Gdzie wcześniejsze rozdziały mówią co innego — a mówią, bo opisują klasy gracza
-i Dusze — **wygrywają sekcje 17–23**.
+i Dusze — **wygrywają sekcje 17–25**. Przy sprzecznościach WEWNĄTRZ tego zakresu
+wygrywa numer wyższy: **sekcja 26 przebija wcześniejsze ustalenia o Wyprawach**,
+a sekcja 25 pozostaje fundamentem liczbowym (skille bojowe, pancerz, skalowanie
+mobów, mikstury).
 
 **Dokument projektowy wyprzedza implementację.** Opisuje docelową grę; kod ma na razie
 pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan na później.
@@ -32,7 +35,17 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 
 **Nawigacja i UI**
 - **Sześć zakładek** — Przygody, Drużyna, Ekwipunek, Skille, Przywołanie, Kronika.
-  Postać siedzi pod przyciskiem profilu; ekran drzewka usunięty
+  Skille MAJĄ swoją zakładkę na dolnym pasku (raz zeszły pod profil i wróciły —
+  nie przenoś ich z powrotem bez polecenia). Ekran drzewka usunięty
+- **Górny pasek = karta gracza**: herb do edycji na miejscu, opis o sobie, gildia
+  (jeszcze nie istnieje w grze), data założenia konta, **ranking top 3**
+- **Pięć motywów** (`config.ui.themes`, palety w `public/style.css` pod
+  `[data-theme=...]`), **jakość** (niska gasi animacje i cienie) i **dźwięk**
+  (WebAudio, bez plików). Ustawienia trzyma serwer, localStorage tylko cachuje
+- **Ranking**: top 3 po piętrze (korona) i po mocy (hełm), liczony ze wszystkich
+  zapisów z cache 15 s w `server.js`
+- **Pasek zbierania** pod nagłówkiem — żyje na każdej zakładce, dopóki coś się
+  zbiera, i pozwala przerwać bez wracania do Skilli
 - **Skille = trzy sekcje**: Zbierackie · Bojowe · Atrybuty. Tam rozdajesz punkty
 - **Stały pasek walki** nad zakładkami, żyje na każdym ekranie
 - **Układ jednoekranowy**, responsywność 520 / 900 / 1180 px
@@ -42,8 +55,39 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 **Przygody**
 - **Wieża** — piętra po 6–10 fal, wariant „+" co 5, boss co 10; siatka pięter,
   odblokowanie sekwencyjne, powrót na zdobyte piętro. **NIE DAJE ŁUPU**
-- **Wyprawa** — jedyne źródło sprzętu. Dziesięć etapów z ziarna: walki, rozdroża,
-  zdarzenia, postój, elita, boss. Sakwa wpada do plecaka dopiero po bossie
+- **Wyprawa** — jedyne źródło sprzętu. Etapy z ziarna: walki, rozdroża, zdarzenia,
+  ogniska, elita, boss. Sakwa wpada do plecaka dopiero po bossie.
+  **Czternaście wypraw do poziomu 200**, otwieranych postępem w wieży. Do 100
+  mają przedziały co 10 poziomów, powyżej 100 co 25: 100–125, 125–150,
+  150–175, 175–200
+- **MOBY WYPRAWY SKALUJĄ SIĘ Z WYBRANĄ WYPRAWĄ, NIE Z `maxFloor` GRACZA.**
+  Pierwszy przeciwnik ma dolny poziom jej przedziału, boss górny, a trasa
+  płynnie przechodzi pomiędzy nimi. Ryzyko dokłada `floorOffset` i mnożnik statystyk
+- **DZIESIĘĆ MIKSTUR NA CAŁĄ WYPRAWĘ**, nie na walkę. Zapas **odnawia namiot**
+  i to jedyny sposób — dlatego liczba namiotów jest prawdziwą walutą trudności
+- **RYZYKO USTAWIA DŁUGOŚĆ RUNU I LICZBĘ NAMIOTÓW**: Bez ryzyka 12 etapów / 1 namiot,
+  Zaawansowany 24 / 3 namioty (×2 nagroda), Profesjonalista 48 / **2 namioty**
+  (×5 nagroda, podwójne widełki ilvl). Namiotów jest MNIEJ na trudniejszym —
+  długi run bez odpoczynku jest tym, za co płaci pięciokrotna nagroda.
+  **Bez ryzyka nie ma legend** — to jest cała różnica, na której stoi wybór
+- **WĘZEŁ DECYDUJE O POZIOMIE PRZEDMIOTU** w widełkach wyprawy (`ilvlWezel`):
+  zwykła walka z dołu, elita ze środka, boss z góry. Puszcza (1–10) daje:
+  walka 1–5, elita 5–8, boss 6–10
+- **OGNISKO LECZY DO PEŁNA.** Na postoju można zjeść jedzenie z Gotowania —
+  pełne HP plus buff, bez ruszania limitu mikstur. Długi run ma kilka ognisk
+- **TO WYPRAWA DECYDUJE O POZIOMIE ŁUPU, NIE PIĘTRO.** Każda ma widełki `ilvl`;
+  legendarne biorą górne 20% (Puszcza: 8–10), reszta dolne (1–8).
+  **Wysokie ryzyko mnoży widełki ×2**
+- **RZADKOŚCI MAJĄ USTALONE PROCENTY.** Wagi w `config.loot` są w setnych procenta
+  i sumują się do 100 000 — inaczej nie da się zapisać 0,001%.
+  Wszędzie tak samo: **unique 5%**, **heroic 1%**, reszta to commony i uncommony.
+- **LEGENDARY, MYSTIC I GOD LECĄ WYŁĄCZNIE ZE SKRZYNI BOSSA**: **0,3%**, **0,1%**,
+  **0,001%** na przedmiot. Poza bossem mają zerową wagę, więc bramka wynika z samych
+  liczb i nie ma jej gdzie obejść
+- **BROŃ MOŻE WYPAŚĆ JUŻ Z PLUSEM.** `config.loot.plusNaBroni`: 1% broni ma
+  jakikolwiek plus, rozkład geometryczny do `upgrade.maxPlus`, najwyższy stopień
+  to 1% puli plusowanych, czyli **0,01% wszystkich broni**. Dotyczy TYLKO broni —
+  pancerz plusuje się wyłącznie u kowala. Zmierzone na 1 mln losowań
 - **Modyfikatory trudności** z mnożnikiem nagrody, otwierane piętrami
 - **Tabela dropów** z odkrywaniem (`???` do pierwszego zdobycia)
 
@@ -51,9 +95,40 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 - symulacja serwerowa, tryb automatyczny (całe piętro) i turowy
 - **boss zawsze turowy**, z przełącznikiem „zawsze automatyczna"
 - **szyk trzech rzędów** — klasa daje rząd, broń zasięg; biała musi podchodzić
-- **dwóch przeciwników od piętra 3**
+- **dwóch przeciwników od piętra 3, trzech od piętra 15**
+- **piętra 25/35/45… kończy mini-elita**: elita ze stunem i trucizną + healer + oprawca
+- **bossy 10/20/30/40/50 mają świtę**: Rogaty Demon (tank, elita), Lich (mag, elita),
+  Sukkubus (łucznik). Ta sama przy każdym bossie — `config.tower.swita`
+- **wrogowie mają zdolności** (`config.wrogowie.zdolnosci`): ogłuszenie, trucizna
+  (procent max HP na turę, omija pancerz), leczenie swoich, kilka ciosów w turze
+- **`armorK` ROŚNIE Z PIĘTREM** (`armorKBase` + `armorKPerFloor`). Stałe 400
+  sprawiało, że pancerz z piętra 50 zbijał 79% obrażeń — gracz uciekał wieży
+- **skalowanie moba ma człon kwadratowy** (`mobHpPerFloor2`, `mobDmgPerFloor2`),
+  bo obrażenia gracza rosną kwadratowo: broń z ilvl razy mnożnik z atrybutów
+- **powtarzanie piętra** od piętra 10 — zdobyte piętro startuje od nowa zamiast
+  wypuszczać wyżej
+- **Kolos (Yeti)** — jeden przeciwnik spoza wieży, `config.kolos`. Liczby są
+  z założenia poza dzisiejszą skalą i ekran mówi o tym wprost
 - trzy siły ciosu, celność, unik, pasek ultimate, Obrona jako akcja tury
+- **ATTACK SPEED (AS) = ILE CIOSÓW NA SEKUNDĘ**, jedna skala dla wszystkich:
+  bohatera, sojuszników, petów i mobów. `AS = speed / 20` — silnik dalej liczy
+  w `speed`, AS jest tym, co widzi gracz. Rośnie ze **Zręczności** (+0,025 za punkt)
+  i z **afiksu Attack Speed**, który wypada na broni I na każdej części garderoby.
+  Helpery: `attackSpeed()` / `asDoSpeed()` w `game/combat.js`
+- **STATYSTYKI PRZECIWNIKA SĄ JAWNE.** Zwykły mob pokazuje HP, atak, obronę i AS
+  od razu; **boss kryje swoje, dopóki nie zejdzie poniżej 50% zdrowia**
+  (`tower.bossOdkrywaOd`)
+- **TOWARZYSZ W FALI NIGDY NIE NOSI „+".** Wariant „+" należy do prowadzącego;
+  towarzysze dostają mnożnik slotu na zwykłej bazie. Inaczej „Leśny Szlam +"
+  miał 171 HP przy zwykłym „Leśnym Wilku" na 202 i plus obiecywał coś, czego nie było
 - **MANA** — zaklęcia nią płacą; pasek został przy umiejętnościach zwykłych
+- **DZIEWIĘĆ RODZAJÓW MIKSTUR** (`config.healing.mikstury`): pięć procentowych
+  (10/15/25/35/50% maks. HP) i cztery stałe (200/500/1000/2500). Zapas siedzi
+  w `ch.mikstury` jako mapa id→sztuki, NIE w jednym liczniku. Automat pije
+  najsłabszą, która wystarczy
+- **BOSS TO ŚCIANA ZDROWIA**: `bossHpMult` 7,0 przy `bossStatMult` 1,0.
+  Boss piętra 20 ma 10 010 HP. Świta skaluje się od ZWYKŁEGO MOBA z piętra,
+  nie od bossa — inaczej podniesienie bossa mnoży całą grupę
 - **sojusznik i pet walczą**; sloty 2–3 zamknięte świadomie
 - rodzaj obrażeń w logu: fizyczne bordowe, magiczne niebieskie
 - **wyczerpanie HP** — nie wraca między falami ani po porażce
@@ -61,11 +136,29 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 **Postać i sprzęt**
 - **broń decyduje o atrybucie obrażeń** (biała/Siła, dystans/Zręczność,
   różdżka/Intelekt); reszta liczy się z wagą `offAttrWeight`
-- **skille bojowe** — Broń biała, Łuk, Różdżka, Obrona, Witalność. Rosną z tego,
-  czym bijesz; podział expa zależy od rąk. **Dają bonusy, NIE bramkują sprzętu**
+- **PIĘĆ SKILLI BOJOWYCH = PIĘĆ RODZIN BRONI**: Broń dwuręczna (topory, młoty,
+  miecze 2H) · Broń jednoręczna (miecze, scimitary, sztylety) · Przyrządy magiczne
+  (różdżki, orby, kostury) · Broń dystansowa (łuki, kusze, oszczepy) ·
+  Ekwipunek defensywny (ciuchy, biżuteria, HP). **Witalność skasowana.**
+  `wtype` przedmiotu JEST identyfikatorem skilla — nie ma drugiej tabeli
+- **KOSTUR JEST DWURĘCZNY, ALE EXPI PRZYRZĄDY MAGICZNE.** Dwuręczność to liczba
+  rąk, nie rodzina
+- **KAŻDY SKILL MA WŁASNE DRZEWKO** (`config.combatSkills.drzewka`): trzy węzły,
+  ranga do 10, jeden punkt za poziom skilla. Węzły rodziny broni działają TYLKO
+  z tą bronią w ręce; Ekwipunek defensywny zawsze. Premii „za sam poziom" NIE MA —
+  cały bonus idzie przez drzewko. Reset jednego drzewka jest darmowy
+- Skille **dają bonusy, NIE bramkują sprzętu**
 - bronie mają liczbę rąk; dwuręczne biją mocniej i blokują drugą rękę
 - 8 slotów, makieta 3×3, porównanie „nosisz kontra bierzesz", kategorie plecaka
-- **ulepszanie sprzętu** sztabami z Kowalstwa
+- **DWANAŚCIE BAZ BRONI**, po trzy na rodzinę, wspólne dla wszystkich wypraw
+  (`BRONIE` w `game/config.js`) — inaczej mag nie znalazłby różdżki w Puszczy
+- **ulepszanie sprzętu** sztabami z Kowalstwa. `plus` wchodzi do statystyk
+  w `itemStatSummary()` — przez jakiś czas rósł w UI i NIE ROBIŁ NIC.
+  **PIERŚCIENIE I NASZYJNIKI TEŻ SIĘ ULEPSZA**: nie mają bazy obrażeń ani
+  pancerza, więc plus podbija u nich WARTOŚĆ AFIKSÓW
+- **DZIEWIĘĆ MIKSTUR POKAZUJE, ILE LECZY** — na każdym ekranie, gdzie się pije
+  (wieża, wyprawa, Kolos), przez wspólny `miksturyPanel()` w `public/app.js`.
+  Procentowe pokazują procent i punkty policzone z aktualnego zdrowia gracza
 - **punkty za piętro lecą przy ostatnim mobie**, nie przy wejściu wyżej
 
 **Profesje — wszystkie siedem gra**
@@ -89,15 +182,16 @@ generator herbu · kod postaci
 ## Zrobione w połowie
 
 - **Drużyna** — bohater + jeden sojusznik + pet walczą, sloty 2–3 zamknięte
-- **Klasy Sojuszników** nadają rząd w szyku, ale nie dają umiejętności
+- **Klasy Sojuszników** nadają rząd i własny automat: tankowanie, leczenie,
+  wielokrotny atak, fala magiczna, przebicie albo osłabienie pancerza; pet krwawi
 - **Przywołanie** — szanse jawne, brak pity, duplikatów i gwiazdek
 - **Kronika** — Przedmioty i Osiągnięcia to karty opisujące zamiar
 - **Żywioły poza ogniem mają po jednym zaklęciu**
 
 ## Czego NIE MA
 
-World Boss · Kolos · Tytan · rajdy · multiplayer · gildia · Mystic/God crafting ·
-przepalanie i energia · bank · postęp offline · umiejętności Sojuszników ·
+World Boss · Tytan · rajdy · multiplayer · gildia · Mystic/God crafting ·
+przepalanie i energia · bank · postęp offline · rozkazy ręczne Sojuszników ·
 **klasy gracza (skasowane na stałe)** · **wiele postaci na koncie**.
 
 ---
@@ -173,6 +267,27 @@ i tak ma zostać.
 
 ## Zasady, które warto znać
 
+**Przycisk na czerwonym pasku naprawia OBIE strony.** Różnica wersji ma dwie
+przyczyny: stary proces serwera ALBO stary plik w telefonie. Gdy serwer jest
+aktualny, klient czyści `caches`, wyrejestrowuje service workera i przeładowuje
+się z sygnaturą czasu w adresie. Bez tego przy winie telefonu przycisk wyglądał
+na zepsuty.
+
+**Restart serwera da się kliknąć z telefonu.** Czerwony pasek ostrzegający
+o starym kodzie ma przycisk, który woła `/api/restart`. Endpoint **działa TYLKO
+wtedy, gdy na dysku leżą nowsze pliki niż kod w pamięci procesu** — po restarcie
+wersje się zgadzają i sam się zamyka, więc nie da się nim ubić serwera w kółko.
+Wymaga ważnego tokenu. Proces startuje odłączoną kopię siebie i wychodzi;
+stan jest bezpieczny, bo postać zapisuje się po każdym zapytaniu.
+UWAGA: endpoint musi już ISTNIEĆ w działającym procesie — pierwszy raz po jego
+dodaniu trzeba zrestartować ręcznie.
+
+**Serwer trzyma swój kod z chwili startu.** Pliki z `public/` idą do przeglądarki
+z dysku przy każdym żądaniu, ale `server.js` i `game/*` ładują się RAZ. Po zmianie
+liczb **trzeba zrestartować proces** — odświeżenie gry na telefonie nic nie da.
+Gra sama to wykrywa: `WERSJA` w `server.js` i `WERSJA_GRY` w `public/app.js`;
+gdy się różnią, nad ekranem wisi czerwony pasek. **Zmieniaj oba znaczniki razem.**
+
 **Wszystkie liczby siedzą w `game/config.js`.** Nigdzie indziej. Balans stroi się przez
 edycję tego jednego pliku, bez dotykania logiki.
 
@@ -215,6 +330,13 @@ przygotowany na 1 + 3 sojuszników + pet.
 **`game/combat.js` ma testy** uruchamiane przez `node game/combat.js`. Uruchamiaj je po
 każdej zmianie w walce — łapały już cztery realne błędy.
 
+**Balans stroi się `tools/balans.js`, nie na oko.** Narzędzie buduje prawdziwą
+postać, bierze statystyki z `character.js` i puszcza symulację z `combat.js`.
+Cele balansu (boss 10 w heroikach +3, z dwiema legendami, w wyprawce…) siedzą
+w tablicy `CELE` w tym pliku — zmieniasz liczby, uruchamiasz `--cel`, widzisz,
+co się posypało. Każda próba losuje INNY zestaw sprzętu tej samej klasy;
+bez tego wynik mówił o jednym losowaniu i skakał z 0% na 100%.
+
 ---
 
 ## Pułapki środowiskowe
@@ -247,6 +369,9 @@ node server.js                  http://localhost:8080
 .\start.ps1                     serwer + tunel publiczny
 node game/combat.js             testy symulacji walki
 node game/character.js          testy skalowania klas i atrybutów
+node tools/balans.js --cel      cele balansu wieży (kod 1 = któryś nietrafiony)
+node tools/balans.js            tabela pięter 1–50 dla wszystkich buildów
+node tools/make-yeti.mjs        zaślepka grafiki Kolosa
 npm run apk <adres>             budowa APK
 ```
 

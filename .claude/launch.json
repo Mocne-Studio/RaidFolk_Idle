@@ -10,6 +10,19 @@
       ],
       "port": 8080,
       "autoPort": false
+    },
+    {
+      "name": "start-podglad",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "start"
+      ],
+      "port": 8090,
+      "env": {
+        "PORT": "8090"
+      },
+      "autoPort": true
     }
   ]
 }

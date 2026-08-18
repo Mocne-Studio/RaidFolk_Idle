@@ -8,6 +8,12 @@ import { dirname, join } from 'node:path';
 const here = dirname(fileURLToPath(import.meta.url));
 const db = new DatabaseSync(join(here, '..', 'raidfolk.db'));
 
+// WAL: czytanie nie blokuje pisania. Bez tego DRUGI proces serwera na tym samym
+// pliku (a łatwo o niego: zapomniany node.exe, tunel, podgląd na innym porcie)
+// wywalał zapis błędem „database is locked" i gracz dostawał 500.
+db.exec('PRAGMA journal_mode = WAL');
+db.exec('PRAGMA busy_timeout = 4000');
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS saves (
     token   TEXT PRIMARY KEY,
@@ -21,6 +27,8 @@ db.exec(`
 const qGet  = db.prepare('SELECT * FROM saves WHERE token = ?');
 const qPut  = db.prepare('INSERT INTO saves (token,name,data,updated) VALUES (?,?,?,?) ON CONFLICT(token) DO UPDATE SET data=excluded.data, updated=excluded.updated');
 const qList = db.prepare('SELECT token, name, data, updated FROM saves ORDER BY updated DESC LIMIT 50');
+// Ranking musi widzieć WSZYSTKIE postacie, nie pięćdziesiąt ostatnio grających.
+const qAll  = db.prepare('SELECT name, data FROM saves');
 
 export function load(token) {
   const row = qGet.get(token);
@@ -38,9 +46,15 @@ export function roster() {
   });
 }
 
+// Surowe zapisy pod ranking. Statystyki liczy server.js — db.js nie zna reguł gry.
+export function all() {
+  return qAll.all().map(r => { try { return { name: r.name, ch: JSON.parse(r.data) }; } catch { return null; } })
+    .filter(Boolean);
+}
+
 export function newToken() {
   return [...crypto.getRandomValues(new Uint8Array(16))]
     .map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-export default { load, save, roster, newToken };
+export default { load, save, roster, all, newToken };

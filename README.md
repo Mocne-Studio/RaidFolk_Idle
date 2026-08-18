@@ -58,9 +58,13 @@ raidfolk.db          zapis — skasuj, żeby wyczyścić świat
 
 ```
 node game/combat.js
+node game/character.js
+node game/expedition-scaling.test.js
+node game/professions.test.js
 ```
 
-Sprawdza determinizm symulacji, wpływ prędkości ataku i wygasanie leczenia.
+Sprawdzają walkę, statystyki postaci, ciągłość i skalowanie Wypraw do poziomu 200
+oraz pełny pion Górnictwo → sztaby → jakościowy sprzęt → bonusy profesji.
 
 ## Uwaga o kontach
 
