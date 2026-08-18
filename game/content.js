@@ -138,6 +138,19 @@ export function statyBazowe(floor) {
 // świta zwykłej fali — towarzysz NIE MOŻE nosić dopisku „+", bo jest słabszy
 // od zwykłego moba. Zmierzone i zgłoszone: „Leśny Szlam +" miał 171 HP,
 // a zwykły „Leśny Wilk" 202 — plus obiecywał coś, czego nie było.
+// ŁAGODNY START — współczynnik tłumiący statystyki mobów na pierwszych piętrach.
+// Rośnie liniowo od `lagodnyMnoznik` do 1,0 i od `lagodnyDoPietra` w górę wynosi
+// dokładnie 1, więc późniejsza skala — i wszystkie wystrojone cele balansu —
+// zostają nietknięte. Bez tego drugi mób i człon kwadratowy uderzały w gracza,
+// który nie miał jeszcze czym oddawać: 0% szans od piętra 3.
+export function lagodnyStart(floor) {
+  const t = C.tower;
+  const doP = t.lagodnyDoPietra ?? 0;
+  if (!doP || floor >= doP) return 1;
+  const m0 = t.lagodnyMnoznik ?? 1;
+  return m0 + (1 - m0) * ((floor - 1) / (doP - 1));
+}
+
 export function makeEnemy(floor, fightIdx, wariantOverride = null) {
   const info = floorInfo(floor);
   const act = actForFloor(floor);
@@ -147,9 +160,10 @@ export function makeEnemy(floor, fightIdx, wariantOverride = null) {
 
   const g = Math.pow(t.mobHpGrowth, floor);
   const f2 = floor * floor;
-  let hp    = (t.mobHpBase + t.mobHpPerFloor * floor + (t.mobHpPerFloor2 ?? 0) * f2) * g;
+  const lag = lagodnyStart(floor);
+  let hp    = (t.mobHpBase + t.mobHpPerFloor * floor + (t.mobHpPerFloor2 ?? 0) * f2) * g * lag;
   let dmg   = (t.mobDmgBase + t.mobDmgPerFloor * floor + (t.mobDmgPerFloor2 ?? 0) * f2)
-              * Math.pow(t.mobDmgGrowth, floor);
+              * Math.pow(t.mobDmgGrowth, floor) * lag;
   let speed = t.mobSpeedBase + t.mobSpeedPerFloor * floor;
 
   // family to klucz bestiariusza — nazwa bez dopisku wariantu, żeby Goblin

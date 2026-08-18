@@ -782,8 +782,18 @@ export const CONFIG = {
     plusStatMult: 1.30,       // wariant "+" ma o tyle mocniejsze statystyki
     // Od tego piętra przeciwnicy wychodzą we dwóch. Wcześniej szyk nie ma sensu,
     // bo nie ma kogo zasłaniać. Drugi jest słabszy, żeby trudność nie skoczyła dwa razy.
-    duoFromFloor: 3,
-    duoStatMult: 0.65,
+    // DRUGI PRZECIWNIK WCHODZI DOPIERO NA PIĄTYM PIĘTRZE, nie na trzecim.
+    // Zmierzone: na piętrze 2 stał jeden mób na 124 HP i 14 obrażeń, a na trzecim
+    // JUŻ DWAJ na łącznie 266 HP i 28 obrażeń — skok ×2,1 na zdrowiu i ×2 na
+    // obrażeniach w jednym kroku, podczas gdy obrażenia gołego gracza stały na 25.
+    // To nie była krzywa trudności, tylko schodek: gracz bez sprzętu miał 0% szans
+    // od piętra 3 w górę i gra kończyła się dla niego zanim zdążył cokolwiek zdobyć.
+    // ...i NIE na piętrze 5, bo tam wypada wariant „+" (co 5 pięter). Dwa skoki
+    // trudności w tym samym kroku dają ścianę: zmierzone 96% na piętrze 4 i 0% na 5.
+    duoFromFloor: 6,
+    // ...i wchodzi słabszy niż dotąd. 0,65 znaczyło, że drugi mób dokłada dwie
+    // trzecie pełnego przeciwnika naraz. 0,45 rozkłada to na kilka pięter.
+    duoStatMult: 0.45,
     // Od piętra 15 wychodzą we TRÓJKĘ. Trzeci jest najsłabszy — trzech pełnych
     // przeciwników potroiłoby trudność z piętra na piętro.
     trioFromFloor: 15,
@@ -811,6 +821,14 @@ export const CONFIG = {
     //
     // UWAGA: Growth to mnożnik WYKŁADNICZY. Trzymaj go blisko 1.01 — od tego jest
     // człon kwadratowy, który rośnie szybko, ale nie ucieka w kosmos.
+    // ŁAGODNY START. Trudność ma rosnąć Z CZASEM GRY, a nie stawiać ściany
+    // w pierwszych minutach. Przez pierwsze `lagodnyDoPietra` pięter statystyki
+    // mobów są przemnażane przez współczynnik, który płynnie wraca do 1,0 —
+    // więc KRZYWA JEST TA SAMA od piętra `lagodnyDoPietra` w górę i wszystkie
+    // wystrojone cele balansu (10, 20, 25, 50) zostają nietknięte.
+    // Zmierzone przed zmianą: gracz bez sprzętu miał 0% szans od piętra 3.
+    lagodnyDoPietra: 9,
+    lagodnyMnoznik: 0.55,
     mobHpBase: 60,   mobHpPerFloor: 28,   mobHpPerFloor2: 1.38, mobHpGrowth: 1.010,
     mobDmgBase: 9,   mobDmgPerFloor: 2.5, mobDmgPerFloor2: 0.048, mobDmgGrowth: 1.006,
     mobSpeedBase: 90, mobSpeedPerFloor: 0.6,
