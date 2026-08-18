@@ -174,8 +174,12 @@ button{font:inherit;color:inherit;background:none;border:0}
 /* GÓRNY PASEK — trzy strefy: KTO · CO SIĘ DZIEJE · CO MASZ.
    Nie jest już jednym <button>, więc mogą w nim stać klikalne rzeczy
    (przerwanie zbierania) i nie ma skąd wrócić domyślnej ramce przeglądarki. */
+/* Belki czytają się jak OSOBNE SEKCJE NAWIGACYJNE, nie jak pasy przyklejone
+   do krawędzi okna: zaokrąglone rogi plus wąski margines dookoła, żeby tło
+   treści było widoczne pod spodem. */
 .topbar{flex:none;display:flex;align-items:center;gap:12px;padding:8px 14px;
-  background:var(--belka);border:0;border-bottom:1px solid var(--edge)}
+  background:var(--belka);border:1px solid var(--edge);border-radius:var(--r-lg);
+  margin:7px 8px 0}
 .hdr-kto{display:flex;align-items:center;gap:10px;flex:1;min-width:0;
   background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;
   padding:4px 6px;margin:-4px -6px;border-radius:var(--r-sm)}
@@ -710,17 +714,26 @@ button.card:active{background:var(--press)}
 
 /* ---------- zakładki ---------- */
 .tabs{flex:none;display:grid;grid-template-columns:repeat(6,1fr);
-  background:var(--belka);border-top:1px solid var(--edge);
+  background:var(--belka);border:1px solid var(--edge);border-radius:var(--r-lg);
+  margin:0 8px 7px;
   padding-bottom:env(safe-area-inset-bottom);
   /* druga linia obrony: nawet gdyby coś przepchnęło układ, pasek zostaje na dole */
   position:sticky;bottom:0;z-index:5}
 /* DEVIDERY między zakładkami — włosowa kreska, nie ramka */
 .tabs button + button{border-left:1px solid var(--sep)}
+.tabs button:first-child{border-radius:var(--r-lg) 0 0 var(--r-lg)}
+.tabs button:last-child{border-radius:0 var(--r-lg) var(--r-lg) 0}
 .tabs button{background:none;border:0;cursor:pointer;padding:10px 2px 12px;color:var(--ink-mute);
   display:flex;flex-direction:column;align-items:center;gap:3px;border-top:2px solid transparent}
-.tabs button .ic{font-size:17px;line-height:1}
+.tabs button .ic{font-size:19px;line-height:1;opacity:.85}
 .tabs button .tx{font-family:var(--mono);font-size:11px;letter-spacing:.03em;white-space:nowrap}
-.tabs button[aria-selected="true"]{color:var(--brass);border-top-color:var(--brass)}
+/* WYBRANA ZAKŁADKA BARWI SIę CAŁA, a nie kreseczką nad nią. Cienka linia
+   u góry gubiła się na telefonie i nie dało się z rzutu oka powiedzieć,
+   gdzie się jest — pełne tło widoczne jest natychmiast. */
+.tabs button[aria-selected="true"]{color:var(--on-brass);background:var(--brass);
+  border-top-color:transparent}
+.tabs button[aria-selected="true"] .ic{opacity:1}
+.tabs button[aria-selected="true"] + button{border-left-color:transparent}
 
 /* ---------- start ---------- */
 .start{padding:28px 20px;max-width:520px;margin:0 auto}

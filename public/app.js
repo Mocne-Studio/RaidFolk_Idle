@@ -328,13 +328,14 @@ function paintMineBar() {
     ? Math.min(100, (Date.now() - MINE.t0) / MINE.ms * 100)
     : (MINE?.pauza ? 100 : 0);
   const nazwa = r?.nodeLabel ?? r?.label ?? akt.res;
-  const sekundy = MINE?.ms ? (MINE.ms / 1000).toFixed(1) + ' s na cykl' : '';
 
-  el.innerHTML = `<span class="akt-chip" title="${esc(`${sk?.label ?? 'Zbieranie'}: ${nazwa}${sekundy ? ' · ' + sekundy : ''}. Leci w tle na każdej zakładce.`)}">
+  // SAMA SYGNALIZACJA. Pasek mówi tylko TYLE, że coś leci i ile zostało — nazwa,
+  // tempo, dorobek i przerwanie siedzą w Skillach, czyli tam, gdzie i tak idziesz,
+  // żeby cokolwiek z tym zrobić. Belka nad całą grą nie jest miejscem na panel.
+  el.innerHTML = `<button class="akt-chip" data-act="tab" data-tab="skille"
+      title="${esc(`${sk?.label ?? 'Zbieranie'}: ${nazwa}. Leci w tle na każdej zakładce — kliknij, żeby przejść do Skilli.`)}">
       <span class="ring" style="--p:${pct}"><span class="ic">${sk?.ic ?? '⛏'}</span></span>
-      <span class="tx"><b>${esc(nazwa)}</b><small>${esc(sk?.label ?? '')}</small></span>
-    </span>
-    <button class="akt-stop" data-act="minestop" title="Przerywa zbieranie. Postęp bieżącego cyklu przepada, zebrane surowce zostają.">✕</button>`;
+    </button>`;
 }
 
 // Podium: trzy miejsca, herb, imię i wynik. Ta sama funkcja rysuje oba rankingi —
@@ -3181,101 +3182,103 @@ function statyPelne(st, baza = null, pelne = false) {
     </div>`;
   }
 
-  // ---- wersja pełna: karta na statystykę ----
-  // Każda mówi cztery rzeczy: CO TO ROBI, Z CZEGO SIĘ SKŁADA, CO JĄ PODNOSI
-  // i GDZIE MA GRANICĘ. Liczby w opisach idą z S.formuly, czyli prosto z config.js —
-  // po zmianie balansu opis poprawia się sam i nie zaczyna kłamać.
-  const karta = (nazwa, wartosc, co, sklad, zalezy, zakres) => `
+  // ---- wersja pełna: kompaktowa karta na statystykę ----
+  // Poprzednia wersja była wykładem: trzy akapity prozy na każdą statystykę.
+  // Gracz nie czyta eseju za każdym wejściem — chce zobaczyć SKŁADNIKI liczby
+  // i jedną rzecz, której nie da się wywnioskować. Stąd rządek boxów zamiast zdań.
+  const kafle = (...pary) => {
+    const w = pary.filter(p => p && p[1] !== null && p[1] !== undefined && p[1] !== '');
+    return w.length ? `<div class="skladniki">${w.map(([et, v, mocny]) =>
+      `<span class="sk ${mocny ? 'mocny' : ''}"><i>${et}</i><b>${v}</b></span>`).join('')}</div>` : '';
+  };
+  const karta = (nazwa, wartosc, skladniki, nota) => `
     <div class="statcard">
       <div class="statcard-head"><span class="nm">${nazwa}</span><span class="val">${wartosc}</span></div>
-      <div class="t2 co">${co}</div>
-      ${sklad ? `<div class="statcard-linia"><span class="et">Składa się z</span><span class="tr">${sklad}</span></div>` : ''}
-      ${zalezy ? `<div class="statcard-linia"><span class="et">Rośnie od</span><span class="tr">${zalezy}</span></div>` : ''}
-      ${zakres ? `<div class="statcard-linia"><span class="et">Warto wiedzieć</span><span class="tr">${zakres}</span></div>` : ''}
+      ${skladniki}
+      ${nota ? `<div class="nota">${nota}</div>` : ''}
     </div>`;
 
   const hp = B.hp ?? {};
   const dmg = B.dmg ?? {};
   const attrGlowny = { dwureczna: 'Siła', jednoreczna: 'Siła',
     dystansowe: 'Precyzja', magiczne: 'Intelekt' }[st.wtype] ?? 'Siła';
-  const asZaPunkt = (1 / (F.agiSpeedDivisor ?? 200) * (F.speedToInterval ?? 1000) / 1000 * 20).toFixed(3);
+  const zeSprzetu = (klucz, fmt = nf) => {
+    if (!baza || baza[klucz] == null || st[klucz] == null) return null;
+    const d = st[klucz] - baza[klucz];
+    return Math.abs(d) < 0.005 ? null : `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}`;
+  };
 
   return `<div class="statcards">
-    ${karta('Zdrowie', nf(st.maxHp),
-      'Ile obrażeń przyjmiesz, zanim padniesz. <b>Nie wraca między falami ani po porażce</b> — oddaje je mikstura, ognisko na wyprawie albo jedzenie z Gotowania.',
-      `baza ${nf(hp.baza ?? F.startHp)} · z Witalności ${nf(hp.zWytrzymalosci ?? 0)} · z poziomu ${nf(hp.zPoziomu ?? 0)} · z afiksów ${nf(hp.zAfiksow ?? 0)}`,
-      `<b>Witalność</b> +${F.hpPerStamina} HP za punkt · <b>poziom</b> +${F.hpPerLevel} HP za każde zdobyte piętro · afiksy zdrowia na sprzęcie`,
-      R('maxHp'))}
+    ${karta('Zdrowie', nf(st.maxHp), kafle(
+      ['baza', nf(hp.baza ?? F.startHp)],
+      ['witalność', nf(hp.zWytrzymalosci ?? 0)],
+      ['poziom', nf(hp.zPoziomu ?? 0)],
+      ['sprzęt', zeSprzetu('maxHp'), true]),
+      'Nie wraca między falami ani po porażce.')}
 
-    ${karta('Atak', nf(st.damage),
-      `Obrażenia jednego ciosu, <b>zanim</b> zetknie się z pancerzem wroga. To <b>broń decyduje</b>, który atrybut je niesie — u Ciebie teraz <b>${attrGlowny}</b>. Pozostałe atrybuty liczą się nadal, tylko słabiej, z wagą ${F.offAttrWeight} — dzięki temu żaden afiks nie jest martwy.`,
-      `płaskie ${nf(dmg.plaskie ?? F.baseDamage)} × mnożnik z atrybutów ${dwa(dmg.attrMult ?? 1)}${(dmg.bonusMult ?? 1) !== 1 ? ` × bonusy ${dwa(dmg.bonusMult)}` : ''}`,
-      `<b>${attrGlowny}</b> · obrażenia samej broni (rosną z jej ilvl i z „+") · afiksy · drzewka skilli bojowych`,
-      R('damage'))}
+    ${karta('Atak', nf(st.damage), kafle(
+      ['płaskie', nf(dmg.plaskie ?? F.baseDamage)],
+      ['×atrybuty', dwa(dmg.attrMult ?? 1)],
+      [(dmg.bonusMult ?? 1) !== 1 ? '×bonusy' : null, (dmg.bonusMult ?? 1) !== 1 ? dwa(dmg.bonusMult) : null],
+      ['sprzęt', zeSprzetu('damage'), true]),
+      `Broń decyduje, który atrybut niesie obrażenia — teraz <b>${attrGlowny}</b>. Reszta liczy się z wagą ${F.offAttrWeight}.`)}
 
-    ${karta('Obrona', nf(st.armor),
+    ${karta('Obrona', nf(st.armor), kafle(
+      ['pancerz', nf(st.armor)],
+      [F.armorModel === 'barrier' ? 'pula' : null, F.armorModel === 'barrier' ? nf(st.armorPool ?? st.armor) : null, true],
+      [A.twardaskora ? 'twarda skóra' : null, A.twardaskora ? `+${Math.round(A.twardaskora * F.twardaSkoraPct * 100)}%` : null]),
       F.armorModel === 'barrier'
-        ? `Pancerz to <b>druga pula życia</b>, a nie procent redukcji. Cios najpierw zdziera pulę i dopiero jej nadwyżka sięga zdrowia. Twoja pula ma <b>${nf(st.armorPool ?? st.armor)}</b> punktów — to pancerz ×${F.barrierPlayerArmorMult}. Pula wraca co walkę, zdrowie nie.`
-        : 'Zbija otrzymywane obrażenia procentowo. Im wyżej w wieży, tym mniej wart jeden punkt.',
-      `pancerz z części sprzętu${A.twardaskora ? ` · Twarda Skóra +${Math.round(A.twardaskora * F.twardaSkoraPct * 100)}%` : ''}`,
-      `<b>Twarda Skóra</b> +${Math.round(F.twardaSkoraPct * 100)}% pancerza za punkt · pancerz każdej części · ulepszanie u kowala`,
-      F.armorModel === 'barrier'
-        ? `Przebicie i magia <b>omijają pulę</b> i biją prosto w zdrowie · Zmiażdżenie łamie ją ×${F.crushVsArmorMult}`
-        : R('armor'))}
+        ? `Druga pula życia, nie redukcja. <b>Przebicie i magia ją omijają</b>, Zmiażdżenie łamie ×${F.crushVsArmorMult}. Wraca co walkę.`
+        : 'Zbija otrzymywane obrażenia procentowo.')}
 
-    ${karta('Attack Speed', dwa(st.attackSpeed ?? st.speed / 20),
-      'Ile ciosów zadajesz na sekundę. <b>Jedna skala dla wszystkich</b> — Twoja, sojuszników, petów i mobów — więc porównanie z paskiem przeciwnika jest uczciwe.',
-      `bazowe tempo broni · Zręczność ${nf(A.zrecznosc ?? 0)}`,
-      `<b>Zręczność</b> +${asZaPunkt} AS za punkt · afiks Attack Speed, który wypada na broni <b>i na każdej części garderoby</b>`,
-      R('attackSpeed', dwa))}
+    ${karta('Attack Speed', dwa(st.attackSpeed ?? st.speed / 20), kafle(
+      ['zręczność', nf(A.zrecznosc ?? 0)],
+      ['sprzęt', zeSprzetu('attackSpeed', dwa), true]),
+      'Ciosy na sekundę. Ta sama skala u Ciebie i u mobów.')}
 
-    ${karta('Celność', pct(st.accuracy),
-      'Szansa, że cios trafi. Pudło to <b>cała stracona tura</b> — dlatego Celność bywa warta więcej niż surowe obrażenia.',
-      `bazowa celność · Precyzja ${nf(A.precyzja ?? 0)} · afiksy`,
-      '<b>Precyzja</b> · afiksy celności · siła ciosu wybrana w turze — mocniejszy cios trafia rzadziej',
-      `nigdy nie spada poniżej ${pct(F.accuracyMin)} i nigdy nie przekracza ${pct(F.accuracyMax)} — pewnego trafienia w tej grze nie ma`)}
+    ${karta('Celność', pct(st.accuracy), kafle(
+      ['precyzja', nf(A.precyzja ?? 0)],
+      ['sprzęt', zeSprzetu('accuracy', pct), true],
+      ['widełki', `${pct(F.accuracyMin)}–${pct(F.accuracyMax)}`]),
+      'Pudło to stracona tura. Pewnego trafienia nie ma.')}
 
-    ${karta('Unik', pct(st.evasion),
-      'Szansa, że cios wroga Cię minie. Liczy się <b>przeciw celności atakującego</b>, więc mocniejszy przeciwnik przebija ten sam unik częściej.',
-      `Zręczność ${nf(A.zrecznosc ?? 0)} · afiksy uniku`,
-      '<b>Zręczność</b> · afiksy uniku na sprzęcie',
-      R('evasion', pct))}
+    ${karta('Unik', pct(st.evasion), kafle(
+      ['zręczność', nf(A.zrecznosc ?? 0)],
+      ['sprzęt', zeSprzetu('evasion', pct), true]),
+      'Liczy się przeciw celności atakującego.')}
 
-    ${karta('Kryt', pct(st.crit),
-      'Szansa na trafienie krytyczne. Krytyk mnoży obrażenia przez Siłę kryta z karty obok.',
-      `baza ${pct(F.critBase)} · Szczęście ${nf(A.szczescie ?? 0)} · afiksy`,
-      `<b>Szczęście</b> +${(100 / (F.agiCritDivisor ?? 500)).toFixed(1)}% kryta za punkt · afiksy krytyka · węzły drzewek`,
-      R('crit', pct))}
+    ${karta('Kryt', pct(st.crit), kafle(
+      ['baza', pct(F.critBase)],
+      ['szczęście', nf(A.szczescie ?? 0)],
+      ['sprzęt', zeSprzetu('crit', pct), true]),
+      `Szczęście daje +${(100 / (F.agiCritDivisor ?? 500)).toFixed(1)}% za punkt.`)}
 
-    ${karta('Siła kryta', `×${dwa(st.critMult)}`,
-      `Ile razy mocniejszy jest krytyk. Bez żadnych afiksów mnoży przez bazowe ×${dwa(F.critMultBase)}. Sama Siła kryta nic nie daje bez szansy na kryta — te dwie liczby działają wyłącznie razem.`,
-      `baza ×${dwa(F.critMultBase)} · afiksy siły kryta`,
-      'afiksy „siła kryta" · węzły drzewek skilli bojowych',
-      R('critMult', dwa))}
+    ${karta('Siła kryta', `×${dwa(st.critMult)}`, kafle(
+      ['baza', `×${dwa(F.critMultBase)}`],
+      ['sprzęt', zeSprzetu('critMult', dwa), true]),
+      'Bez szansy na kryta nie daje nic — działają wyłącznie razem.')}
 
-    ${karta('Moc', nf(st.power),
-      'Jedna liczba na porównanie postaci — <b>to ona ustawia Cię w rankingu</b> pod hełmem w nagłówku. Do samej walki NIE wchodzi: silnik liczy osobno z Ataku, Zdrowia i Pancerza.',
-      `Atak ${nf(st.damage)} ×3 · Zdrowie ${nf(st.maxHp)} ×0,5 · Pancerz ${nf(st.armor)} ×1,5`,
-      'wszystko, co podnosi Atak, Zdrowie albo Pancerz — atrybuty, sprzęt, ulepszenia u kowala i drzewka skilli',
-      R('power'))}
+    ${karta('Moc', nf(st.power), kafle(
+      ['atak ×3', nf(st.damage * 3)],
+      ['zdrowie ×0,5', nf(Math.round(st.maxHp * 0.5))],
+      ['pancerz ×1,5', nf(Math.round(st.armor * 1.5))],
+      ['sprzęt', zeSprzetu('power'), true]),
+      'Ustawia Cię w rankingu. Do walki NIE wchodzi.')}
 
-    ${st.block ? karta('Blok', pct(st.block),
-      'Szansa, że przyjmiesz cios tarczą. <b>Wymaga tarczy w drugiej ręce</b>, więc broń dwuręczna wyklucza blok całkowicie. Zablokowany krytyk boli tyle, co zwykły cios.',
-      'tarcza · afiksy bloku',
-      '<b>tarcza w drugiej ręce</b> · afiksy bloku',
-      R('block', pct)) : ''}
+    ${st.block ? karta('Blok', pct(st.block), kafle(
+      ['sprzęt', zeSprzetu('block', pct), true]),
+      'Wymaga tarczy — broń dwuręczna wyklucza blok.') : ''}
 
-    ${st.maxMana ? karta('Mana', nf(st.maxMana),
-      'Zaklęcia płacą maną, a nie ładunkami paska. Pasek ultimate został przy umiejętnościach zwykłych — to <b>dwa osobne zasoby</b> i dwie osobne decyzje.',
-      `baza ${nf(F.manaBase)} · Intelekt ${nf(A.intelekt ?? 0)} × ${F.manaPerInt}`,
-      `<b>Intelekt</b> +${F.manaPerInt} many za punkt`,
-      `wraca ${F.manaRegenPerTurn} na każdą Twoją turę`) : ''}
+    ${st.maxMana ? karta('Mana', nf(st.maxMana), kafle(
+      ['baza', nf(F.manaBase)],
+      ['intelekt', `${nf(A.intelekt ?? 0)} × ${F.manaPerInt}`],
+      ['na turę', `+${F.manaRegenPerTurn}`, true]),
+      'Zaklęcia płacą maną. Pasek ultimate to osobny zasób.') : ''}
 
-    ${A.witalnosc ? karta('Regeneracja w walce', `+${nf(Math.round(A.witalnosc * F.hpRegenPerVit))} HP / turę`,
-      'Witalność leczy Cię <b>w trakcie walki</b>, co turę. Poza walką nie działa — między sesjami wraca osobne 2% na minutę.',
-      `Witalność ${nf(A.witalnosc)} × ${F.hpRegenPerVit}`,
-      `<b>Witalność</b> +${F.hpRegenPerVit} HP na turę za punkt`,
-      '') : ''}
+    ${A.witalnosc ? karta('Regeneracja', `+${nf(Math.round(A.witalnosc * F.hpRegenPerVit))}`, kafle(
+      ['witalność', nf(A.witalnosc)],
+      ['za punkt', `+${F.hpRegenPerVit}`]),
+      'HP na turę, tylko w walce.') : ''}
   </div>`;
 }
 
@@ -3507,12 +3510,9 @@ function sekcjaZbierackie() {
     }
   }
 
-  if (skillOpen === 'gornictwo') {
-    const pct = n => `${(100 * (n ?? 0)).toFixed(1)}%`;
-    h += `<div class="card"><div class="row"><div class="grow"><div class="t1">Zestaw Skill</div>
-      <div class="t2">Szybkość +${pct(S.mining.bonuses.miningSpeed)} · klejnot ${(S.mining.baseGemChance * (1 + S.mining.bonuses.gemFind) * 100).toFixed(2)}%</div></div>
-      <button class="btn" data-act="eqskill">Otwórz ekwipunek</button></div></div>`;
-  }
+  // KARTA „Zestaw Skill" STĄD ZNIKŁA. Trzymała dwie liczby i przycisk do
+  // Ekwipunku, a zajmowała całą trzecią kolumnę — przez co lista surowców
+  // dostawała trzy wąskie kolumny zamiast czterech szerokich.
   if (skillOpen === 'gotowanie') {
     const r = s.resources.find(x => x.id === cookingSelected) ?? s.resources.find(x => x.unlocked) ?? s.resources[0];
     if (r) {
