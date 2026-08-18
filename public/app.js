@@ -3219,8 +3219,16 @@ function sekcjaAtrybuty() {
 // `pelne` przełącza na wykład: skąd liczba się bierze, co ją podnosi i gdzie ma
 // sufit. Karta gracza woła bez tego i dostaje ciasną siatkę jak dotąd.
 function statyPelne(st, baza = null, pelne = false) {
-  const pct = v => `${(v * 100).toFixed(1)}%`;
-  const dwa = v => v.toFixed(2);
+  // JEDNA ZASADA NA WSZYSTKIE LICZBY W ROZBICIACH: maksimum dwa miejsca
+  // po przecinku, bez zbędnych zer na końcu. Wcześniej każde miejsce miało
+  // własne zaokrąglenie — procenty jedno miejsce, mnożniki dwa, a różnica
+  // sprzętu żadnego, przez co wychodziło „+18,545".
+  const lb = v => {
+    const r = Math.round(v * 100) / 100;
+    return Number.isInteger(r) ? nf(r) : r.toFixed(2).replace('.', ',');
+  };
+  const pct = v => `${lb(v * 100)}%`;
+  const dwa = v => lb(v);
   const F = S.formuly ?? {};
   const A = st.attrs ?? {};
   const B = st.breakdown ?? {};
@@ -3232,7 +3240,7 @@ function statyPelne(st, baza = null, pelne = false) {
     if (b == null || t == null) return '';
     const d = t - b;
     if (Math.abs(d) < 0.5) return `Twoje ${fmt(baza[klucz])}`;
-    return `Twoje ${fmt(baza[klucz])} · sprzęt <b>${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</b>`;
+    return `Twoje ${fmt(baza[klucz])} · sprzęt <b>${d > 0 ? '+' : '−'}${fmt === nf ? lb(Math.abs(d)) : fmt(Math.abs(d))}</b>`;
   };
 
   if (!pelne || !F.hpPerStamina) {
@@ -3286,7 +3294,8 @@ function statyPelne(st, baza = null, pelne = false) {
     const b = baza.raw?.[klucz] ?? baza[klucz];
     if (t == null || b == null) return null;
     const d = t - b;
-    return Math.abs(d) < 0.5 ? null : `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}`;
+    if (Math.abs(d) < 0.5) return null;
+    return `${d > 0 ? '+' : '−'}${fmt === nf ? lb(Math.abs(d)) : fmt(Math.abs(d))}`;
   };
 
   return `<div class="statcards">
