@@ -240,8 +240,13 @@ button{font:inherit;color:inherit;background:none;border:0}
 /* Jedyny wyjątek: „Przerwij”. To inna czynność niż przejście do profesji,
    więc ma własny, ZAPEŁNIONY hover — i gasi podświetlenie całego boxa,
    żeby nie wyglądało, że klika się obie rzeczy naraz. */
-.akt-box .btn:hover{border-color:var(--blood);background:var(--blood);color:var(--void)}
-.akt-box:has(.btn:hover){background:none;border-color:var(--edge)}
+/* Zapełnienie bierzemy z DOMOWEGO stanu przycisku (.btn.solid: mosiądz
+   + --on-brass), a nie z wymyślonej czerwieni — takiego wypełnienia gra nie
+   używa nigdzie indziej i „Przerwij” wyglądał jak wklejony z innego programu. */
+.akt-box .btn:hover{background:var(--brass);color:var(--on-brass);border-color:var(--brass)}
+/* Box ZOSTAJE podswietlony takze nad „Przerwij” — kursor jest w środku, więc
+   gaszenie go wyglądało jak zniknięcie celu pod palcem. „Przerwij” po prostu
+   dokłada swoje wypełnienie NA WIERZCHU. */
 .akt-box .ic{font-size:24px;line-height:1;flex:none}
 .akt-box .grow{min-width:0;display:flex;flex-direction:column;gap:3px}
 .akt-box .t1{font-size:15px;display:flex;align-items:baseline;gap:7px}
