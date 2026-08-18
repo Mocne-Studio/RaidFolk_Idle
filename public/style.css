@@ -226,8 +226,17 @@ button{font:inherit;color:inherit;background:none;border:0}
 .akt-go{display:flex;align-items:center;gap:11px;flex:1;min-width:0;
   background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;
   padding:3px 5px;margin:-3px -5px;border-radius:var(--r-sm)}
-.akt-go:hover{background:rgba(200,154,74,.07)}
-.akt-go:active{background:var(--press)}
+/* PODSWIETLA SIE CALY BOX, nie sam przycisk. Klikalna tresc zajmuje tylko
+   lewa czesc, wiec hover na niej rozjasnial wycinek i wygladal na blad ukladu.
+   :has() przenosi stan na rodzica — przegladarka, ktora go nie zna, po prostu
+   nie podswietli nic i nic sie nie psuje. */
+.akt-box:has(.akt-go:hover){background:rgba(200,154,74,.07);border-color:var(--brass)}
+.akt-box:has(.akt-go:active){background:var(--press)}
+.akt-go:hover,.akt-go:active{background:none}
+/* „Przerwij” ma WLASNY hover — to inna czynnosc niz przejscie do profesji,
+   wiec nie moze wygladac jak czesc tego samego klikniecia. */
+.akt-box .btn:hover{border-color:var(--blood);background:var(--blood);color:var(--void)}
+.akt-box:has(.btn:hover){background:none;border-color:var(--brass)}
 .akt-box .ic{font-size:24px;line-height:1;flex:none}
 .akt-box .grow{min-width:0;display:flex;flex-direction:column;gap:3px}
 .akt-box .t1{font-size:15px;display:flex;align-items:baseline;gap:7px}
