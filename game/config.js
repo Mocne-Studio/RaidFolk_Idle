@@ -336,9 +336,9 @@ export const CONFIG = {
     // gracza to jego build, a nie cudza rozpiska.
     // SIEDEM ATRYBUTÓW. Siła (mele), Precyzja (dystans), Intelekt (magia),
     // Zręczność (AS + unik), Szczęście (kryt), Witalność (HP + regen),
-    // Twarda Skóra (+% pancerza). „Atak" nie jest atrybutem — to wynik.
+    // „Atak" nie jest atrybutem — to wynik.
     startingAttrs: { sila: 0, precyzja: 0, intelekt: 0, zrecznosc: 0,
-                     szczescie: 0, witalnosc: 0, twardaskora: 0 },
+                     szczescie: 0, witalnosc: 0 },
     startingAttrPoints: 10,
     // mnożniki: (1 + atrybut / dzielnik)
     strDamageDivisor: 100,    // Siła → obrażenia bronią mele
@@ -361,8 +361,6 @@ export const CONFIG = {
     weaponAttr: { dwureczna: 'sila', jednoreczna: 'sila',
                   dystansowe: 'precyzja', magiczne: 'intelekt' },
     offAttrWeight: 0.35,
-    // Twarda Skóra: +% do pancerza (puli w modelu bariery) za punkt.
-    twardaSkoraPct: 0.03,
     // Witalność: regeneracja HP na turę = tyle × punktów Witalności.
     hpRegenPerVit: 0.5,
 
@@ -1798,7 +1796,6 @@ export const CONFIG = {
       { id: 'zrecznosc',   label: 'Zręczność',         min: 2, max: 5,  perIlvl: 0.55 },
       { id: 'szczescie',   label: 'Szczęście',         min: 2, max: 5,  perIlvl: 0.40 },
       { id: 'witalnosc',   label: 'Witalność',         min: 2, max: 5,  perIlvl: 0.55 },
-      { id: 'twardaskora', label: 'Twarda Skóra',      min: 1, max: 3,  perIlvl: 0.30 },
       { id: 'wszystkie',   label: 'Wszystkie staty',   min: 1, max: 2,  perIlvl: 0.20 },
       { id: 'dmgFlat',     label: 'Obrażenia',         min: 3, max: 8,  perIlvl: 1.80 },
       { id: 'hpFlat',      label: 'Zdrowie',           min: 8, max: 20, perIlvl: 3.20 },

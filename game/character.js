@@ -44,8 +44,16 @@ export function migrate(ch) {
 
   // MIGRACJA ATRYBUTÓW 4→7. Role się rozeszły: Zręczność → Precyzja (dmg dyst.)
   // + Zręczność (AS/unik) + Szczęście (kryt); Wytrzymałość → Witalność (HP/regen)
-  // + Twarda Skóra (% pancerza). Nie da się tego uczciwie rozdzielić za gracza,
+  // Nie da się tego uczciwie rozdzielić za gracza,
   // więc zwracamy WSZYSTKIE punkty i pozwalamy rozdać na nowo.
+  // TWARDA SKÓRA ZOSTAŁA USUNIĘTA Z GRY. Postacie, które zdążyły w nią włożyć
+  // punkty, dostają je z powrotem do puli — nikt nie traci nic za decyzję,
+  // która zapadła po jego stronie ekranu.
+  if (ch.attrs && 'twardaskora' in ch.attrs) {
+    ch.unspentAttr = (ch.unspentAttr ?? 0) + (Number(ch.attrs.twardaskora) || 0);
+    delete ch.attrs.twardaskora;
+  }
+
   if (ch.attrs && ('wytrzymalosc' in ch.attrs || !('witalnosc' in ch.attrs))) {
     const zwrot = Object.values(ch.attrs).reduce((s, v) => s + (Number(v) || 0), 0);
     ch.attrs = { ...C.character.startingAttrs };
@@ -492,7 +500,6 @@ export function computeStats(ch, options = {}) {
     a.zrecznosc += s.zrecznosc * m; a.szczescie += s.szczescie * m;
     // Stary afiks „Wytrzymałość" (s.wytrzymalosc) dolicza się do Witalności.
     a.witalnosc += (s.witalnosc + s.wytrzymalosc) * m;
-    a.twardaskora += s.twardaskora * m;
     dmgFlat += s.dmgFlat * m; hpFlat += s.hpFlat * m; armorFlat += s.armorFlat * m;
     critChance += s.critChance * m; critPower += s.critPower * m;
     speedFlat += s.speed * m; accFlat += s.accuracy * m; evaFlat += s.evasion * m;
@@ -564,10 +571,9 @@ export function computeStats(ch, options = {}) {
   const speed = Math.round((C.combat.baseSpeed + speedFlat + T.speed + (K.speed ?? 0)
     + asDoSpeed(asFlat / 100)
     + a.zrecznosc / (cc.agiSpeedDivisor / 100)) * (1 + (B.attackSpeedPct ?? 0)));
-  // Twarda Skóra podbija pancerz procentowo (w modelu bariery = pulę do przebicia).
   // Witalność nie daje już płaskiego pancerza — to teraz rola Twardej Skóry.
   const armor = Math.round((armorFlat + T.armorFlat)
-    * (1 + T.armorPct + K.armorPct + (B.armorPct ?? 0) + a.twardaskora * cc.twardaSkoraPct));
+    * (1 + T.armorPct + K.armorPct + (B.armorPct ?? 0)));
 
   // Celność niesie Precyzja (trafianie), nie Zręczność.
   const accuracy = cc.accuracyBase + a.precyzja * cc.accuracyPerAgi + accFlat / 100

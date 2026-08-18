@@ -45,12 +45,11 @@ const BUILDY = {
 // giną — i tak ma być.
 function rozdajPunkty(ch, pkt) {
   // 55% w Siłę (obrażenia mele), reszta w przeżywalność: Witalność (HP)
-  // i Twarda Skóra (pula pancerza). Skrajne buildy w sam atak giną — tak ma być.
+  // Skrajne buildy w sam atak giną — tak ma być.
   const doAtaku = Math.round(pkt * 0.55);
   const przezyj = pkt - doAtaku;
   const doSkory = Math.round(przezyj * 0.3);
   ch.attrs.sila += doAtaku;
-  ch.attrs.twardaskora += doSkory;
   ch.attrs.witalnosc += przezyj - doSkory;
   ch.unspentAttr = 0;
 }

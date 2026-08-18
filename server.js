@@ -451,7 +451,6 @@ function view(ch) {
       hpPerLevel: C.character.hpPerLevel,
       startHp: C.character.startHp,
       staArmorPerPoint: C.character.staArmorPerPoint,
-      twardaSkoraPct: C.character.twardaSkoraPct,
       hpRegenPerVit: C.character.hpRegenPerVit,
       agiSpeedDivisor: C.character.agiSpeedDivisor,
       agiCritDivisor: C.character.agiCritDivisor,

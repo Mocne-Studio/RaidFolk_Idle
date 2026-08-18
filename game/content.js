@@ -541,7 +541,7 @@ export function rollTrophy(seed, family, znane = [], variant = 'normal') {
 
 export function itemStatSummary(item) {
   const s = { sila: 0, precyzja: 0, intelekt: 0, zrecznosc: 0,
-              szczescie: 0, witalnosc: 0, twardaskora: 0,
+              szczescie: 0, witalnosc: 0,
               wytrzymalosc: 0,   // most dla starych przedmiotów → mapuje się na Witalność
               dmgFlat: 0, hpFlat: 0, armorFlat: 0, critChance: 0, critPower: 0,
               speed: 0, accuracy: 0, evasion: 0,
@@ -560,7 +560,7 @@ export function itemStatSummary(item) {
     const v = a.value * mnoznikAfiksu;
     if (a.id === 'wszystkie') {
       s.sila += v; s.precyzja += v; s.intelekt += v; s.zrecznosc += v;
-      s.szczescie += v; s.witalnosc += v; s.twardaskora += v;
+      s.szczescie += v; s.witalnosc += v;
     } else if (a.id in s) {
       s[a.id] += v;
     }

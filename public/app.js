@@ -1770,7 +1770,7 @@ function canEquipLocal(it) {
 }
 
 const ATTR_LABEL = { sila: 'Siła', precyzja: 'Precyzja', intelekt: 'Intelekt',
-  zrecznosc: 'Zręczność', szczescie: 'Szczęście', witalnosc: 'Witalność', twardaskora: 'Twarda Skóra' };
+  zrecznosc: 'Zręczność', szczescie: 'Szczęście', witalnosc: 'Witalność' };
 // Warstwa uniwersalna działa u każdego; obrażenia tylko z atrybutu swojej klasy.
 // Opisy mówią prawdę o TYM buildzie: gracz nie ma klasy, więc o obrażenia
 // decyduje RODZINA TRZYMANEJ BRONI. Atrybut spoza niej liczy się słabiej
@@ -1782,7 +1782,6 @@ const ATTR_DESC = {
   zrecznosc: 'Attack Speed · unik',
   szczescie: 'szansa na trafienie krytyczne',
   witalnosc: 'zdrowie · regeneracja HP w walce',
-  twardaskora: 'pancerz procentowo — grubsza pula do przebicia',
 };
 
 // Makieta postaci przeniosła się do zakładki Ekwipunek — tam, gdzie gracz
@@ -2280,7 +2279,7 @@ function itemStats(it) {
 
 const STAT_NAZWA = {
   dmg: 'Atak', arm: 'Obrona', sila: 'Siła', precyzja: 'Precyzja', intelekt: 'Intelekt',
-  zrecznosc: 'Zręczność', szczescie: 'Szczęście', witalnosc: 'Witalność', twardaskora: 'Twarda Skóra',
+  zrecznosc: 'Zręczność', szczescie: 'Szczęście', witalnosc: 'Witalność',
   wytrzymalosc: 'Wytrzymałość', wszystkie: 'Wszystkie staty',
   hpFlat: 'Zdrowie', critChance: 'Szansa na kryt', critPower: 'Siła kryta',
   speed: 'Prędkość', accuracy: 'Celność', evasion: 'Unik', attackSpeed: 'Attack Speed',
@@ -3181,7 +3180,7 @@ function sekcjaAtrybuty() {
     <span class="num big-n">${S.unspentAttr}</span>
     ${rozdane ? `<button class="btn ghost" data-act="attrreset" title="Zwraca wszystkie rozdane punkty do puli — za darmo">Reset</button>` : ''}
   </div>`;
-  for (const k of ['sila', 'precyzja', 'intelekt', 'zrecznosc', 'szczescie', 'witalnosc', 'twardaskora']) {
+  for (const k of ['sila', 'precyzja', 'intelekt', 'zrecznosc', 'szczescie', 'witalnosc']) {
     const total = st.attrs[k] ?? 0;
     const baza = st.attrsBase?.[k] ?? total;
     const zeSprz = total - baza;
@@ -3323,8 +3322,7 @@ function statyPelne(st, baza = null, pelne = false) {
 
     ${karta('Obrona', nf(st.armor), kafle(
       ['pancerz', nf(st.armor)],
-      [F.armorModel === 'barrier' ? 'pula' : null, F.armorModel === 'barrier' ? nf(st.armorPool ?? st.armor) : null, true],
-      [A.twardaskora ? 'twarda skóra' : null, A.twardaskora ? `+${Math.round(A.twardaskora * F.twardaSkoraPct * 100)}%` : null]),
+      [F.armorModel === 'barrier' ? 'pula' : null, F.armorModel === 'barrier' ? nf(st.armorPool ?? st.armor) : null, true],),
       F.armorModel === 'barrier'
         ? `Druga pula życia, nie redukcja. <b>Przebicie i magia ją omijają</b>, Zmiażdżenie łamie ×${F.crushVsArmorMult}. Wraca co walkę.`
         : 'Zbija otrzymywane obrażenia procentowo.')}
