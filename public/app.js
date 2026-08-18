@@ -332,11 +332,21 @@ function paintMineBar() {
     : (MINE?.pauza ? 100 : 0);
   const nazwa = r?.nodeLabel ?? r?.label ?? akt.res;
 
-  // SAMA SYGNALIZACJA. Pasek mówi tylko TYLE, że coś leci i ile zostało — nazwa,
-  // tempo, dorobek i przerwanie siedzą w Skillach, czyli tam, gdzie i tak idziesz,
-  // żeby cokolwiek z tym zrobić. Belka nad całą grą nie jest miejscem na panel.
-  el.innerHTML = `<button class="akt-chip" data-act="tab" data-tab="skille"
-      title="${esc(`${sk?.label ?? 'Zbieranie'}: ${nazwa}. Leci w tle na każdej zakładce — kliknij, żeby przejść do Skilli.`)}">
+  // SAMA SYGNALIZACJA. Belka mówi tylko TYLE, że coś leci i ile zostało.
+  // Kliknięcie prowadzi PROSTO DO TEJ PROFESJI — nie do ogólnej zakładki Skille,
+  // tylko do otwartego Rolnictwa czy Górnictwa, czyli tam, gdzie rzecz się dzieje.
+  // Robi to `skillgo`, które ustawia sekcję i wybraną profesję naraz.
+  const zostalo = MINE?.ms ? Math.max(0, (MINE.ms - (Date.now() - MINE.t0)) / 1000) : null;
+  const tip = [
+    `${sk?.label ?? 'Zbieranie'}: ${nazwa}`,
+    MINE?.ms ? `cykl ${(MINE.ms / 1000).toFixed(1)} s` : '',
+    zostalo != null ? `zostało ${zostalo.toFixed(1)} s` : '',
+    r?.xp ? `${r.xp} exp za cykl` : '',
+    'Leci w tle na każdej zakładce — kliknij, żeby przejść do tej profesji.',
+  ].filter(Boolean).join(' · ');
+  el.innerHTML = `<button class="akt-chip" data-act="skillgo" data-t="zbierackie"
+      data-skill="${esc(akt.skill)}" title="${esc(tip)}"
+      aria-label="${esc(`${sk?.label ?? 'Zbieranie'}: ${nazwa}`)}">
       <span class="ring" style="--p:${pct}"><span class="ic">${sk?.ic ?? '⛏'}</span></span>
     </button>`;
 }

@@ -206,9 +206,14 @@ button{font:inherit;color:inherit;background:none;border:0}
    Wcześniej miały własny pasek na całą szerokość pod nagłówkiem — kilkadziesiąt
    pikseli wysokości na każdym ekranie po to, żeby pokazać jedną nazwę. */
 .hdr-akt{display:flex;align-items:center;gap:5px;flex:none;min-width:0}
-.akt-chip{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 5px;
-  background:var(--stone);border:1px solid var(--edge-soft);border-radius:999px;
-  font:inherit;color:var(--ink-dim);cursor:help;min-width:0}
+/* Chip jest KOŁEM, nie pastylką. Odkąd została w nim sama ikona, niesymetryczny
+   padding (10 px z prawej, 5 z lewej) zostawiał puste pole po prawej stronie
+   pierścienia — kształt wychodził poza rysunek i wyglądał na przesunięty. */
+.akt-chip{display:grid;place-items:center;padding:3px;
+  background:var(--stone);border:1px solid var(--edge);border-radius:50%;
+  font:inherit;color:var(--ink-dim);cursor:pointer;flex:none;line-height:0}
+.akt-chip:hover{border-color:var(--brass)}
+.akt-chip:active{background:var(--press)}
 button.akt-chip{cursor:pointer}
 .akt-chip.pusty{border-style:dashed;color:var(--ink-mute)}
 .akt-chip .tx{display:flex;flex-direction:column;min-width:0;line-height:1.15}
@@ -221,7 +226,7 @@ button.akt-chip{cursor:pointer}
 .akt-chip .ring{position:relative;flex:none;width:28px;height:28px;border-radius:50%;
   background:conic-gradient(var(--brass) calc(var(--p,0) * 1%), var(--edge) 0);
   display:grid;place-items:center}
-.akt-chip .ring .ic{width:22px;height:22px;border-radius:50%;background:var(--belka);
+.akt-chip .ring .ic{width:22px;height:22px;border-radius:50%;background:var(--stone);
   display:grid;place-items:center;font-size:13px;line-height:1}
 .akt-stop{flex:none;width:26px;height:26px;border-radius:50%;cursor:pointer;
   background:var(--stone);border:1px solid var(--edge-soft);color:var(--ink-mute);
