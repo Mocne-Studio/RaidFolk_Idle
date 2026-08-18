@@ -2906,14 +2906,26 @@ function czasKrotki(ms) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-// PASEK ZBIERANIA. Bliźniak paska walki, tylko u góry: pokazuje się, gdy gracz
-// wyjdzie ze Skilli, a coś nadal się zbiera. Na Skillach jest zbędny, bo tam
-// stoi pełny panel — dlatego wtedy znika.
+// PASEK ZBIERANIA — STAŁA BELKA NAD TREŚCIĄ, na każdej zakładce.
+// Wcześniej znikał, gdy nic się nie zbierało: układ skakał o kilkadziesiąt
+// pikseli przy każdym starcie i końcu zbierania, a gracz, który nic nie robił,
+// nie miał nigdzie śladu, że w ogóle może coś zacząć. Teraz belka stoi zawsze
+// i w stanie spoczynku ZAPRASZA do zbierania zamiast pokazywać pustkę.
 function paintMineBar() {
   const el = $('#minebar');
   if (!el || !S) return;
   const akt = S.activity;
-  if (!akt) { el.hidden = true; return; }
+  if (!akt) {
+    el.hidden = false;
+    el.innerHTML = `<div class="mb-row pusty">
+      <span class="ic">⛏</span>
+      <span class="mb-kto"><b>Nic nie zbierasz</b></span>
+      <span class="mb-zacheta">Wejdź w Skille i wybierz surowiec — zbieranie leci samo,
+        także gdy oglądasz inne zakładki.</span>
+      <button class="cbtn" data-act="tab" data-tab="skille">SKILLE</button>
+    </div>`;
+    return;
+  }
 
   const sk = S.skills?.[akt.skill];
   const r = sk?.resources?.find(x => x.id === akt.res);
@@ -3038,8 +3050,15 @@ function renderSkille() {
 
 function sekcjaAtrybuty() {
   const st = S.stats;
-  let h = `<div class="scrollbox">`;
+  const bz = S.statsBase ?? null;
   const rozdane = Object.values(st.attrsBase ?? {}).reduce((s, v) => s + (v || 0), 0);
+
+  // DWIE KOLUMNY: po lewej rozdajesz punkty, po prawej OD RAZU widzisz, co z tego
+  // wyszło. Wcześniej staty leżały pod listą atrybutów, więc żeby zobaczyć skutek
+  // kliknięcia, trzeba było przewinąć w dół i z powrotem.
+  let h = `<div class="two-col atryb">`;
+
+  h += `<div class="col scrollbox">`;
   h += `<div class="card ${S.unspentAttr ? 'hi' : ''} row">
     <div class="grow"><div class="t1">Punkty do rozdania</div>
       <div class="t2">10 na start, 3 za każde zdobyte piętro</div></div>
@@ -3061,31 +3080,59 @@ function sekcjaAtrybuty() {
       <button class="btn" data-act="attr" data-attr="${k}" ${S.unspentAttr ? '' : 'disabled'}>+</button>
     </div>`;
   }
-  h += `<div class="sec">Co z tego wychodzi</div>${statyPelne(st)}`;
+  h += `</div>`;
+
+  h += `<div class="col scrollbox">
+    <div class="sec">Co z tego wychodzi</div>
+    ${statyPelne(st, bz)}
+    <div class="t2" style="margin-top:8px">Pierwsza liczba to wartość łączna. Pod nią widać,
+      ile z niej niosą Twoje punkty i poziom, a ile dokłada założony sprzęt.</div>
+  </div>`;
+
   return h + `</div>`;
 }
 
 // PEŁNY KOMPLET STATYSTYK WYNIKOWYCH. Jedno miejsce dla ekranu atrybutów
 // i karty gracza — inaczej Celność i Unik trzeba by dopisywać dwa razy.
-function statyPelne(st) {
-  const w = (k, v, tip) => `<div class="stat-box" title="${esc(tip)}">
-    <span class="k">${k}</span><span class="v">${v}</span></div>`;
-  return `<div class="statgrid">
-    ${w('Zdrowie', nf(st.maxHp), 'Nie wraca między falami.')}
-    ${w('Atak', nf(st.damage), 'Obrażenia jednego ciosu, przed pancerzem wroga.')}
-    ${w('Obrona', nf(st.armor), 'Pancerz. Zbija otrzymywane obrażenia.')}
-    ${w('Attack Speed', (st.attackSpeed ?? st.speed / 20).toFixed(2),
-      'Ile ciosów na sekundę. Ta sama skala u Ciebie i u mobów.')}
-    ${w('Celność', `${(st.accuracy * 100).toFixed(1)}%`,
-      'Szansa, że cios trafi. Pudło to stracona tura. Rośnie ze Zręczności.')}
-    ${w('Unik', `${(st.evasion * 100).toFixed(1)}%`,
-      'Szansa, że cios wroga Cię minie. Rośnie ze Zręczności.')}
-    ${w('Kryt', `${(st.crit * 100).toFixed(1)}%`, 'Szansa na trafienie krytyczne.')}
-    ${w('Siła kryta', `×${st.critMult.toFixed(2)}`, 'Ile razy mocniejszy jest krytyk.')}
-    ${w('Moc', nf(st.power), 'Atak, zdrowie i pancerz w jednej liczbie.')}
+//
+// `baza` to te same statystyki policzone Z PUSTYMI SLOTAMI (`statsBase` z serwera).
+// Różnica między nią a stanem faktycznym JEST wkładem sprzętu — nie ma tu drugiego
+// wzoru, który mógłby się rozjechać z computeStats().
+function statyPelne(st, baza = null) {
+  const pct = v => `${(v * 100).toFixed(1)}%`;
+  const dwa = v => v.toFixed(2);
+  const w = (k, v, tip, skad) => `<div class="stat-box" title="${esc(tip)}">
+    <span class="k">${k}</span><span class="v">${v}</span>${skad ? `<span class="skad">${skad}</span>` : ''}</div>`;
+
+  // Rozbicie „ile jest Twoje, ile daje sprzęt". Bez `baza` znika bez śladu,
+  // więc karta gracza może dalej wołać statyPelne(st) z jednym argumentem.
+  const R = (klucz, fmt = nf) => {
+    if (!baza) return '';
+    const b = baza[klucz], t = st[klucz];
+    if (b == null || t == null) return '';
+    const d = t - b;
+    if (Math.abs(d) < 0.005) return `Twoje ${fmt(b)}`;
+    const znak = d > 0 ? '+' : '−';
+    return `Twoje ${fmt(b)} · sprzęt <b>${znak}${fmt(Math.abs(d))}</b>`;
+  };
+
+  return `<div class="statgrid staty-rozbite">
+    ${w('Zdrowie', nf(st.maxHp), 'Nie wraca między falami.', R('maxHp'))}
+    ${w('Atak', nf(st.damage), 'Obrażenia jednego ciosu, przed pancerzem wroga.', R('damage'))}
+    ${w('Obrona', nf(st.armor), 'Pancerz. Zbija otrzymywane obrażenia.', R('armor'))}
+    ${w('Attack Speed', dwa(st.attackSpeed ?? st.speed / 20),
+      'Ile ciosów na sekundę. Ta sama skala u Ciebie i u mobów.',
+      R('attackSpeed', dwa))}
+    ${w('Celność', pct(st.accuracy),
+      'Szansa, że cios trafi. Pudło to stracona tura. Rośnie z Precyzji.', R('accuracy', pct))}
+    ${w('Unik', pct(st.evasion),
+      'Szansa, że cios wroga Cię minie. Rośnie ze Zręczności.', R('evasion', pct))}
+    ${w('Kryt', pct(st.crit), 'Szansa na trafienie krytyczne. Rośnie ze Szczęścia.', R('crit', pct))}
+    ${w('Siła kryta', `×${dwa(st.critMult)}`, 'Ile razy mocniejszy jest krytyk.', R('critMult', dwa))}
+    ${w('Moc', nf(st.power), 'Atak, zdrowie i pancerz w jednej liczbie.', R('power'))}
     ${st.block ? w('Blok', `${Math.round(st.block * 100)}%`,
-      'Wymaga tarczy. Zablokowany cios traci połowę obrażeń.') : ''}
-    ${st.maxMana ? w('Mana', nf(st.maxMana), 'Zaklęcia nią płacą. Rośnie z Intelektu.') : ''}
+      'Wymaga tarczy. Zablokowany cios traci połowę obrażeń.', R('block', pct)) : ''}
+    ${st.maxMana ? w('Mana', nf(st.maxMana), 'Zaklęcia nią płacą. Rośnie z Intelektu.', R('maxMana')) : ''}
   </div>`;
 }
 
@@ -3096,18 +3143,16 @@ function sekcjaZbierackie() {
   let h = '';
   h += `<div class="three-col zbierackie">`;
 
-  // ---- góra: WSZYSTKIE profesje naraz, siatka trzech kolumn ----
-  // Był tu pionowy słupek (na telefonie poziomy pasek), więc żeby zobaczyć
-  // siódmą profesję, trzeba było przewijać. Siedem kafli w trzech kolumnach
-  // mieści się w trzech rzędach i widzi się je wszystkie bez ruchu.
+  // ---- bok: lista profesji (wąski słupek, na telefonie pasek) ----
   h += `<div class="col skill-list">`;
   for (const [id, sk] of Object.entries(S.skills)) {
     const kopie = akt?.skill === id;
     h += `<button class="skillrow ${id === skillOpen ? 'on' : ''}" data-act="skill" data-id="${id}">
       <span class="ic">${sk.ic}</span>
-      <span class="nm">${esc(sk.label)}</span>
-      <span class="lv">${sk.grywalne ? `Lv. ${sk.lvl}` : 'wkrótce'}</span>
-      <span class="op">${esc(sk.daje ?? '')}</span>
+      <span class="grow">
+        <span class="nm">${esc(sk.label)}</span>
+        <span class="lv">${sk.grywalne ? `Lv. ${sk.lvl}` : 'wkrótce'}</span>
+      </span>
       ${kopie ? '<span class="dot"></span>' : ''}
     </button>`;
   }
@@ -3342,21 +3387,9 @@ function sekcjaZbierackie() {
         ${!r.unlocked ? `<div class="t2 bad-text">Wymaga poziomu ${r.lvl}</div>` : !stac ? '<div class="t2 bad-text">Brakuje składników</div>' : ''}</div>`;
     }
   }
-  if (akt && S.skills[akt.skill]?.grywalne) {
-    const r = S.skills[akt.skill].resources.find(x => x.id === akt.res);
-    // PANEL ZBIERANIA ZSZEDŁ NA PASEK POD NAGŁÓWKIEM — ten sam widok działa
-    // na każdej zakładce, więc druga kopia tutaj byłaby tą samą rzeczą dwa razy.
-    h += `<div class="card hi row">
-      <div class="icon lg">${esc(S.skills[akt.skill].ic ?? '⛏')}</div>
-      <div class="grow"><div class="t1">Aktywność: ${esc(r?.nodeLabel ?? r?.label ?? akt.res)}</div>
-        <div class="t2">Postęp, tempo i czas do poziomu masz na pasku u góry —
-          widać go z każdej zakładki.</div></div>
-      <button class="btn" data-act="minestop">Przerwij</button>
-    </div>`;
-  } else {
-    h += `<div class="card"><div class="t1">Brak aktywności</div>
-      <div class="t2">Wybierz łowisko, uprawę, surowiec albo recepturę. Tryb ciągły działa aż do przerwania lub braku składników.</div></div>`;
-  }
+  // KARTA „Aktywność" STĄD ZNIKŁA. Mówiła dokładnie to samo, co stała belka
+  // nad treścią — dwa razy ta sama rzecz na jednym ekranie, a przy okazji
+  // zajmowała całą prawą kolumnę, która jest potrzebna na przegląd skilli.
 
   h += `</div>`;
 

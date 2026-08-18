@@ -204,16 +204,17 @@ button{font:inherit;color:inherit;background:none;border:0}
   .two-col>.col{flex:1;min-height:0;overflow-y:auto}
   .three-col{flex-direction:row;overflow:hidden}
   .three-col>.col{min-height:0;overflow-y:auto}
-  .three-col>.skill-mid{flex:1.2}
+  .three-col>.skill-list{flex:0 0 168px}
   .three-col>.skill-now{flex:1}
-  /* ZBIERACKIE MAJĄ WŁASNY UKŁAD: siatka profesji na całą szerokość u góry,
-     szczegół wybranej profesji w dwóch kolumnach pod nią. Wcześniej lista
-     była wąskim słupkiem 168 px z boku i nie mieściła wszystkich siedmiu. */
-  .three-col.zbierackie{flex-direction:row;flex-wrap:wrap;align-content:flex-start;
-    overflow-y:auto}
-  .three-col.zbierackie>.skill-list{flex:0 0 100%;order:-1}
-  .three-col.zbierackie>.skill-mid,
-  .three-col.zbierackie>.skill-now{min-height:0;overflow:visible}
+  /* LISTA SUROWCOW W TRZECH KOLUMNACH. To ona rosnie bez konca (Miedz, Zelazo,
+     Wegiel, i tak dalej w dol) i to ja trzeba bylo przewijac. Menu profesji
+     zostaje waskim slupkiem z boku — tam nic sie nie zmienia.
+     Siatka obejmuje WYLACZNIE wiersze surowcow: pasek expa, zakladki kategorii
+     i filtry ida przez cala szerokosc, bo to naglowki, nie pozycje listy. */
+  .three-col>.skill-mid{flex:2.6;display:grid;align-content:start;
+    grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .three-col>.skill-mid>*{grid-column:1/-1}
+  .three-col>.skill-mid>.res-row{grid-column:auto;margin:0}
 }
 
 .scr-head{font-family:var(--display);font-size:15px;color:var(--ink);
@@ -898,6 +899,12 @@ button.card:active{background:var(--press)}
   padding:6px 7px;display:flex;flex-direction:column;gap:1px;cursor:help}
 .stat-box .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;
   text-transform:uppercase;color:var(--ink-mute)}
+/* SKĄD SIĘ BIERZE TA LICZBA — ile niosą Twoje punkty i poziom, a ile sprzęt.
+   Trzecia linia kafelka, włącza się sama, gdy jest co pokazać. */
+.stat-box .skad{font-family:var(--mono);font-size:11px;line-height:1.3;
+  color:var(--ink-mute);margin-top:2px;display:block}
+.stat-box .skad b{font-weight:400;color:var(--brass)}
+.staty-rozbite .stat-box{align-items:flex-start;text-align:left}
 .stat-box .v{font-family:var(--mono);font-size:13px;color:var(--ink);
   font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   min-width:0}
@@ -1074,6 +1081,12 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .mb-kto{min-width:0;flex:none;max-width:40%}
 .mb-kto b{font-size:13px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mb-row .bar{height:6px}
+/* STAN SPOCZYNKU. Belka stoi zawsze — gdy nic się nie zbiera, zaprasza zamiast
+   znikać. Znikająca belka przesuwała cały układ przy każdym starcie i końcu. */
+.mb-row.pusty .ic,.mb-row.pusty .mb-kto b{color:var(--ink-mute)}
+.mb-zacheta{flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--ink-mute);
+  overflow:hidden;text-overflow:ellipsis}
+@media (max-width:759px){ .mb-zacheta{display:none} }
 
 /* ---------- KOLOS ---------- */
 .kolos-fot{position:relative;border:1px solid var(--edge);border-radius:var(--r-lg);
@@ -1145,23 +1158,14 @@ textarea:focus{outline:none;border-color:var(--brass)}
 
 /* ---------- skille zbierackie ---------- */
 /* Na telefonie lista profesji leży poziomo jako pasek — pionowa zjadłaby ekran. */
-/* SIATKA PROFESJI — TRZY KOLUMNY, WSZYSTKIE NARAZ.
-   Był tu pasek jadący w bok (na szerokim ekranie wąski słupek 168 px), więc
-   siódma profesja zawsze siedziała poza widokiem i trzeba było przewijać.
-   Siedem kafli w trzech kolumnach to trzy rzędy — mieszczą się bez ruchu. */
-.three-col>.skill-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:7px;overflow:visible;flex:none;padding-bottom:0}
+.three-col>.skill-list{display:flex;flex-direction:row;gap:5px;overflow-x:auto;flex:none;padding-bottom:6px}
 /* Tu też pasek był schowany — z tego samego powodu wrócił. */
-.skillrow{display:flex;flex-direction:column;align-items:center;gap:3px;flex:none;
-  font:inherit;color:var(--ink-dim);text-align:center;
-  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:var(--r-md);
-  padding:11px 8px 9px;cursor:pointer;position:relative;min-height:var(--tap)}
-/* Ikona jest DUŻA — to ona niesie rozpoznanie profesji, nie napis. */
-.skillrow .ic{font-size:30px;line-height:1.05;margin-bottom:1px}
-.skillrow .nm{font-size:15px;line-height:1.15}
-/* Co ta profesja daje. Jedno zdanie, żeby nie trzeba było w nią wchodzić,
-   żeby się dowiedzieć, po co w ogóle istnieje. */
-.skillrow .op{font-size:11px;line-height:1.25;color:var(--ink-mute)}
+.skillrow{display:flex;align-items:center;gap:6px;flex:none;font:inherit;color:var(--ink-dim);
+  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
+  padding:7px 9px;cursor:pointer;position:relative}
+.skillrow .ic{font-size:19px;line-height:1}
+.skillrow .grow{display:flex;flex-direction:column;gap:1px;text-align:left}
+.skillrow .nm{font-size:13px;white-space:nowrap}
 .skillrow .lv{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
 .skillrow.on{border-color:var(--brass);background:rgba(200,154,74,.12);color:var(--brass)}
 .skillrow.on .lv{color:var(--brass)}
@@ -1176,6 +1180,8 @@ textarea:focus{outline:none;border-color:var(--brass)}
   .three-col > .skill-now{order:-1}
 }
 @media (min-width:760px){
+  .three-col>.skill-list{flex-direction:column;overflow-x:visible;padding-bottom:0}
+  .skillrow{flex:none}
   .skillrow .nm{white-space:normal}
 }
 

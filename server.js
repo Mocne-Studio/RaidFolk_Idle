@@ -438,6 +438,11 @@ function view(ch) {
     fightsOnFloor: info.fights, isBoss: info.isBoss, isPlus: info.isPlus,
     actName: act.name, actId: act.id, bossName: info.bossName,
     stats: st, poziom: poziom(ch), shield: isShield,
+    // STATYSTYKI BEZ SPRZĘTU. Ekran atrybutów pokazuje każdą liczbę jako
+    // bazę + wkład itemów, a najuczciwszym sposobem policzenia tego wkładu
+    // jest policzenie WSZYSTKIEGO drugi raz z pustymi slotami i odjęcie.
+    // Żadnej równoległej matematyki, która rozjedzie się z computeStats().
+    statsBase: computeStats({ ...ch, equipped: {} }),
     tree: treeView(ch), treeRespec: respecCost(ch),
     attrs: ch.attrs, unspentAttr: ch.unspentAttr, treePoints: ch.treePoints,
     gold: ch.gold, currency: ch.currency,
