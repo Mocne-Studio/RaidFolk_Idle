@@ -3046,6 +3046,10 @@ function startMineLoop(skill, res, ms, elapsed = 0) {
     if (ring) ring.style.setProperty('--p', pct);
     const ap = $('#aktprog');
     if (ap) ap.style.width = pct + '%';
+    // Licznik sekund też musi żyć — był rysowany raz przy render() i stał
+    // w miejscu na wartości z chwili wejścia na ekran, choć pasek obok się sunął.
+    const ac = $('#aktczas');
+    if (ac) ac.textContent = Math.max(0, (MINE.ms - (Date.now() - MINE.t0)) / 1000).toFixed(1);
   };
   rysuj();
   MINE.tick = setInterval(rysuj, 80);
@@ -3116,18 +3120,22 @@ function pasekAktywnosci() {
     ? Math.min(100, (Date.now() - MINE.t0) / MINE.ms * 100)
     : (MINE?.pauza ? 100 : 0);
   const zostalo = MINE?.ms ? Math.max(0, (MINE.ms - (Date.now() - MINE.t0)) / 1000) : null;
+  // Kliknięcie prowadzi DO TEJ PROFESJI, tak samo jak koło w górnej belce —
+  // ta sama akcja `skillgo`, więc oba skróty zachowują się identycznie.
+  // Treść jest przyciskiem, a "Przerwij" stoi OBOK niego, nie w środku:
+  // przycisk w przycisku to nieprawidłowy HTML i klik w "Przerwij"
+  // wyzwalałby przy okazji przejście do profesji.
   return `<div class="akt-box">
-    <span class="ic">${sk?.ic ?? '⛏'}</span>
-    <div class="grow">
-      <div class="t1">${esc(r?.nodeLabel ?? r?.label ?? akt.res)}
-        <small>${esc(sk?.label ?? '')}</small></div>
-      <div class="bar"><i id="aktprog" style="width:${pct}%"></i></div>
-      <div class="t2">${[
-        MINE?.ms ? `cykl ${(MINE.ms / 1000).toFixed(1)} s` : '',
-        zostalo != null ? `zostało ${zostalo.toFixed(1)} s` : '',
-        r?.xp ? `${r.xp} exp za cykl` : '',
-      ].filter(Boolean).join(' · ')}</div>
-    </div>
+    <button class="akt-go" data-act="skillgo" data-t="zbierackie"
+      data-skill="${esc(akt.skill)}" title="Przejdź do ${esc(sk?.label ?? 'tej profesji')}">
+      <span class="ic">${sk?.ic ?? '⛏'}</span>
+      <span class="grow">
+        <span class="t1">${esc(r?.nodeLabel ?? r?.label ?? akt.res)}
+          <small>${esc(sk?.label ?? '')}</small></span>
+        <span class="bar"><i id="aktprog" style="width:${pct}%"></i></span>
+        <span class="t2">${MINE?.ms ? `cykl ${(MINE.ms / 1000).toFixed(1)} s · ` : ''}zostało <b id="aktczas">${zostalo != null ? zostalo.toFixed(1) : '—'}</b> s${r?.xp ? ` · ${r.xp} exp za cykl` : ''}</span>
+      </span>
+    </button>
     <button class="btn" data-act="minestop">Przerwij</button>
   </div>`;
 }

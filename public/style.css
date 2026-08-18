@@ -221,7 +221,14 @@ button{font:inherit;color:inherit;background:none;border:0}
 .akt-box{display:flex;align-items:center;gap:11px;margin:0 0 10px;padding:9px 12px;
   background:var(--stone-hi);border:1px solid var(--brass);border-radius:var(--r-md)}
 .akt-box.pusty{border-color:var(--edge-soft);border-style:dashed}
-.akt-box>.ic{font-size:24px;line-height:1;flex:none}
+/* Tresc boxa jest przyciskiem prowadzacym do profesji; „Przerwij” stoi obok,
+   nie w srodku — przycisk w przycisku to nieprawidlowy HTML. */
+.akt-go{display:flex;align-items:center;gap:11px;flex:1;min-width:0;
+  background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;
+  padding:3px 5px;margin:-3px -5px;border-radius:var(--r-sm)}
+.akt-go:hover{background:rgba(200,154,74,.07)}
+.akt-go:active{background:var(--press)}
+.akt-box .ic{font-size:24px;line-height:1;flex:none}
 .akt-box .grow{min-width:0;display:flex;flex-direction:column;gap:3px}
 .akt-box .t1{font-size:15px;display:flex;align-items:baseline;gap:7px}
 .akt-box .t1 small{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
