@@ -1063,9 +1063,19 @@ button.topbar:active{background:var(--press)}
 .tabs button{padding:8px 1px 10px;min-height:var(--tap)}
 .tabs button .ic{font-size:18px}
 .tabs button .tx{font-size:11px;letter-spacing:0}
-@media (max-width:400px){
-  .tabs button .ic{font-size:17px}
-  .tabs button .tx{font-size:11px}
+
+/* NA TELEFONIE ZOSTAJĄ SAME IKONY.
+   Sześć podpisów na 375 px to sześć kolumn po ~62 px — „PRZYWOŁANIE"
+   i „EKWIPUNEK" mieściły się tam tylko dlatego, że font zjechał do granicy
+   czytelności. Sama ikona jest większa, celniejsza pod kciuk i nie kłóci się
+   z progiem 11 pt, bo nie ma już czego ściskać.
+   Nazwa zostaje w atrybucie title i w aria-label — czytnik ekranowy dalej
+   wie, gdzie prowadzi każda zakładka. */
+@media (max-width:759px){
+  .tabs button{padding:0;gap:0;place-items:center}
+  .tabs button .tx{display:none}
+  .tabs button .ic{font-size:23px;opacity:.9}
+  .tabs button[aria-selected="true"] .ic{opacity:1}
 }
 @media (min-width:760px){
   .tabs button .ic{font-size:20px}
