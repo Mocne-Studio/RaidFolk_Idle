@@ -259,6 +259,15 @@ function enterGame() {
 
   $('#start').hidden = true;
   $('#app').hidden = false;
+  // KRÓTKIE WEJŚCIE TREŚCI. Odkąd ekran ładowania nie pokazuje się przy szybkim
+  // wczytaniu, odświeżenie było NIEODRÓŻNIALNE od jego braku — obraz wracał
+  // identyczny, więc nie było wiadomo, czy kliknięcie w ogóle zadziałało.
+  // 180 ms na pojawienie się wystarcza, żeby oko złapało „to przyszło od nowa",
+  // a nie na tyle, żeby na cokolwiek czekać. Klasa schodzi po animacji, więc
+  // nie łapie kolejnych renderów.
+  const app = $('#app');
+  app.classList.add('wchodzi');
+  setTimeout(() => app.classList.remove('wchodzi'), 400);
   // Strona przestaje się przewijać — dolne menu ma stać w miejscu.
   document.body.classList.add('wgrze');
   // Serwer jest właścicielem ustawień — po wczytaniu postaci jego wersja wygrywa.

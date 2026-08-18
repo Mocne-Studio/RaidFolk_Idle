@@ -1625,3 +1625,12 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 /* Niska jakość gasi animacje w całej grze — tu też. */
 [data-quality="niska"] .lad-godlo,[data-quality="niska"] .lad-pasek i{animation:none}
 [data-quality="niska"] #ladowanie > *{animation:lad-wejscie 0s ease .22s forwards}
+
+/* Jednorazowe wejście gry po wczytaniu — jedyny sygnał, że odświeżenie się
+   zdarzyło, odkąd ekran ładowania nie pokazuje się przy szybkim połączeniu.
+   Dotyczy TREŚCI, nie belek: pasek górny i dolne menu stoją w miejscu,
+   bo to one dają poczucie, że aplikacja jest ta sama. */
+#app.wchodzi .screens{animation:app-wejscie .18s ease-out}
+@keyframes app-wejscie{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+[data-quality="niska"] #app.wchodzi .screens{animation:none}
+@media (prefers-reduced-motion:reduce){#app.wchodzi .screens{animation:none}}
