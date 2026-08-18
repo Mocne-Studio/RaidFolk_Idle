@@ -15,7 +15,11 @@
   /* iOS: promienie i cel dotyku trzymane w jednym miejscu */
   --r-lg:14px; --r-md:10px; --r-sm:8px; --tap:44px;
   --sep:rgba(233,224,210,.09);         /* separator w duchu iOS-owego hairline */
-  --z:1;                               /* skala całego okna gry — patrz #app */
+  /* SZEROKOŚĆ GRY NA DUŻYM EKRANIE. Jedno miejsce — patrz #app. */
+  --gra-szer:1440px;
+  /* PASKI PRZEWIJANIA — patrz sekcja PRZEWIJANIE. Kolory idą z palety motywu,
+     więc pasek zmienia się razem z motywem i nie ma pięciu miejsc do poprawiania. */
+  --pasek-gr:9px;
 }
 *{box-sizing:border-box}
 html,body{height:100dvh}
@@ -33,25 +37,60 @@ body{
 body.wgrze{position:fixed;inset:0;width:100%;overflow:hidden}
 button{font:inherit;color:inherit}
 
-/* Gra zajmuje całe okno. Dawny limit 520/900/1180 px zniknął na polecenie:
-   w oknie i na pełnym ekranie ma być na całą szerokość. */
+/* SZEROKOŚĆ GRY JEST STAŁA: 1440 px, wyśrodkowana, tło po bokach.
+   Historia tego miejsca: najpierw limit 520/900/1180, potem pełna szerokość okna
+   z powiększaniem schodkami, teraz z powrotem stała kolumna — tym razem 1440,
+   bo na tyle rozchodzą się układy dwu- i trójkolumnowe (Ekwipunek, Skille).
+   ZOOM ZNIKNĄŁ ŚWIADOMIE, nie przez przeoczenie: skalował cały #app, więc
+   „stałe 1440 px" na monitorze 1900 px dawało w rzeczywistości 1843 px.
+   Stała szerokość i skalowanie okna wykluczają się — trzeba było wybrać jedno. */
 #app{display:flex;flex-direction:column;background:var(--stone);overflow:hidden;
-  /* Gra bierze CAŁĄ szerokość okna. Na dużych ekranach nie rozciągamy układu
-     w pasek 4K, tylko POWIĘKSZAMY go: zoom skaluje wektorowo, więc nic nie mięknie.
-     Wysokość idzie przez 100% z body (a nie 100dvh tutaj) — pod zoom-em procenty
-     przeliczają się same, jednostki viewportu NIE. Zmierzone, nie zgadnięte. */
-  zoom:var(--z);
-  width:100%;height:100%;max-width:none;margin:0}
+  /* Wysokość idzie przez 100% z body, a nie 100dvh — na telefonie pasek adresu
+     chowa się i wraca, a jednostki viewportu skaczą razem z nim. */
+  width:100%;height:100%;max-width:var(--gra-szer);margin:0 auto;
+  /* Krawędzie mówią, że kolumna kończy się celowo, a nie że gra się urwała. */
+  border-left:1px solid var(--edge-soft);border-right:1px solid var(--edge-soft)}
+/* Dopóki okno jest węższe niż kolumna, krawędzie tylko zjadałyby dwa piksele szerokości. */
+@media (max-width:1441px){ #app{border-left:0;border-right:0} }
 /* display:flex bije domyslne [hidden]{display:none} — bez tego pusty ekran gry
    wisial pod ekranem startowym i dalo sie do niego doskrolowac */
 #app[hidden],#start[hidden]{display:none}
 #start{max-width:520px}
 @media (min-width:760px){ #start{max-width:640px} }
-/* Skala rośnie schodkami razem z oknem. Przeglądarka bez obsługi zoom-u
-   ignoruje go i dostaje dokładnie dawny układ — nic się nie psuje. */
-@media (min-width:1500px){ :root{--z:1.12} }
-@media (min-width:1900px){ :root{--z:1.28} }
-@media (min-width:2500px){ :root{--z:1.5} }
+
+/* ==========================================================================
+   PRZEWIJANIE
+   Każde pudełko, które się przewija, dostaje TEN SAM pasek: log walki, plecak,
+   bestiariusz, kolumny Skilli, sakwa, ekran tworzenia herbu. Kolory biorą się
+   z palety motywu, więc pasek zmienia się razem z motywem i nie ma pięciu miejsc
+   do poprawiania po każdej zmianie wyglądu.
+
+   Reguły celują w `*` świadomie — dzięki temu każde NOWE przewijane pudełko
+   dostaje pasek samo, bez dopisywania go do listy. Miejsca, które chcą pasek
+   UKRYĆ (poziomy pasek drużyny na telefonie), nadpisują to wyższą
+   specyficznością i dalej działają.
+
+   Firefox rozumie scrollbar-width/color, WebKit własne pseudo-elementy — stąd
+   dwa zapisy tego samego. Przeglądarka, która nie zna żadnego, dostaje pasek
+   systemowy i nic się nie psuje.
+   ========================================================================== */
+*{scrollbar-width:thin;scrollbar-color:var(--edge) transparent}
+*::-webkit-scrollbar{width:var(--pasek-gr);height:var(--pasek-gr)}
+/* Tór zostaje przezroczysty: pasek kładzie się NA panelu, zamiast malować wzdłuż
+   niego drugą krechę w innym kolorze. */
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{
+  /* Przezroczysta ramka plus background-clip robi wąski suwak w szerokim torze:
+     palec ma w co trafić, a oko widzi cienką kreskę. */
+  background:var(--edge);border:2px solid transparent;background-clip:content-box;
+  border-radius:99px}
+*::-webkit-scrollbar-thumb:hover{background:var(--ink-mute);background-clip:content-box}
+*::-webkit-scrollbar-thumb:active{background:var(--brass);background-clip:content-box}
+*::-webkit-scrollbar-corner{background:transparent}
+/* Na wąskim ekranie pasek systemowy i tak jest nakładką — nie ma po co
+   zabierać mu dziewięciu pikseli z szerokości treści. */
+@media (max-width:759px){ :root{--pasek-gr:6px} }
+
 
 /* ==========================================================================
    MOTYWY
@@ -738,9 +777,10 @@ button.card:active{background:var(--press)}
 /* drużyna */
 .team-row{width:100%;text-align:left;cursor:pointer;align-items:center}
 @media (max-width:759px){
+  /* Pasek BYŁ tu schowany. Został odkryty razem z nową oprawą pasków: cienka
+     kreska w kolorze motywu nie zawadza, a mówi wprost, że lista jedzie dalej w bok. */
   .two-col>.team-list{display:flex;flex-direction:row;gap:5px;overflow-x:auto;flex:none;
-    padding-bottom:3px;scrollbar-width:none;-ms-overflow-style:none}
-  .two-col>.team-list::-webkit-scrollbar{display:none}
+    padding-bottom:3px}
   .team-list .team-row{flex:0 0 174px;margin-bottom:0;padding:8px 9px}
 }
 .team-go{cursor:pointer;width:100%;text-align:left}
@@ -1080,8 +1120,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 /* ---------- skille zbierackie ---------- */
 /* Na telefonie lista profesji leży poziomo jako pasek — pionowa zjadłaby ekran. */
 .three-col>.skill-list{display:flex;flex-direction:row;gap:5px;overflow-x:auto;flex:none;padding-bottom:6px}
-.three-col>.skill-list{scrollbar-width:none;-ms-overflow-style:none}
-.three-col>.skill-list::-webkit-scrollbar{display:none}
+/* Tu też pasek był schowany — z tego samego powodu wrócił. */
 .skillrow{display:flex;align-items:center;gap:6px;flex:none;font:inherit;color:var(--ink-dim);
   background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
   padding:7px 9px;cursor:pointer;position:relative}
