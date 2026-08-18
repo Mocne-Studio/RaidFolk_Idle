@@ -150,25 +150,21 @@ function buildPickers() {
   wire('#pickInk', 'ink');
 }
 
-// EKRAN ŁADOWANIA POKAZUJE SIĘ DOPIERO, GDY JEST NA CO CZEKAć.
-// Mignięcie na ułamek sekundy jest gorsze niż brak ekranu w ogóle, więc:
-//   • przez pierwsze POKAZ_PO ms jest przezroczysty — szybkie wczytanie (a takie
-//     jest każde po sieci lokalnej) nie pokaże go ANI RAZU,
-//   • jeśli jednak zdąży się pojawić, zostaje minimum MIN_WIDOCZNY ms, żeby
-//     nie mrugnął w drugą stronę.
-// Tło jest w kolorze gry, więc ta cisza przed pokazaniem wygląda jak sama gra,
-// a nie jak biała dziura.
+// EKRAN ŁADOWANIA POKAZUJE SIĘ ZAWSZE I NA TYLE DŁUGO, ŻEBY BYŁ WIDOCZNY.
+//
+// Przeszedł trzy podejścia i to jest wniosek: przy 9 ms wczytania KAŻDA próba
+// pokazania go „tylko gdy trzeba" kończy się mrugnięciem — albo miga sam ekran,
+// albo miga treść pod nim. Więc się nie mieścimy: ekran stoi PEŁNE MIN_WIDOCZNY ms
+// niezależnie od tego, jak szybko odpowie serwer.
+//
+// Pół sekundy to świadoma cena za to, że odświeżenie widać i że nic nie migocze.
 const LAD_T0 = Date.now();
-const LAD_POKAZ_PO = 220;
-const LAD_MIN_WIDOCZNY = 550;
+const LAD_MIN_WIDOCZNY = 500;
 
 function schowajLadowanie() {
   const el = $('#ladowanie');
   if (!el || el.hidden) return;
-  const minelo = Date.now() - LAD_T0;
-  // Nie zdążył się pojawić — zdejmujemy bez animacji, bo nie ma czego wygaszać.
-  if (minelo < LAD_POKAZ_PO) { el.hidden = true; return; }
-  const czekaj = Math.max(0, LAD_POKAZ_PO + LAD_MIN_WIDOCZNY - minelo);
+  const czekaj = Math.max(0, LAD_MIN_WIDOCZNY - (Date.now() - LAD_T0));
   setTimeout(() => {
     el.classList.add('znika');
     setTimeout(() => { el.hidden = true; }, 260);
@@ -259,15 +255,11 @@ function enterGame() {
 
   $('#start').hidden = true;
   $('#app').hidden = false;
-  // KRÓTKIE WEJŚCIE TREŚCI. Odkąd ekran ładowania nie pokazuje się przy szybkim
-  // wczytaniu, odświeżenie było NIEODRÓŻNIALNE od jego braku — obraz wracał
-  // identyczny, więc nie było wiadomo, czy kliknięcie w ogóle zadziałało.
-  // 180 ms na pojawienie się wystarcza, żeby oko złapało „to przyszło od nowa",
-  // a nie na tyle, żeby na cokolwiek czekać. Klasa schodzi po animacji, więc
-  // nie łapie kolejnych renderów.
-  const app = $('#app');
-  app.classList.add('wchodzi');
-  setTimeout(() => app.classList.remove('wchodzi'), 400);
+  // ŻADNEJ ANIMACJI WEJŚCIA. Próbowałem sygnalizować odświeżenie ruchem — najpierw
+  // ekranem ładowania, potem 180 ms pojawiania się treści — i przy 9 ms wczytania
+  // KAŻDY taki ruch czyta się jako mrugnięcie, nie jako informacja.
+  // Gra pojawia się po prostu gotowa. Jeśli odświeżenie ma być kiedyś widoczne,
+  // musi to być coś, co NIE miga: napis, znacznik czasu, cokolwiek statycznego.
   // Strona przestaje się przewijać — dolne menu ma stać w miejscu.
   document.body.classList.add('wgrze');
   // Serwer jest właścicielem ustawień — po wczytaniu postaci jego wersja wygrywa.
