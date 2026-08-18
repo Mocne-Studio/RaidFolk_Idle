@@ -3225,13 +3225,14 @@ function statyPelne(st, baza = null, pelne = false) {
   const A = st.attrs ?? {};
   const B = st.breakdown ?? {};
 
+  // To samo co w zeSprzetu: różnica z surowych wartości, zaokrąglenie na końcu.
   const R = (klucz, fmt = nf) => {
     if (!baza) return '';
-    const b = baza[klucz], t = st[klucz];
+    const b = baza.raw?.[klucz] ?? baza[klucz], t = st.raw?.[klucz] ?? st[klucz];
     if (b == null || t == null) return '';
     const d = t - b;
-    if (Math.abs(d) < 0.005) return `Twoje ${fmt(b)}`;
-    return `Twoje ${fmt(b)} · sprzęt <b>${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</b>`;
+    if (Math.abs(d) < 0.5) return `Twoje ${fmt(baza[klucz])}`;
+    return `Twoje ${fmt(baza[klucz])} · sprzęt <b>${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</b>`;
   };
 
   if (!pelne || !F.hpPerStamina) {
@@ -3273,10 +3274,19 @@ function statyPelne(st, baza = null, pelne = false) {
   const dmg = B.dmg ?? {};
   const attrGlowny = { dwureczna: 'Siła', jednoreczna: 'Siła',
     dystansowe: 'Precyzja', magiczne: 'Intelekt' }[st.wtype] ?? 'Siła';
+  // WKŁAD SPRZĘTU. Liczony z SUROWYCH wartości (`raw`), a zaokrąglany DOPIERO
+  // na końcu. Wcześniej odejmowałem dwie osobno zaokrąglone liczby i wynik potrafił
+  // ZMALEĆ przy rosnącej statystyce: przy Sile 8 chip pokazywał „+19", przy 10 „+18",
+  // choć atak w tym czasie rósł z 24,67 na 25,09. Znikający punkt brał się z tego,
+  // że liczba pomocnicza (postaci bez sprzętu) przeskakiwała próg zaokrąglenia
+  // wcześniej niż prawdziwa. Teraz różnica jest monotoniczna.
   const zeSprzetu = (klucz, fmt = nf) => {
-    if (!baza || baza[klucz] == null || st[klucz] == null) return null;
-    const d = st[klucz] - baza[klucz];
-    return Math.abs(d) < 0.005 ? null : `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}`;
+    if (!baza) return null;
+    const t = st.raw?.[klucz] ?? st[klucz];
+    const b = baza.raw?.[klucz] ?? baza[klucz];
+    if (t == null || b == null) return null;
+    const d = t - b;
+    return Math.abs(d) < 0.5 ? null : `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}`;
   };
 
   return `<div class="statcards">

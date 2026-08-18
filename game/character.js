@@ -548,8 +548,15 @@ export function computeStats(ch, options = {}) {
     return sum + (a[attr] ?? 0) * waga * (1 + (T.attrWeight[attr] ?? 0));
   }, 0);
 
-  const damage = Math.round((cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor)
-    * (1 + T.dmgPct + K.dmgPct + (B.dmgPct ?? 0)));
+  // SUROWY atak, PRZED zaokrągleniem. Potrzebny UI-owi do rozbicia „Twoje / sprzęt":
+  // ten wkład liczy się jako różnica dwóch przebiegów computeStats (z ekwipunkiem
+  // i z pustymi slotami), a odejmowanie dwóch OSOBNO zaokrąglonych liczb potrafi
+  // zmaleć przy rosnącej statystyce — gracz dokładał punkt Siły i widział
+  // „sprzęt +19" → „+18", choć jego atak właśnie wzrósł. Różnicę liczy się
+  // teraz z tych surowych wartości, a zaokrągla DOPIERO na końcu.
+  const damageRaw = (cc.baseDamage + dmgFlat) * (1 + mainAttr / divisor)
+    * (1 + T.dmgPct + K.dmgPct + (B.dmgPct ?? 0));
+  const damage = Math.round(damageRaw);
   // Attack Speed z afiksów wchodzi TU, przeliczony na jednostki silnika —
   // dzięki temu jest jedna skala i jedno miejsce, w którym się je łączy.
   // ZRĘCZNOŚĆ TEŻ PODBIJA AS: agiSpeedDivisor 200 to +0,5 speed za punkt,
@@ -590,6 +597,8 @@ export function computeStats(ch, options = {}) {
     hpRegen: Math.round(a.witalnosc * cc.hpRegenPerVit),
     hp: Math.max(1, maxHp - (ch.hpLost ?? 0)),
     damage: Math.max(1, damage),
+    // Surowce dla rozbicia w UI — patrz komentarz przy damageRaw.
+    raw: { damage: Math.max(1, damageRaw), maxHp, armor },
     speed: Math.max(20, speed),
     // Liczba, którą widzi gracz. Ta sama skala u mobów — patrz makeEnemy.
     attackSpeed: attackSpeed(Math.max(20, speed)),
