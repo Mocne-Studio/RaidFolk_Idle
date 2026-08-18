@@ -215,6 +215,20 @@ button{font:inherit;color:inherit;background:none;border:0}
 .akt-chip:hover{border-color:var(--brass)}
 .akt-chip:active{background:var(--press)}
 
+/* DUŻY BOX „CO ROBISZ TERAZ" w sekcji Skilli.
+   Koło w górnej belce jest SKRÓTEM widocznym z każdej zakładki. Tutaj — na ekranie,
+   który służy do zbierania — stoi pełna informacja i przerwanie pod ręką. */
+.akt-box{display:flex;align-items:center;gap:11px;margin:0 0 10px;padding:9px 12px;
+  background:var(--stone-hi);border:1px solid var(--brass);border-radius:var(--r-md)}
+.akt-box.pusty{border-color:var(--edge-soft);border-style:dashed}
+.akt-box>.ic{font-size:24px;line-height:1;flex:none}
+.akt-box .grow{min-width:0;display:flex;flex-direction:column;gap:3px}
+.akt-box .t1{font-size:15px;display:flex;align-items:baseline;gap:7px}
+.akt-box .t1 small{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
+.akt-box .bar{height:6px;border-radius:3px;background:var(--void);overflow:hidden}
+.akt-box .bar i{display:block;height:100%;background:var(--brass);transition:width .1s linear}
+.akt-box .btn{flex:none}
+
 /* CHMURKA W MOTYWIE STRONY. Systemowa podpowiedź przeglądarki ma własne tło,
    własny krój i pojawia się po sekundzie — w ciemnym interfejsie wygląda jak
    wycinek z innego programu. Ta jest z tej samej palety i wychodzi od razu. */

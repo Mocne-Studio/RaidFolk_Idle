@@ -3044,6 +3044,8 @@ function startMineLoop(skill, res, ms, elapsed = 0) {
     // a nie przerysowuję paska — przebudowa DOM co 80 ms zabierałaby przewijanie.
     const ring = $('#hdrAkt .ring');
     if (ring) ring.style.setProperty('--p', pct);
+    const ap = $('#aktprog');
+    if (ap) ap.style.width = pct + '%';
   };
   rysuj();
   MINE.tick = setInterval(rysuj, 80);
@@ -3096,6 +3098,40 @@ function stopMineLoop() {
 // i atrybuty. Drużyna została podglądem składu i niczym więcej.
 let skillTab = 'zbierackie';   // 'zbierackie' | 'bojowe' | 'atrybuty'
 
+// Co teraz leci — pełny wiersz z postępem i przerwaniem.
+// Żródłem prawdy jest S.activity i MINE, dokładnie jak w kole w górnej belce,
+// więc obie rzeczy nie mają jak się rozść.
+function pasekAktywnosci() {
+  const akt = S.activity;
+  if (!akt) {
+    return `<div class="akt-box pusty">
+      <div class="grow"><div class="t1">Nic się nie zbiera</div>
+        <div class="t2">Wybierz profesję i surowiec niżej — cykl leci sam,
+          także gdy oglądasz inne zakładki.</div></div>
+    </div>`;
+  }
+  const sk = S.skills?.[akt.skill];
+  const r = sk?.resources?.find(x => x.id === akt.res);
+  const pct = MINE && !MINE.pauza
+    ? Math.min(100, (Date.now() - MINE.t0) / MINE.ms * 100)
+    : (MINE?.pauza ? 100 : 0);
+  const zostalo = MINE?.ms ? Math.max(0, (MINE.ms - (Date.now() - MINE.t0)) / 1000) : null;
+  return `<div class="akt-box">
+    <span class="ic">${sk?.ic ?? '⛏'}</span>
+    <div class="grow">
+      <div class="t1">${esc(r?.nodeLabel ?? r?.label ?? akt.res)}
+        <small>${esc(sk?.label ?? '')}</small></div>
+      <div class="bar"><i id="aktprog" style="width:${pct}%"></i></div>
+      <div class="t2">${[
+        MINE?.ms ? `cykl ${(MINE.ms / 1000).toFixed(1)} s` : '',
+        zostalo != null ? `zostało ${zostalo.toFixed(1)} s` : '',
+        r?.xp ? `${r.xp} exp za cykl` : '',
+      ].filter(Boolean).join(' · ')}</div>
+    </div>
+    <button class="btn" data-act="minestop">Przerwij</button>
+  </div>`;
+}
+
 function renderSkille() {
   let h = `<div class="scr-head">
     <button class="lnk" data-act="tab" data-tab="postac">‹ ${esc(S.name)}</button>
@@ -3107,6 +3143,13 @@ function renderSkille() {
     <button data-act="skilltab" data-t="atrybuty" aria-selected="${skillTab === 'atrybuty'}">
       Atrybuty${S.unspentAttr ? ` · ${S.unspentAttr}` : ''}</button>
   </div>`;
+
+  // DUZY BOX „CO ROBISZ TERAZ", zaraz pod wyborem sekcji.
+  // Koło w górnej belce zostaje SKRÓTEM widocznym z każdej zakładki, ale tutaj —
+  // na ekranie, który SŁUŻY do zbierania — gracz ma prawo do pełnej informacji
+  // i do przerwania bez szukania. Stoi na każdej z trzech sekcji, bo zbieranie
+  // leci dalej także wtedy, gdy oglądasz Bojowe albo Atrybuty.
+  h += pasekAktywnosci();
 
   if (skillTab === 'bojowe') return h + sekcjaBojowe();
   if (skillTab === 'atrybuty') return h + sekcjaAtrybuty();
