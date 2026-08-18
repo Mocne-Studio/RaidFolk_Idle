@@ -1062,12 +1062,23 @@ button.card:active{background:var(--press)}
 .statcard-head .val{font-family:var(--mono);font-size:17px;color:var(--brass)}
 .statcard .co{margin:0 0 7px}
 .statcard .co b{font-weight:400;color:var(--ink-dim)}
-.statcard-linia{display:flex;gap:9px;font-size:11px;line-height:1.35;
-  padding-top:5px;border-top:1px solid var(--sep)}
-.statcard-linia .et{font-family:var(--mono);font-size:11px;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--ink-mute);flex:0 0 88px}
-.statcard-linia .tr{flex:1;min-width:0;color:var(--ink-dim)}
-.statcard-linia .tr b{font-weight:400;color:var(--brass)}
+/* SKŁADNIKI JAKO KAFELKI. Szablon rysował je od dawna, ale CSS został po starej
+   strukturze — przez to „baza / 120 / witalność / 32" zlepiało się w jeden ciąg
+   kursywy: „baza120witalnoś{32". Każdy składnik ma teraz własne pudełko,
+   podpis nad wartością i oddech dookoła. */
+.skladniki{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px}
+.sk{display:flex;flex-direction:column;gap:1px;padding:4px 9px;min-width:0;
+  background:var(--stone);border:1px solid var(--edge-soft);border-radius:var(--r-sm)}
+.sk i{font-style:normal;font-family:var(--mono);font-size:11px;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--ink-mute);line-height:1.1}
+.sk b{font-weight:400;font-family:var(--mono);font-size:15px;color:var(--ink);line-height:1.2}
+/* Wkład sprzętu wyróżnia się kolorem — to jedyna liczba, którą gracz zmienia
+   zakładając coś innego, więc ma się rzucać w oczy. */
+.sk.mocny{border-color:var(--brass)}
+.sk.mocny b{color:var(--brass)}
+.statcard .nota{font-size:12px;line-height:1.4;color:var(--ink-mute);
+  padding-top:6px;border-top:1px solid var(--sep)}
+.statcard .nota b{font-weight:400;color:var(--ink-dim)}
 @media (max-width:520px){
   .statcard-linia{flex-direction:column;gap:1px}
   .statcard-linia .et{flex:none}
@@ -1555,3 +1566,7 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 .wersja-bar b{display:block;font-size:13px;letter-spacing:.06em}
 .wersja-bar code{font-family:var(--mono);background:rgba(0,0,0,.28);padding:1px 5px;border-radius:3px}
 .wersja-bar .btn{border-color:#fff;background:#fff;color:var(--blood);font-weight:600}
+
+/* Przycisk uzbrojony do czynności nieodwracalnej — drugie kliknięcie wykona.
+   Zastępuje natywne confirm(), które w webview potrafi wrócić false bez pytania. */
+.btn.groza{border-color:var(--blood);color:var(--blood)}

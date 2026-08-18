@@ -4458,7 +4458,24 @@ document.addEventListener('click', async (ev) => {
       const d = await api('potion', { id: btn.dataset.id ?? null });
       if (!d.error) { toast(`${d.label}: +${nf(d.ile)} HP`); render(); }
     } else if (act === 'logout') {
-      if (!confirm('Wrócić do ekranu startowego?\n\nPostać zostaje na serwerze — wrócisz do niej kodem z zakładki Konto.')) return;
+      // POTWIERDZENIE W GRZE, NIE PRZEZ confirm().
+      // Natywne okno dialogowe bywa blokowane w webview — w podglądzie i w APK
+      // z Capacitora `confirm()` potrafi wrócić false bez pytania, więc przycisk
+      // wyglądał na zepsuty: klikasz i nic się nie dzieje.
+      // Dwa kliknięcia zamiast okna: pierwsze uzbraja, drugie wykonuje.
+      if (btn.dataset.pewne !== '1') {
+        btn.dataset.pewne = '1';
+        btn.classList.add('groza');
+        btn.textContent = 'Na pewno? Kliknij jeszcze raz';
+        toast('Postać zostaje na serwerze — wrócisz do niej kodem z zakładki Konto');
+        setTimeout(() => {
+          if (!btn.isConnected || btn.dataset.pewne !== '1') return;
+          btn.dataset.pewne = '0';
+          btn.classList.remove('groza');
+          btn.textContent = 'Zmień postać';
+        }, 4000);
+        return;
+      }
       localStorage.removeItem('rf_token');
       location.reload();
     } else if (act === 'copycode') {
