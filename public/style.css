@@ -226,17 +226,22 @@ button{font:inherit;color:inherit;background:none;border:0}
 .akt-go{display:flex;align-items:center;gap:11px;flex:1;min-width:0;
   background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;
   padding:3px 5px;margin:-3px -5px;border-radius:var(--r-sm)}
-/* PODSWIETLA SIE CALY BOX, nie sam przycisk. Klikalna tresc zajmuje tylko
-   lewa czesc, wiec hover na niej rozjasnial wycinek i wygladal na blad ukladu.
-   :has() przenosi stan na rodzica — przegladarka, ktora go nie zna, po prostu
-   nie podswietli nic i nic sie nie psuje. */
-.akt-box:has(.akt-go:hover){background:rgba(200,154,74,.07);border-color:var(--brass)}
-.akt-box:has(.akt-go:active){background:var(--press)}
+/* CALY BOX JEST JEDNYM CELEM. Wcześniej klikalna była tylko lewa część —
+   pusty pas między treścią a „Przerwij” nie reagował ani na klik, ani na hover,
+   więc podświetlenie rozjaśniało wycinek i wyglądało na błąd układu.
+   Pseudoelement rozciąga przycisk na cały box; „Przerwij” leży NAD nim,
+   więc dalej łapie własne kliknięcie. */
+.akt-box{position:relative}
+.akt-go::before{content:"";position:absolute;inset:0;border-radius:var(--r-md)}
+.akt-box .btn{position:relative;z-index:1}
+.akt-box:hover{background:rgba(200,154,74,.07);border-color:var(--brass)}
+.akt-box:active{background:var(--press)}
 .akt-go:hover,.akt-go:active{background:none}
-/* „Przerwij” ma WLASNY hover — to inna czynnosc niz przejscie do profesji,
-   wiec nie moze wygladac jak czesc tego samego klikniecia. */
+/* Jedyny wyjątek: „Przerwij”. To inna czynność niż przejście do profesji,
+   więc ma własny, ZAPEŁNIONY hover — i gasi podświetlenie całego boxa,
+   żeby nie wyglądało, że klika się obie rzeczy naraz. */
 .akt-box .btn:hover{border-color:var(--blood);background:var(--blood);color:var(--void)}
-.akt-box:has(.btn:hover){background:none;border-color:var(--brass)}
+.akt-box:has(.btn:hover){background:none;border-color:var(--edge)}
 .akt-box .ic{font-size:24px;line-height:1;flex:none}
 .akt-box .grow{min-width:0;display:flex;flex-direction:column;gap:3px}
 .akt-box .t1{font-size:15px;display:flex;align-items:baseline;gap:7px}
