@@ -179,9 +179,15 @@ dwóch przeciwników od piętra 3.** Wszystko zamknięte i zacommitowane.
 
 ## NEXT STEP
 
-**Werdykt właściciela**, potem zapowiedziane **umiejętności**.
+**ZACZNIJ OD ostatniego wpisu w `RAIDFOLK_IDLE_SESSION_LOG.md`** (sesja
+2026-08-18/19). Duża przebudowa rdzenia: **pancerz = pula (model bariery, LIVE)**,
+**atrybuty 4→7**, **typy broni z podziałem**, dużo czytelności. Commit `74999bc`.
 
-Dalej w kolejce: sloty drużyny 2–3, druga wyprawa (Mokradła Szeptu — definicja
+TODO „na koniec" (z końca wpisu sesji): ekrany Kolosa/Tytana liczą staty starym
+wzorem redukcji — pod barierą kłamią, przeliczyć. Strojenie afiksów nowych
+atrybutów, mnożnika `barrierPlayerArmorMult`, ranged divisor (130→100).
+
+Starsze w kolejce: sloty drużyny 2–3, druga wyprawa (Mokradła Szeptu — definicja
 już stoi w `config.expedition.lista`, brakuje jej tabeli dropów).
 
 ~~ALCHEMIA~~ — ZROBIONA. Poniżej zostaje kontekst decyzji: Ustalone z autorem tuż przed przerwą:

@@ -1050,3 +1050,76 @@ już pokazane w dwóch pełnych blokach; panel mikstur otwiera osobny przycisk
 `Leczenie`. Niedokończona walka i zdobyte piętro również stawiają główną akcję
 na samej górze. Widok 390×844 oraz oba rozwijane panele zostały sprawdzone.
 Wersja patcha: `2026-08-18.1330`.
+
+---
+
+## Sesja 2026-08-18/19 — bariera pancerza, 7 atrybutów, typy broni, czytelność
+
+Duży przebudowa rdzenia. Commit `74999bc`. Wersja `2026-08-19.0210`.
+
+**NAJWAŻNIEJSZE: pancerz to teraz PULA (model bariery).** `config.combat.armorModel`
+= `'barrier'` (WŁĄCZONE, live). Cios najpierw bije pulę pancerza; dopiero jej
+nadwyżka sięga HP. **Przebicie** omija pulę (prosto w HP), **Zmiażdżenie** łamie
+ją ×1.3 (`crushVsArmorMult`), **Magia** idzie po odporności na magię z pominięciem
+puli. Pula wraca CO WALKĘ (init w `mkUnit`/`barrierArmorMax`), HP zostaje.
+Rozmiar puli: mob **0.5×HP** (`barrierMobArmorRatio`), boss/kolos/tytan **0.25×HP**
+(`barrierBossArmorRatio`), gracz = pancerz sprzętu **×2** (`barrierPlayerArmorMult`).
+Stary model `'reduction'` (armor/(armor+K)) zostaje w kodzie za tą samą flagą —
+gałąź w `strike()` w `game/combat.js`. Pola jednostki: `armorMax` (pula max),
+`armorNow` (bieżąca). Snapshoty niosą oba.
+
+**Atrybuty 4→7.** Siła (obrażenia mele biała+2H), **Precyzja** (obrażenia dystans
++ celność), Intelekt (magia + mana), Zręczność (Attack Speed + unik), **Szczęście**
+(kryt), **Witalność** (HP + regeneracja HP w walce, `hpRegenPerVit`), **Twarda
+Skóra** (+% pancerza, `twardaSkoraPct` 0.03/pkt). „Atak" NIE jest atrybutem —
+to wynik. `weaponAttr.dystansowe='precyzja'`, `bohater.dmgAttrs=['sila','precyzja',
+'intelekt']`. **Migracja** (`migrate()` w character.js): stare postacie dostają
+ZWROT wszystkich punktów i respec (role się rozeszły). Afiksy sprzętu rolują
+wszystkie 7 (pula afiksów w config, `itemStatSummary` w content.js). Stary afiks
+„Wytrzymałość" mapuje się na Witalność.
+
+**Typy broni: główny + poboczny podział.** `weaponDamageSplit()` w content.js
+(mirror `bronPodzial()` w app.js). Miecz 80% Cięcie/20% Przebicie, Sztylet 100%
+Przebicie (melee-pierce), Młot/Buława Zmiażdżenie, Łuk/Kusza Przebicie, Oszczep
+90/10, magia 100% Magia. `strike()` blenduje odporności ważone po podziale.
+Smash przemianowany na **Crush / Zmiażdżenie** (id `smash` w środku zostaje).
+`damageSplit` dochodzi przez `mkUnit` (był bug — nie kopiował go).
+
+**Czytelność (dużo).** Podgląd „po założeniu" na itemie (realny Atak/HP/pula/Moc
+przed→po, endpoint `/api/preview` + `wearPreview`, cache `wearCache`). Rozbicie
+ataku (karta „Skąd bierze się Twój atak", `computeStats.breakdown`). Pancerz jako
+LICZBA obok HP w arenie (`🛡 N`) + log `🛡−X` przy pochłonięciu. Stat panel i
+podgląd pokazują `armorPool` (×2), nie surowiec, pod barierą. Rozbicie atrybutu
+(punkty vs sprzęt, `attrsBase` z serwera). **Reset atrybutów** za darmo
+(`/api/attrreset` + przycisk). **Hold-to-add** na „+" z akceleracją + input
+„ile na klik" (`/api/attr` przyjmuje `n`, pointer w app.js).
+
+**Grafiki.** Tytan (boss lvl 300, 100M HP, „nie do zajebania", `config.tytan`,
+świta jak Kolos, ekran `renderTytan`) z łupem **Aegis Tytana** (boska tarcza,
+rarity god, 8 wpisanych afiksów). **Zbroja Runiczna** (napierśnik). Render obrazków
+itemów przez mapę `ITEM_IMG` w app.js (`itemIcon()`). Portret Draegara z GIF-a 8-dir
+(klatka 0 = przód). Pliki: `public/img/{tytan,tarcza-boska,zbroja-runiczna}.png`.
+
+**Balans.** Wszystkie 7 celów `tools/balans.js --cel` trafione pod nowym modelem.
+Tabela pięter 1–50 zdrowa (bossy 10/20/30 to ściany, legendy 90/88/68%).
+`rozdajPunkty` w balans.js sypie w sila/witalnosc/twardaskora.
+
+**Inne z sesji.** Naprawiona walka (auto + resume — Codex zostawił pusty log przez
+pół-przeróbkę na /api/autotick; wróciło do runToEnd/resolveFight). Kolos po
+wygranej → powrót do menu (nie skok do wieży). Ikony emoji: sojusznicy wg klasy
+(tank tarcza/mag różdżka/dystans łuk), moby (`FAMILY_IC`), rośliny/ryby/potrawy
+(`LIFE_IC` w life-content.js), heal przy miksturach w Alchemii (`miksturyInfo`).
+Layout areny: usunięty label PRZÓD/ŚRODEK/TYŁ, samotny wróg nie pływa.
+
+### TODO na następny czat („na koniec zrobimy zmiany")
+- **Ekrany Kolosa/Tytana pod barierę.** `kolosWidok`/`tytanWidok` liczą „ile ci
+  brakuje" starym wzorem redukcji (`armor/(armor+K)`) — pod barierą te liczby
+  KŁAMIĄ. Przeliczyć na model puli.
+- **Strojenie afiksów** nowych atrybutów (precyzja/szczescie/witalnosc/twardaskora
+  — wartości min/max/perIlvl w config, na oko).
+- **Mnożnik pancerza gracza** `barrierPlayerArmorMult` (2.0) na prawdziwych buildach.
+- **Ranged divisor** zszedł 130→100 (Precyzja jest czysta) — sprawdzić czy dystans
+  nie za mocny vs mele.
+- **Afiksy dla nowych atrybutów działają**, ale mag/dystans build sprawdzić w praniu.
+- Ranking na komputerze ziomka pokazywał czerwoną kartę „serwer nie zna rankingu"
+  — to STARY serwer u niego, nie bug (kod OK, view() zawsze wysyła ranking).
