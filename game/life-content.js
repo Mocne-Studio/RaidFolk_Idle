@@ -112,11 +112,17 @@ export const FARMING_PRODUCTIONS = [
     [{ id: 'mistycznemleko', label: 'Mistyczne Mleko', yield: [1, 2] }]),
 ];
 
-const DUR = { early: 15 * 60_000, mid: 30 * 60_000, late: 45 * 60_000, end: 60 * 60_000 };
+// TRWAŁOŚĆ JEDZENIA LICZY SIĘ WYŁĄCZNIE WALKAMI.
+// Był tu drugi, równoległy licznik czasu (`DUR`) — buff wygasał po X walkach
+// ALBO po Y minutach, zależnie od tego, co skonćzyło się pierwsze. Dwa liczniki
+// na jedną rzecz to dwa razy więcej do wytłumaczenia i żadnej decyzji więcej
+// dla gracza: zegar tykał także wtedy, gdy nie walczył, więc potrawa potrafiła
+// wyparować nieużyta. Silnik i tak zjechał już na same walki (cleanupFoodBuffs
+// kasuje expiresAt), a to pole zostało i dalej ogłaszało nieistniejącą mechanikę.
 const WALKS = { early: 10, mid: 20, late: 30, end: 40 };
 const recipe = (id, label, category, lvl, xp, ms, koszt, effects, tier = 'early', buffSlot = 'main_meal') => ({
   id, label, category, lvl, xp, ms, koszt,
-  food: { category, buffSlot, durationMs: DUR[tier], walki: WALKS[tier], effects },
+  food: { category, buffSlot, walki: WALKS[tier], effects },
 });
 
 export const COOKING_RECIPES = [

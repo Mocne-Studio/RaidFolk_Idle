@@ -178,6 +178,9 @@ export function professionBonuses(ch, skill) {
   return out;
 }
 
+// ILE WALK WYTRZYMA POTRAWA. Jedyna miara trwałości jedzenia — równoległy
+// licznik czasu został usunięty, patrz komentarz przy WALKS w life-content.js.
+// Stare zapisy z pierwszej, czasowej wersji przeliczają się raz, po 90 s na walkę.
 export function foodFightCount(food) {
   if (food?.walki) return Math.max(1, Math.floor(food.walki));
   if (food?.expiresAt && food?.startedAt) {
