@@ -62,21 +62,24 @@
      Główna postać NIE MA KLASY — klasy należą do Sojuszników. -->
 
 <div id="app" hidden>
-  <!-- Cały pasek jest przyciskiem: herb i nick prowadzą do karty postaci,
-       bo Postać i Drzewko zeszły spod głównej nawigacji pod profil. -->
-  <button class="topbar" data-act="tab" data-tab="postac">
-    <div id="hdrCrest" class="hdr-crest"></div>
-    <div class="who">
-      <div class="n" id="hdrName">—</div>
-      <div class="m" id="hdrMeta">—</div>
-    </div>
-    <div class="rank" id="hdrRank"></div>
-    <div class="purse" id="hdrPurse">—</div>
-  </button>
-
-  <!-- Pasek zbierania. Pokazuje się, gdy wyjdziesz ze Skilli, a coś nadal
-       się zbiera — i pozwala przerwać bez wracania tam. -->
-  <div id="minebar" class="minebar" hidden></div>
+  <!-- GÓRNY PASEK. NIE jest już jednym <button>: w środku muszą stać klikalne
+       rzeczy (przerwanie zbierania), a przycisk w przycisku to nieprawidłowy HTML.
+       Przy okazji znika na dobre domyślna ramka przeglądarki, która robiła
+       jasny obrys wokół belki.
+       Trzy strefy: KTO (herb, imię, poziom) — CO SIĘ DZIEJE (rzeczy w tle)
+       — CO MASZ (pozycja w rankingu, złoto, klucze). -->
+  <div class="topbar">
+    <button class="hdr-kto" data-act="tab" data-tab="postac"
+            title="Twoja karta postaci — herb, opis o sobie, pełny ranking i ustawienia gry">
+      <div id="hdrCrest" class="hdr-crest"></div>
+      <div class="who">
+        <div class="n" id="hdrName">—</div>
+        <div class="m" id="hdrMeta">—</div>
+      </div>
+    </button>
+    <div class="hdr-akt" id="hdrAkt"></div>
+    <div class="hdr-boxy" id="hdrBoxy"></div>
+  </div>
 
   <div class="screens">
     <section class="screen on" id="s-wyprawa"></section>

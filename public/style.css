@@ -171,15 +171,67 @@ button{font:inherit;color:inherit;background:none;border:0}
 :root[data-quality="niska"] #app{background-image:none}
 
 /* ---------- nagłówek ---------- */
-.topbar{flex:none;display:flex;align-items:center;gap:10px;padding:10px 14px;
-  /* BELKA JEST CIEMNIEJSZA OD TREŚCI, ale tylko o tyle, żeby oko widziało
-     krawędź. Pełny --ground dzielił ekran na dwa światy — stąd --belka,
-     policzona jako punkt między tłem treści a --ground. */
+/* GÓRNY PASEK — trzy strefy: KTO · CO SIĘ DZIEJE · CO MASZ.
+   Nie jest już jednym <button>, więc mogą w nim stać klikalne rzeczy
+   (przerwanie zbierania) i nie ma skąd wrócić domyślnej ramce przeglądarki. */
+.topbar{flex:none;display:flex;align-items:center;gap:12px;padding:8px 14px;
   background:var(--belka);border:0;border-bottom:1px solid var(--edge)}
+.hdr-kto{display:flex;align-items:center;gap:10px;flex:1;min-width:0;
+  background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;
+  padding:4px 6px;margin:-4px -6px;border-radius:var(--r-sm)}
+.hdr-kto:active{background:var(--press)}
 .who{flex:1;min-width:0}
-.who .n{font-family:var(--display);font-size:16px;line-height:1.1}
-.who .m{font-family:var(--mono);font-size:12px;color:var(--ink-mute);letter-spacing:.05em;margin-top:2px}
-.purse{font-family:var(--mono);font-size:13px;color:var(--brass);text-align:right;line-height:1.5;flex:none}
+.who .n{font-family:var(--display);font-size:17px;line-height:1.15}
+.who .m{font-family:var(--mono);font-size:11px;color:var(--ink-mute);letter-spacing:.05em;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* CO MASZ — jeden rząd, bez ramek.
+   Wersja z trzema obramowanymi pudełkami i podpisami nad liczbami zajmowała pół
+   belki i ciągnęła oko na siebie zamiast na imię postaci. Teraz jest ikona
+   i wartość; co znaczy która, mówi podpowiedź pod kursorem. */
+.hdr-boxy{display:flex;align-items:center;gap:14px;flex:none}
+.hpoz{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);
+  font-size:15px;color:var(--ink-mute);cursor:help;line-height:1;white-space:nowrap}
+.hpoz b{font-weight:400;color:var(--ink)}
+/* Trofea to SVG, a globalna reguła daje im display:block — przez to korona
+   i hełm stały JEDNO POD DRUGIM i rozdymały belkę do 110 px. */
+.hpoz svg{display:block;width:15px;height:15px;flex:none}
+.hsep{width:1px;align-self:stretch;background:var(--edge);margin:2px 0}
+
+/* CO SIĘ DZIEJE. Rzeczy lecące w tle jako ikona z pierścieniem postępu.
+   Wcześniej miały własny pasek na całą szerokość pod nagłówkiem — kilkadziesiąt
+   pikseli wysokości na każdym ekranie po to, żeby pokazać jedną nazwę. */
+.hdr-akt{display:flex;align-items:center;gap:5px;flex:none;min-width:0}
+.akt-chip{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 5px;
+  background:var(--stone);border:1px solid var(--edge-soft);border-radius:999px;
+  font:inherit;color:var(--ink-dim);cursor:help;min-width:0}
+button.akt-chip{cursor:pointer}
+.akt-chip.pusty{border-style:dashed;color:var(--ink-mute)}
+.akt-chip .tx{display:flex;flex-direction:column;min-width:0;line-height:1.15}
+.akt-chip .tx b{font-weight:400;font-size:13px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.akt-chip .tx small{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
+.akt-chip.pusty .tx{font-size:13px}
+/* Pierścień postępu: stożek CSS zamiast SVG. Zmienną --p krecę co 80 ms
+   bez przerysowania DOM, więc przewijanie pod palcem zostaje płynne. */
+.akt-chip .ring{position:relative;flex:none;width:28px;height:28px;border-radius:50%;
+  background:conic-gradient(var(--brass) calc(var(--p,0) * 1%), var(--edge) 0);
+  display:grid;place-items:center}
+.akt-chip .ring .ic{width:22px;height:22px;border-radius:50%;background:var(--belka);
+  display:grid;place-items:center;font-size:13px;line-height:1}
+.akt-stop{flex:none;width:26px;height:26px;border-radius:50%;cursor:pointer;
+  background:var(--stone);border:1px solid var(--edge-soft);color:var(--ink-mute);
+  font-size:12px;line-height:1}
+.akt-stop:active{background:var(--press);color:var(--blood)}
+
+/* Na telefonie zostaje sama ikona z pierścieniem — nazwa i podpisy nie mieszczą
+   się obok imienia, a podpowiedź pod przytrzymaniem dalej mówi wszystko. */
+@media (max-width:640px){
+  .akt-chip .tx{display:none}
+  .akt-chip{padding:4px 5px;border-radius:999px}
+  .hdr-boxy{gap:10px}
+  .hpoz{font-size:13px}
+}
 
 /* ---------- treść ----------
    ZASADA: ekran gry mieści się na ekranie. Scrolluje się tylko to, co z natury
@@ -1096,20 +1148,8 @@ textarea:focus{outline:none;border-color:var(--brass)}
 /* ---------- pasek zbierania ----------
    Bliźniak paska walki, tylko pod nagłówkiem. Żyje na każdej zakładce poza
    Skillami — tam stoi pełny panel i pasek byłby drugą kopią tej samej rzeczy. */
-.minebar{flex:none;background:var(--stone-hi);border-bottom:1px solid var(--edge);
-  padding:7px 12px}
-.minebar[hidden]{display:none}
-.mb-row{display:flex;align-items:center;gap:9px}
-.mb-row .ic{font-size:17px;line-height:1;flex:none}
-.mb-kto{min-width:0;flex:none;max-width:40%}
-.mb-kto b{font-size:13px;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.mb-row .bar{height:6px}
-/* STAN SPOCZYNKU. Belka stoi zawsze — gdy nic się nie zbiera, zaprasza zamiast
-   znikać. Znikająca belka przesuwała cały układ przy każdym starcie i końcu. */
-.mb-row.pusty .ic,.mb-row.pusty .mb-kto b{color:var(--ink-mute)}
-.mb-zacheta{flex:1;min-width:0;font-size:11px;line-height:1.3;color:var(--ink-mute);
-  overflow:hidden;text-overflow:ellipsis}
-@media (max-width:759px){ .mb-zacheta{display:none} }
+/* Pasek zbierania na całą szerokość ZOSTAŁ SKASOWANY — rzeczy lecące w tle
+   pokazuje teraz ikona z pierścieniem w górnym pasku (patrz .akt-chip wyżej). */
 
 /* ---------- KOLOS ---------- */
 .kolos-fot{position:relative;border:1px solid var(--edge);border-radius:var(--r-lg);

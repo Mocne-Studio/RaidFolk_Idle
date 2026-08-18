@@ -763,8 +763,14 @@ export const CONFIG = {
       { id: 'wysoka', label: 'Wysoka', opis: 'Animacje, cienie i gradienty.' },
       { id: 'niska',  label: 'Niska',  opis: 'Bez animacji i cieni. Dla słabszych telefonów.' },
     ],
+    // Języki interfejsu. Polski jest domyślny i jest też KLUCZEM tłumaczeń —
+    // patrz public/i18n.js. Dodanie języka to dopisanie wpisu tutaj i mapy tam.
+    langs: [
+      { id: 'pl', label: 'Polski',  ic: '🇵🇱' },
+      { id: 'en', label: 'English', ic: '🇬🇧' },
+    ],
     // Ustawienia świeżej postaci.
-    domyslne: { theme: 'mrok', quality: 'wysoka', sound: true, volume: 0.5 },
+    domyslne: { theme: 'mrok', quality: 'wysoka', sound: true, volume: 0.5, lang: 'pl' },
     bioMax: 140,
   },
 

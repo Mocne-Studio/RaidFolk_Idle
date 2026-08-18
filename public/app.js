@@ -43,7 +43,7 @@ async function api(path, body) {
 }
 
 function toast(msg, err = false) {
-  $$('.toast').forEach(t => t.remove());
+  $$('.toast').forEach(el => el.remove());
   const el = document.createElement('div');
   el.className = 'toast' + (err ? ' err' : '');
   el.textContent = msg;
@@ -57,12 +57,16 @@ function toast(msg, err = false) {
 // urządzenia), localStorage trzyma je tylko po to, żeby motyw nie mrugnął
 // przy starcie — zanim wróci stan z serwera.
 const UST_KEY = 'rf_ui';
-let UST = { theme: 'mrok', quality: 'wysoka', sound: true, volume: 0.5 };
+let UST = { theme: 'mrok', quality: 'wysoka', sound: true, volume: 0.5, lang: 'pl' };
 try { UST = { ...UST, ...JSON.parse(localStorage.getItem(UST_KEY) ?? '{}') }; } catch {}
 
 function applyUI() {
   document.documentElement.dataset.theme = UST.theme;
   document.documentElement.dataset.quality = UST.quality;
+  // Język ustawia się TU, razem z motywem — jedno miejsce na wszystko, co idzie
+  // z ustawień na <html>. setLang() ustawia też atrybut lang, od którego zależy
+  // dzielenie wyrazów i czytnik ekranowy.
+  setLang(UST.lang ?? 'pl');
   try { localStorage.setItem(UST_KEY, JSON.stringify(UST)); } catch {}
 }
 applyUI();
@@ -85,11 +89,11 @@ function dzwiek(rodzaj) {
     const g = AUDIO.createGain();
     o.type = rodzaj === 'wygrana' || rodzaj === 'awans' ? 'triangle' : 'square';
     o.frequency.value = hz;
-    const t = AUDIO.currentTime;
-    g.gain.setValueAtTime(Math.min(0.25, UST.volume * 0.25), t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
+    const teraz = AUDIO.currentTime;
+    g.gain.setValueAtTime(Math.min(0.25, UST.volume * 0.25), teraz);
+    g.gain.exponentialRampToValueAtTime(0.0001, teraz + ms / 1000);
     o.connect(g); g.connect(AUDIO.destination);
-    o.start(t); o.stop(t + ms / 1000);
+    o.start(teraz); o.stop(teraz + ms / 1000);
   } catch { /* przeglądarka bez WebAudio gra po cichu */ }
 }
 
@@ -100,6 +104,9 @@ const DZWIEK_LOGU = { crit: 'kryt', miss: 'pudlo', heal: 'leczenie',
 // ---------------------------------------------------------------- ekran startowy
 
 import { SHAPES, SYMBOLS, COLORS, DEFAULT_CREST, randomCrest, crestSvg } from './crest.js';
+// TŁUMACZENIA. Polski tekst jest kluczem — t('Ekwipunek') oddaje 'Equipment'
+// albo sam polski, gdy brak wpisu w słowniku. Patrz public/i18n.js.
+import { t, setLang, getLang, odmiana } from './i18n.js';
 
 let crest = { ...DEFAULT_CREST };
 const heroCrest = (size) => crestSvg(S?.crest ?? DEFAULT_CREST, size);
@@ -261,19 +268,73 @@ function header() {
   if (box) box.innerHTML = heroCrest(30);
   $('#hdrName').textContent = S.name;
   $('#hdrMeta').textContent = `POZIOM ${S.poziom} · MOC ${nf(S.stats.power)} · ${S.actName.toUpperCase()}`;
-  const purse = $('#hdrPurse');
-  if (purse) purse.innerHTML = `${nf(S.gold)} zł<br>${S.keys ?? 0} 🔑`;
 
-  // Trofea w pasku pokazują TWOJE miejsce. Pełne podium siedzi na karcie gracza,
-  // czyli tam, dokąd ten pasek prowadzi.
-  const r = $('#hdrRank');
+  // ---- CO MASZ: pozycja, złoto, klucze ----
+  // Cztery liczby w JEDNYM rzędzie: ikona i wartość, bez ramek i bez podpisów.
+  // Wersja z trzema obramowanymi pudełkami i etykietami nad liczbami zajmowała
+  // pół belki i ciągnęła oko na siebie zamiast na imię postaci. Co znaczy która
+  // liczba, mówi podpowiedź pod kursorem — czyta się ją raz, a patrzy codziennie.
   const M = S.mojeMiejsce ?? {};
-  if (r) {
-    // Miejsce pokazuje się ZAWSZE, nie tylko w pierwszej trójce — pusty pasek
-    // czytało się jako „ranking nie działa".
-    r.innerHTML = (M.pietro ? `<span class="tr">${KORONA}<b>${M.pietro}#</b></span>` : '')
-                + (M.moc    ? `<span class="tr">${HELM}<b>${M.moc}#</b></span>` : '');
+  const poz = (ic, v, tip) =>
+    `<span class="hpoz" title="${esc(tip)}">${ic}<b>${v}</b></span>`;
+
+  const boxy = $('#hdrBoxy');
+  if (boxy) {
+    const ranking = [
+      M.pietro ? poz(KORONA, M.pietro,
+        `Jesteś ${M.pietro} w rankingu pięter — licząc po najwyższym zdobytym piętrze wieży. Pełne podium jest na karcie postaci.`) : '',
+      M.moc ? poz(HELM, M.moc,
+        `Jesteś ${M.moc} w rankingu Mocy. Moc to Atak ×3, Zdrowie ×0,5 i Pancerz ×1,5 w jednej liczbie.`) : '',
+    ].filter(Boolean).join('');
+
+    boxy.innerHTML = ranking
+      + (ranking ? '<span class="hsep"></span>' : '')
+      + poz('◈', nf(S.gold),
+          'Złoto. Sypie je walka w wieży; wydajesz je u kowala i na ulepszenia. Wyprawa nie płaci za sam marsz — płaci łupem.')
+      + poz('⚷', nf(S.keys ?? 0),
+          'Klucze otwierają Przywołanie — losujesz nimi sojuszników i pety. Szanse są jawne, bez pity i bez duplikatów.');
   }
+
+  // ---- CO SIĘ DZIEJE: rzeczy lecące w tle ----
+  paintMineBar();
+}
+
+// RZECZY W TLE, JAKO IKONY W GÓRNYM PASKU.
+//
+// Wcześniej zbieranie miało własny pasek na całą szerokość pod nagłówkiem.
+// Zjadał kilkadziesiąt pikseli wysokości na każdym ekranie po to, żeby pokazać
+// jedną nazwę i jeden postęp — a wysokość jest w tej grze walutą, bo ekran
+// z założenia ma się mieścić bez przewijania.
+//
+// Teraz to ikona z pierścieniem postępu w pasku: widać, że coś leci, widać ile
+// zostało, a po najechaniu widać co dokładnie. Przerwanie siedzi tam samo.
+function paintMineBar() {
+  const el = $('#hdrAkt');
+  if (!el || !S) return;
+  const akt = S.activity;
+
+  if (!akt) {
+    // STAN SPOCZYNKU. Nie znika — pusty slot z zachętą, żeby układ nie skakał
+    // przy każdym starcie i końcu zbierania, a gracz widział, że coś tu bywa.
+    el.innerHTML = `<button class="akt-chip pusty" data-act="tab" data-tab="skille"
+      title="Nic nie zbierasz. Wejdź w Skille i wybierz surowiec — zbieranie leci samo, także gdy oglądasz inne zakładki.">
+      <span class="ic">⛏</span><span class="tx">Nic w tle</span></button>`;
+    return;
+  }
+
+  const sk = S.skills?.[akt.skill];
+  const r = sk?.resources?.find(x => x.id === akt.res);
+  const pct = MINE && !MINE.pauza
+    ? Math.min(100, (Date.now() - MINE.t0) / MINE.ms * 100)
+    : (MINE?.pauza ? 100 : 0);
+  const nazwa = r?.nodeLabel ?? r?.label ?? akt.res;
+  const sekundy = MINE?.ms ? (MINE.ms / 1000).toFixed(1) + ' s na cykl' : '';
+
+  el.innerHTML = `<span class="akt-chip" title="${esc(`${sk?.label ?? 'Zbieranie'}: ${nazwa}${sekundy ? ' · ' + sekundy : ''}. Leci w tle na każdej zakładce.`)}">
+      <span class="ring" style="--p:${pct}"><span class="ic">${sk?.ic ?? '⛏'}</span></span>
+      <span class="tx"><b>${esc(nazwa)}</b><small>${esc(sk?.label ?? '')}</small></span>
+    </span>
+    <button class="akt-stop" data-act="minestop" title="Przerywa zbieranie. Postęp bieżącego cyklu przepada, zebrane surowce zostają.">✕</button>`;
 }
 
 // Podium: trzy miejsca, herb, imię i wynik. Ta sama funkcja rysuje oba rankingi —
@@ -502,16 +563,16 @@ function currentRunStats() {
 
 function combatStatsHtml() {
   const R = currentRunStats();
-  const t = R?.totals ?? {};
+  const sumy = R?.totals ?? {};
   let h = `<button class="combat-stats-toggle" data-act="fightstats" aria-expanded="${fightStatsOpen}">
     <span class="combat-stats-icon">📊</span><span class="grow"><b>Podsumowanie runu</b>
-      <small>${R?.waves ?? 0} ${R?.waves === 1 ? 'walka' : 'walk'} · zadane ${nf(t.damageDone ?? 0)}</small></span>
+      <small>${R?.waves ?? 0} ${R?.waves === 1 ? 'walka' : 'walk'} · zadane ${nf(sumy.damageDone ?? 0)}</small></span>
     <span>${fightStatsOpen ? '▲' : '▼'}</span></button>`;
   if (!fightStatsOpen) return h;
   h += `<div class="combat-stats-panel"><div class="combat-total-grid">
-    <div><span>⚔ Zadane</span><b>${nf(t.damageDone ?? 0)}</b></div>
-    <div><span>🛡 Wytankowane</span><b>${nf(t.damageTaken ?? 0)}</b></div>
-    <div><span>✚ Leczenie</span><b>${nf(t.healingDone ?? 0)}</b></div></div>
+    <div><span>⚔ Zadane</span><b>${nf(sumy.damageDone ?? 0)}</b></div>
+    <div><span>🛡 Wytankowane</span><b>${nf(sumy.damageTaken ?? 0)}</b></div>
+    <div><span>✚ Leczenie</span><b>${nf(sumy.healingDone ?? 0)}</b></div></div>
     <div class="combat-table-head"><span>Jednostka</span><span>Zadane</span><span>Tank</span><span>Leczenie</span></div>
     ${(R?.party ?? []).map(u => `<div class="combat-table-row"><span>${esc(u.name)}</span>
       <b>${nf(u.damageDone)}</b><b>${nf(u.damageTaken)}</b><b>${nf(u.healingDone)}</b></div>`).join('') ||
@@ -926,31 +987,31 @@ function renderHub() {
   const K = S.kolos ?? {};
   let h = `<div class="scr-head">Przygody <span>PIĘTRO ${S.maxFloor}</span></div>`;
   h += `<div class="modes">`;
-  for (const t of TRYBY) {
-    const czynny = t.stan === 'on';
-    const akcja = t.id === 'wieza' ? 'opentower' : t.id === 'wyprawa' ? 'openexp'
-      : t.id === 'dungeon' ? 'opendungeon'
-      : t.id === 'bosses' ? 'openbosses' : null;
-    const podpis = t.id === 'wieza' ? `${S.actName} · piętro ${S.floor} z ${S.actId * 10}`
-      : t.id === 'wyprawa' ? (S.expedition?.kind === 'expedition'
+  for (const tryb of TRYBY) {
+    const czynny = tryb.stan === 'on';
+    const akcja = tryb.id === 'wieza' ? 'opentower' : tryb.id === 'wyprawa' ? 'openexp'
+      : tryb.id === 'dungeon' ? 'opendungeon'
+      : tryb.id === 'bosses' ? 'openbosses' : null;
+    const podpis = tryb.id === 'wieza' ? `${S.actName} · piętro ${S.floor} z ${S.actId * 10}`
+      : tryb.id === 'wyprawa' ? (S.expedition?.kind === 'expedition'
           ? `TRWA · etap ${S.expedition.at + 1} z ${S.expedition.total} · surowce ${S.expedition.mats?.reduce((a,m)=>a+m.count,0) ?? 0}`
-          : t.desc)
-      : t.id === 'dungeon' ? (S.expedition?.kind === 'dungeon'
+          : tryb.desc)
+      : tryb.id === 'dungeon' ? (S.expedition?.kind === 'dungeon'
           ? `TRWA · komnata ${S.expedition.at + 1} z ${S.expedition.total} · skrzynia ${S.expedition.sakwaCount}`
-          : t.desc)
-      : t.id === 'bosses' ? `Tylko drużynowo · Kolos ${K.otwarty ? (K.pokonany ? 'pokonany' : 'otwarty') : `od poziomu ${K.unlockFloor ?? 10}`}`
-      : t.desc;
-    h += `<button class="card row mode-card compact ${czynny ? 'hi' : 'off'}" title="${esc(t.desc)}"
+          : tryb.desc)
+      : tryb.id === 'bosses' ? `Tylko drużynowo · Kolos ${K.otwarty ? (K.pokonany ? 'pokonany' : 'otwarty') : `od poziomu ${K.unlockFloor ?? 10}`}`
+      : tryb.desc;
+    h += `<button class="card row mode-card compact ${czynny ? 'hi' : 'off'}" title="${esc(tryb.desc)}"
       ${akcja ? `data-act="${akcja}"` : ''} ${czynny ? '' : 'disabled'}>
-      <div class="icon lg">${t.ic}</div>
+      <div class="icon lg">${tryb.ic}</div>
       <div class="grow">
-        <div class="t1">${esc(t.label)}</div>
+        <div class="t1">${esc(tryb.label)}</div>
         <div class="t2">${esc(podpis)}</div>
       </div>
-      <span class="badge ${czynny ? 'on' : ''}">${S.expedition?.kind === 'expedition' && t.id === 'wyprawa' ? 'TRWA'
-        : S.expedition?.kind === 'dungeon' && t.id === 'dungeon' ? 'TRWA'
-        : t.id === 'bosses' ? `${K.otwarty ? 1 : 0} / 3`
-        : STAN_BADGE[t.stan]}</span>
+      <span class="badge ${czynny ? 'on' : ''}">${S.expedition?.kind === 'expedition' && tryb.id === 'wyprawa' ? 'TRWA'
+        : S.expedition?.kind === 'dungeon' && tryb.id === 'dungeon' ? 'TRWA'
+        : tryb.id === 'bosses' ? `${K.otwarty ? 1 : 0} / 3`
+        : STAN_BADGE[tryb.stan]}</span>
     </button>`;
   }
   return h + `</div>`;
@@ -1464,7 +1525,7 @@ function renderBossowie() {
 // Wszystko przychodzi gotowe z serwera (widokSpozaWiezy); klient nic nie przelicza.
 function panelSpozaWiezy(K, ogon) {
   const bar = !!K.barierowy;
-  const male = t => `<span class="t2" style="display:block">${t}</span>`;
+  const male = txt => `<span class="t2" style="display:block">${txt}</span>`;
   // Broń w pełni przebijająca albo magiczna nigdy nie tknie puli — i to jest
   // prawda do napisania wprost, a nie licznik dzielony przez zero.
   const naPancerz = K.ciosowNaPancerz == null
@@ -1794,12 +1855,18 @@ function renderPostac() {
 
   // ---- prawa kolumna: ustawienia i sprawy administracyjne ----
   h += `<div class="col">
-    <div class="sec">Motyw</div>
+    <div class="sec">${t('Język')}</div>
+    <div class="segs">
+      ${(ui.langs ?? []).map(l => `<button data-act="jezyk" data-l="${l.id}"
+        aria-selected="${(UST.lang ?? 'pl') === l.id}">${l.ic} ${esc(l.label)}</button>`).join('')}
+    </div>
+
+    <div class="sec">${t('Motyw')}</div>
     <div class="motywy">
-      ${(ui.themes ?? []).map(t => `<button class="motyw ${UST.theme === t.id ? 'on' : ''}"
-        data-theme="${t.id}" data-act="motyw" data-t="${t.id}" title="${esc(t.opis)}">
+      ${(ui.themes ?? []).map(mt => `<button class="motyw ${UST.theme === mt.id ? 'on' : ''}"
+        data-theme="${mt.id}" data-act="motyw" data-t="${mt.id}" title="${esc(mt.opis)}">
         <span class="pas"><i class="c1"></i><i class="c2"></i><i class="c3"></i></span>
-        <span class="nm">${esc(t.label)}</span>
+        <span class="nm">${esc(mt.label)}</span>
       </button>`).join('')}
     </div>
 
@@ -2923,43 +2990,6 @@ function czasKrotki(ms) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-// PASEK ZBIERANIA — STAŁA BELKA NAD TREŚCIĄ, na każdej zakładce.
-// Wcześniej znikał, gdy nic się nie zbierało: układ skakał o kilkadziesiąt
-// pikseli przy każdym starcie i końcu zbierania, a gracz, który nic nie robił,
-// nie miał nigdzie śladu, że w ogóle może coś zacząć. Teraz belka stoi zawsze
-// i w stanie spoczynku ZAPRASZA do zbierania zamiast pokazywać pustkę.
-function paintMineBar() {
-  const el = $('#minebar');
-  if (!el || !S) return;
-  const akt = S.activity;
-  if (!akt) {
-    el.hidden = false;
-    el.innerHTML = `<div class="mb-row pusty">
-      <span class="ic">⛏</span>
-      <span class="mb-kto"><b>Nic nie zbierasz</b></span>
-      <span class="mb-zacheta">Wejdź w Skille i wybierz surowiec — zbieranie leci samo,
-        także gdy oglądasz inne zakładki.</span>
-      <button class="cbtn" data-act="tab" data-tab="skille">SKILLE</button>
-    </div>`;
-    return;
-  }
-
-  const sk = S.skills?.[akt.skill];
-  const r = sk?.resources?.find(x => x.id === akt.res);
-  const pct = MINE && !MINE.pauza
-    ? Math.min(100, (Date.now() - MINE.t0) / MINE.ms * 100)
-    : (MINE?.pauza ? 100 : 0);
-  // JEDEN WIERSZ. Exp na godzinę, poziom i dorobek sesji tu były i wyleciały —
-  // na telefonie zjadały pół ekranu, a pasek ma tylko mówić, co robisz i jak długo.
-  el.hidden = false;
-  el.innerHTML = `<div class="mb-row">
-      <span class="ic">${sk?.ic ?? '⛏'}</span>
-      <span class="mb-kto"><b>${esc(r?.nodeLabel ?? r?.label ?? akt.res)}</b></span>
-      <span class="bar" style="flex:1"><i id="mbprog" style="width:${pct}%"></i></span>
-      <button class="cbtn" data-act="minestop">PRZERWIJ</button>
-    </div>`;
-}
-
 // Ile to już trwa, po ludzku.
 function czasTrwania(od) {
   if (!od) return '—';
@@ -2994,8 +3024,10 @@ function startMineLoop(skill, res, ms, elapsed = 0) {
     const zeg = $('#minetime');
     if (zeg) zeg.textContent = Math.max(0, (MINE.ms - (Date.now() - MINE.t0)) / 1000).toFixed(1) + ' s';
     malujDorobek();
-    const mb = $('#mbprog');
-    if (mb) mb.style.width = pct + '%';
+    // Pierścień postępu przy ikonie w górnym pasku. Krecę samą zmienną CSS,
+    // a nie przerysowuję paska — przebudowa DOM co 80 ms zabierałaby przewijanie.
+    const ring = $('#hdrAkt .ring');
+    if (ring) ring.style.setProperty('--p', pct);
   };
   rysuj();
   MINE.tick = setInterval(rysuj, 80);
@@ -4125,6 +4157,11 @@ document.addEventListener('click', async (ev) => {
       await api('settings', { theme: UST.theme });
       render();
 
+    } else if (act === 'jezyk') {
+      // Język leży w tych samych ustawieniach co motyw — przechodzi na inne
+      // urządzenie razem z postacią, bo właścicielem ustawień jest serwer.
+      UST.lang = btn.dataset.l; applyUI(); render();
+      await api('settings', { lang: UST.lang });
     } else if (act === 'jakosc') {
       UST.quality = btn.dataset.q; applyUI();
       await api('settings', { quality: UST.quality });
@@ -4370,13 +4407,13 @@ document.addEventListener('input', ev => {
 // Pola formularza karty gracza. Nie wołają render() przy każdym znaku —
 // przerysowanie zabrałoby kursor w połowie zdania.
 document.addEventListener('input', (ev) => {
-  const t = ev.target;
-  if (t.id === 'bio') {
-    bioSzkic = t.value;
+  const cel = ev.target;
+  if (cel.id === 'bio') {
+    bioSzkic = cel.value;
     const licz = $('#biolicznik');
-    if (licz) licz.textContent = `${t.value.length} / ${S.ui?.bioMax ?? 140}`;
-  } else if (t.id === 'glosnosc') {
-    UST.volume = Number(t.value) / 100;
+    if (licz) licz.textContent = `${cel.value.length} / ${S.ui?.bioMax ?? 140}`;
+  } else if (cel.id === 'glosnosc') {
+    UST.volume = Number(cel.value) / 100;
     applyUI();
   }
   // Pole „punktów na klik" zniknęło razem z kartą — tempo ustala teraz samo

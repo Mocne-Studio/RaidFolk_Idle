@@ -433,7 +433,7 @@ function view(ch) {
     bio: ch.bio ?? '',
     guild: ch.guild ?? null,
     settings: ch.settings ?? C.ui.domyslne,
-    ui: { themes: C.ui.themes, quality: C.ui.quality, bioMax: C.ui.bioMax },
+    ui: { themes: C.ui.themes, quality: C.ui.quality, langs: C.ui.langs, bioMax: C.ui.bioMax },
     floor: ch.floor, maxFloor: ch.maxFloor, fight: ch.fight,
     fightsOnFloor: info.fights, isBoss: info.isBoss, isPlus: info.isPlus,
     actName: act.name, actId: act.id, bossName: info.bossName,
@@ -2076,6 +2076,7 @@ const server = http.createServer(async (req, res) => {
           const st2 = ch.settings ?? { ...C.ui.domyslne };
           if (typeof body.theme === 'string' && C.ui.themes.some(t => t.id === body.theme)) st2.theme = body.theme;
           if (typeof body.quality === 'string' && C.ui.quality.some(q => q.id === body.quality)) st2.quality = body.quality;
+          if (typeof body.lang === 'string' && C.ui.langs.some(l => l.id === body.lang)) st2.lang = body.lang;
           if (typeof body.sound === 'boolean') st2.sound = body.sound;
           if (typeof body.volume === 'number') st2.volume = Math.min(1, Math.max(0, body.volume));
           ch.settings = st2;
