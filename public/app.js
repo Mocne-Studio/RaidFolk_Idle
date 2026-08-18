@@ -292,9 +292,9 @@ function header() {
       // Ikony wektorowe zamiast znaków ◈ i ⚷ — tamte zależały od kroju pisma
       // urządzenia, więc na jednym telefonie były romb i klucz, a na drugim
       // dwa pustaki. Te rysują się tak samo wszędzie i barwią currentColor.
-      + poz(`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.5 9.5h4a1.75 1.75 0 0 1 0 3.5h-3a1.75 1.75 0 0 0 0 3.5h4"/></svg>`, nf(S.gold),
+      + poz(`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>`, nf(S.gold),
           'Złoto. Sypie je walka w wieży; wydajesz je u kowala i na ulepszenia. Wyprawa nie płaci za sam marsz — płaci łupem.')
-      + poz(`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="3.5"/><path d="m10 13 8.5-8.5"/><path d="m16 7 2 2"/><path d="m18.5 4.5 2 2"/></svg>`, nf(S.keys ?? 0),
+      + poz(`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>`, nf(S.keys ?? 0),
           'Klucze otwierają Przywołanie — losujesz nimi sojuszników i pety. Szanse są jawne, bez pity i bez duplikatów.');
   }
 
