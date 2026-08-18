@@ -150,12 +150,29 @@ function buildPickers() {
   wire('#pickInk', 'ink');
 }
 
-// Zdejmuje ekran ładowania — dopiero wtedy, gdy wiadomo, co pod nim stoi.
+// EKRAN ŁADOWANIA POKAZUJE SIĘ DOPIERO, GDY JEST NA CO CZEKAć.
+// Mignięcie na ułamek sekundy jest gorsze niż brak ekranu w ogóle, więc:
+//   • przez pierwsze POKAZ_PO ms jest przezroczysty — szybkie wczytanie (a takie
+//     jest każde po sieci lokalnej) nie pokaże go ANI RAZU,
+//   • jeśli jednak zdąży się pojawić, zostaje minimum MIN_WIDOCZNY ms, żeby
+//     nie mrugnął w drugą stronę.
+// Tło jest w kolorze gry, więc ta cisza przed pokazaniem wygląda jak sama gra,
+// a nie jak biała dziura.
+const LAD_T0 = Date.now();
+const LAD_POKAZ_PO = 220;
+const LAD_MIN_WIDOCZNY = 550;
+
 function schowajLadowanie() {
   const el = $('#ladowanie');
   if (!el || el.hidden) return;
-  el.classList.add('znika');
-  setTimeout(() => { el.hidden = true; }, 260);
+  const minelo = Date.now() - LAD_T0;
+  // Nie zdążył się pojawić — zdejmujemy bez animacji, bo nie ma czego wygaszać.
+  if (minelo < LAD_POKAZ_PO) { el.hidden = true; return; }
+  const czekaj = Math.max(0, LAD_POKAZ_PO + LAD_MIN_WIDOCZNY - minelo);
+  setTimeout(() => {
+    el.classList.add('znika');
+    setTimeout(() => { el.hidden = true; }, 260);
+  }, czekaj);
 }
 
 async function boot() {

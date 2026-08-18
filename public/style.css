@@ -1604,9 +1604,14 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
    więc przy każdym odświeżeniu mrugał przez sekundę ekran tworzenia herbu,
    zanim serwer zdążył odpowiedzieć, że postać istnieje.
    ========================================================================== */
+/* Treść wchodzi z opóźnieniem: przez pierwsze 220 ms ekran jest w kolorze gry,
+   ale PUSTY. Szybkie wczytanie zdejmie go, zanim cokolwiek błyśnie — a mignięcie
+   godła na ułamek sekundy jest gorsze niż brak ekranu ładowania w ogóle. */
 #ladowanie{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;
   align-items:center;justify-content:center;gap:14px;background:var(--stone);
   transition:opacity .25s ease}
+#ladowanie > *{opacity:0;animation:lad-wejscie .3s ease .22s forwards}
+@keyframes lad-wejscie{to{opacity:1}}
 #ladowanie[hidden]{display:none}
 #ladowanie.znika{opacity:0;pointer-events:none}
 .lad-godlo{color:var(--brass);animation:lad-tetno 1.6s ease-in-out infinite}
@@ -1619,3 +1624,4 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 @keyframes lad-suw{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
 /* Niska jakość gasi animacje w całej grze — tu też. */
 [data-quality="niska"] .lad-godlo,[data-quality="niska"] .lad-pasek i{animation:none}
+[data-quality="niska"] #ladowanie > *{animation:lad-wejscie 0s ease .22s forwards}
