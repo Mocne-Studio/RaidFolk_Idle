@@ -12,8 +12,8 @@ import CONFIG from './game/config.js';
 import { floorInfo, makeEnemy, makeEnemies, rollDrops, actForFloor, expeditionEnemyLevel,
          ACTS, WEAPON_TYPES, nowyWtype, classDamageType,
          rollTrophy, dropsOf, mulberry32 } from './game/content.js';
-import { createFight, step, beginTurn, runToEnd, autoRound, summary, hitChance, armorK, playerArmorEffect, attackSpeed,
-         STRENGTHS, ABILITIES } from './game/combat.js';
+import { createFight, step, beginTurn, runToEnd, autoRound, summary, hitChance, attackSpeed,
+         STRENGTHS, ABILITIES, projekcja, pulaPancerza } from './game/combat.js';
 import { miningBonuses, miningCycleMs, mineOutcome, qualityChances,
          craftProduct, equipMining, furnaceCoal, transferFurnaceCoal,
          consumeFurnaceFuel, professionBonuses, professionCycleMs,
@@ -51,7 +51,7 @@ async function wersjaZDysku() {
   } catch { return null; }
 }
 
-export const WERSJA = '2026-08-19.0210';
+export const WERSJA = '2026-08-19.1140';
 const C = CONFIG;
 
 // ---------------------------------------------------------------- regeneracja
@@ -1172,45 +1172,44 @@ function setFightTarget(ch, idx) {
 // Przeciwnik spoza wieży. Jedna walka, zawsze turowa, bez fal i bez postępu.
 // Nie rusza piętra, nie rusza wyprawy — wchodzisz, bijesz się, wychodzisz.
 
-function kolosWidok(ch) {
-  const K = C.kolos;
+// Ekran „ile Ci brakuje" dla przeciwników spoza wieży. Kolos i Tytan różnią się
+// wyłącznie liczbami, więc liczy ich JEDNA funkcja — i liczy projekcją z combat.js,
+// żeby ekran nie miał własnej arytmetyki, która rozjedzie się z silnikiem przy
+// następnej zmianie modelu pancerza. Tak właśnie stało się z modelem bariery.
+function widokSpozaWiezy(ch, K, pokonany) {
   const st = computeStats(ch);
-  // Ile ciosów potrzeba PRZY TWOIM ATAKU. Liczone tą samą formułą co walka,
-  // żeby liczba na ekranie nie kłamała.
-  const kA = armorK(K.poziom);
-  const naCios = Math.max(1, Math.round(st.damage * (1 - K.armor / (K.armor + kA))));
-  const efektywnaObrona = st.armor * playerArmorEffect(K.poziom);
-  const jegoCios = Math.max(1, Math.round(K.damage * (1 - efektywnaObrona / (efektywnaObrona + kA))));
+  // Jednostki dokładnie takie, jakie wejdą do walki w startKolos/startTytan —
+  // łącznie z `variant`, bo z niego bierze się rozmiar puli pancerza.
+  const wrog = { name: K.label, variant: 'kolos', dtype: 'fiz',
+                 hp: K.hp, maxHp: K.hp, damage: K.damage, armor: K.armor };
+  const bohater = heroUnit(ch, st);
+  const mnie = projekcja(st.damage, bohater, wrog, 'wrog', K.poziom);
+  const on   = projekcja(K.damage, wrog, bohater, 'gracz', K.poziom);
+  const jegoCios = Math.max(1, Math.round(on.eff));
+  const naTure = jegoCios * (K.ataki ?? 1);
   return {
     ...K,
     otwarty: poziom(ch) >= K.unlockFloor,
-    pokonany: !!ch.kolosPokonany,
+    pokonany,
+    // Który model pancerza liczy — klient opowiada z tego inną historię.
+    barierowy: C.combat.armorModel === 'barrier',
     // Prawda o dystansie, jaki dzieli gracza od tego przeciwnika.
-    twojCios: naCios,
-    ciosowPotrzeba: Math.ceil(K.hp / naCios),
+    jegoPula: Math.round(mnie.pula),
+    twojaPula: Math.round(on.pula),
+    twojCios: Math.max(1, Math.round(mnie.eff)),
+    twojCiosWPule: Math.round(mnie.doPuli),
+    twojCiosWZycie: Math.round(mnie.doZycia),
+    // null = ta broń w ogóle nie rusza puli (pełne przebicie albo magia),
+    // więc pancerz stoi do końca i żaden licznik tego nie odczaruje.
+    ciosowNaPancerz: Number.isFinite(mnie.ciosowNaPule) ? mnie.ciosowNaPule : null,
+    ciosowPotrzeba: mnie.ciosow,
     jegoCios,
-    ciosowNaCiebie: Math.max(1, Math.ceil(st.maxHp / (jegoCios * K.ataki))),
+    ciosowNaCiebie: Math.max(1, Math.ceil((on.pula + st.maxHp) / naTure)),
   };
 }
 
-// Tytan liczy się dokładnie jak Kolos — te same formuły, inne liczby.
-function tytanWidok(ch) {
-  const K = C.tytan;
-  const st = computeStats(ch);
-  const kA = armorK(K.poziom);
-  const naCios = Math.max(1, Math.round(st.damage * (1 - K.armor / (K.armor + kA))));
-  const efektywnaObrona = st.armor * playerArmorEffect(K.poziom);
-  const jegoCios = Math.max(1, Math.round(K.damage * (1 - efektywnaObrona / (efektywnaObrona + kA))));
-  return {
-    ...K,
-    otwarty: poziom(ch) >= K.unlockFloor,
-    pokonany: !!ch.tytanPokonany,
-    twojCios: naCios,
-    ciosowPotrzeba: Math.ceil(K.hp / naCios),
-    jegoCios,
-    ciosowNaCiebie: Math.max(1, Math.ceil(st.maxHp / (jegoCios * K.ataki))),
-  };
-}
+function kolosWidok(ch) { return widokSpozaWiezy(ch, C.kolos, !!ch.kolosPokonany); }
+function tytanWidok(ch) { return widokSpozaWiezy(ch, C.tytan, !!ch.tytanPokonany); }
 
 function startTytan(ch) {
   const K = C.tytan;

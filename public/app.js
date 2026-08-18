@@ -22,7 +22,7 @@ const oporHtml = (resists = {}, compact = false) => `<div class="resist-profile 
 // Znacznik wersji GRY (plików z public/). Serwer niesie swój własny w stanie.
 // Różnica znaczy jedno: proces serwera jest starszy niż pliki na dysku, więc
 // ekrany są nowe, a liczby stare. ZMIENIAJ RAZEM z WERSJA w server.js.
-const WERSJA_GRY = '2026-08-19.0210';
+const WERSJA_GRY = '2026-08-19.1140';
 
 let TOKEN = localStorage.getItem('rf_token') || null;
 let S = null;               // stan z serwera
@@ -1457,6 +1457,48 @@ function renderBossowie() {
 // ---------------------------------------------------------------- KOLOS
 // Ekran jednego przeciwnika. Bez pięter, bez fal, bez postępu — obrazek,
 // opis i liczby mówiące wprost, ile Ci do niego brakuje.
+// Panel „Jego liczby" + „Ile Ci brakuje" — wspólny dla Kolosa i Tytana.
+// Pod modelem bariery pancerz NIE zbija ciosu: stoi jako druga pula życia, którą
+// trzeba zedrzeć, zanim cios sięgnie HP. Stary ekran pokazywał tu surową „Obronę"
+// i cios „przez pancerz" policzony wzorem redukcji — obie liczby kłamały.
+// Wszystko przychodzi gotowe z serwera (widokSpozaWiezy); klient nic nie przelicza.
+function panelSpozaWiezy(K, ogon) {
+  const bar = !!K.barierowy;
+  const male = t => `<span class="t2" style="display:block">${t}</span>`;
+  // Broń w pełni przebijająca albo magiczna nigdy nie tknie puli — i to jest
+  // prawda do napisania wprost, a nie licznik dzielony przez zero.
+  const naPancerz = K.ciosowNaPancerz == null
+    ? `<span class="v" style="color:var(--brass)">omijasz go</span>`
+    : `<span class="v">${nf(K.ciosowNaPancerz)}</span>`;
+  return `
+    <div class="sec">Jego liczby</div>
+    <div class="statgrid">
+      <div class="stat-box"><span class="k">Zdrowie</span><span class="v">${nf(K.hp)}</span></div>
+      <div class="stat-box"><span class="k">Atak</span><span class="v">${nf(K.damage)}</span></div>
+      <div class="stat-box"><span class="k">${bar ? 'Pancerz · pula' : 'Obrona'}</span>
+        <span class="v">${nf(bar ? (K.jegoPula ?? 0) : (K.armor ?? 0))}</span></div>
+    </div>
+
+    <div class="sec">Ile Ci brakuje</div>
+    <div class="ios-list">
+      <div class="stat"><span class="k">Twój cios${bar
+          ? male(`w pancerz ${nf(K.twojCiosWPule ?? 0)} · w życie ${nf(K.twojCiosWZycie ?? 0)}`) : ''}</span>
+        <span class="v">${nf(K.twojCios ?? 0)}</span></div>
+      ${bar ? `<div class="stat"><span class="k">Ciosów na zdarcie pancerza</span>${naPancerz}</div>` : ''}
+      <div class="stat"><span class="k">Ciosów do jego zabicia</span>
+        <span class="v" style="color:var(--blood)">${nf(K.ciosowPotrzeba ?? 0)}</span></div>
+      <div class="stat"><span class="k">Jego cios w Ciebie</span>
+        <span class="v">${nf(K.jegoCios ?? 0)} ×${K.ataki ?? 2}</span></div>
+      <div class="stat"><span class="k">Jego tur do Twojej śmierci${bar
+          ? male(`musi zdjąć Twoją pulę ${nf(K.twojaPula ?? 0)} i dopiero życie`) : ''}</span>
+        <span class="v" style="color:var(--blood)">${nf(K.ciosowNaCiebie ?? 0)}</span></div>
+    </div>
+    <div class="t2">${bar
+      ? 'Pancerz to druga pula życia — cios najpierw zdziera ją, dopiero nadwyżka sięga zdrowia. '
+        + 'Przebicie i magia omijają pulę, Zmiażdżenie łamie ją szybciej. '
+      : 'Te liczby są policzone z Twoich statystyk tą samą formułą, co walka. '}${ogon}</div>`;
+}
+
 function renderKolos() {
   const K = S.kolos ?? {};
   const st = S.stats;
@@ -1477,26 +1519,7 @@ function renderKolos() {
   </div>`;
 
   h += `<div class="col">
-    <div class="sec">Jego liczby</div>
-    <div class="statgrid">
-      <div class="stat-box"><span class="k">Zdrowie</span><span class="v">${nf(K.hp)}</span></div>
-      <div class="stat-box"><span class="k">Atak</span><span class="v">${nf(K.damage)}</span></div>
-      <div class="stat-box"><span class="k">Obrona</span><span class="v">${nf(K.armor)}</span></div>
-    </div>
-
-    <div class="sec">Ile Ci brakuje</div>
-    <div class="ios-list">
-      <div class="stat"><span class="k">Twój cios przez jego pancerz</span>
-        <span class="v">${nf(K.twojCios ?? 0)}</span></div>
-      <div class="stat"><span class="k">Ciosów do jego zabicia</span>
-        <span class="v" style="color:var(--blood)">${nf(K.ciosowPotrzeba ?? 0)}</span></div>
-      <div class="stat"><span class="k">Jego cios w Ciebie</span>
-        <span class="v">${nf(K.jegoCios ?? 0)} ×${K.ataki ?? 2}</span></div>
-      <div class="stat"><span class="k">Jego tur do Twojej śmierci</span>
-        <span class="v" style="color:var(--blood)">${nf(K.ciosowNaCiebie ?? 0)}</span></div>
-    </div>
-    <div class="t2">Te liczby są policzone z Twoich statystyk tą samą formułą, co walka.
-      Jeśli ciosów do zabicia jest więcej niż tur, które przeżyjesz — nie ma czego próbować.</div>
+    ${panelSpozaWiezy(K, 'Jeśli ciosów do zabicia jest więcej niż tur, które przeżyjesz — nie ma czego próbować.')}
 
     <div class="sec">Łup</div>
     <div class="card ${K.pokonany ? '' : 'hi'}">
@@ -1552,26 +1575,7 @@ function renderTytan() {
   </div>`;
 
   h += `<div class="col">
-    <div class="sec">Jego liczby</div>
-    <div class="statgrid">
-      <div class="stat-box"><span class="k">Zdrowie</span><span class="v">${nf(K.hp)}</span></div>
-      <div class="stat-box"><span class="k">Atak</span><span class="v">${nf(K.damage)}</span></div>
-      <div class="stat-box"><span class="k">Obrona</span><span class="v">${nf(K.armor)}</span></div>
-    </div>
-
-    <div class="sec">Ile Ci brakuje</div>
-    <div class="ios-list">
-      <div class="stat"><span class="k">Twój cios przez jego pancerz</span>
-        <span class="v">${nf(K.twojCios ?? 0)}</span></div>
-      <div class="stat"><span class="k">Ciosów do jego zabicia</span>
-        <span class="v" style="color:var(--blood)">${nf(K.ciosowPotrzeba ?? 0)}</span></div>
-      <div class="stat"><span class="k">Jego cios w Ciebie</span>
-        <span class="v">${nf(K.jegoCios ?? 0)} ×${K.ataki ?? 3}</span></div>
-      <div class="stat"><span class="k">Jego tur do Twojej śmierci</span>
-        <span class="v" style="color:var(--blood)">${nf(K.ciosowNaCiebie ?? 0)}</span></div>
-    </div>
-    <div class="t2">Te liczby są policzone z Twoich statystyk tą samą formułą, co walka.
-      Tytan jest z założenia poza dzisiejszą skalą — to próba na później.</div>
+    ${panelSpozaWiezy(K, 'Tytan jest z założenia poza dzisiejszą skalą — to próba na później.')}
 
     <div class="sec">Łup</div>
     <div class="card ${K.pokonany ? '' : 'hi'}">

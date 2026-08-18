@@ -93,6 +93,58 @@ function barrierArmorMax(u, side) {
   const ratio = bossLike ? C.combat.barrierBossArmorRatio : C.combat.barrierMobArmorRatio;
   return Math.round((u.maxHp ?? u.hp ?? 0) * ratio);
 }
+// ---------------------------------------------------------------- PROJEKCJA
+
+// Ekrany „ile ci brakuje" (Kolos, Tytan) muszą liczyć TĄ SAMĄ arytmetyką co
+// walka. Wcześniej miały wklejony wzór redukcji `armor/(armor+K)` i po włączeniu
+// bariery kłamały: Kolos pokazywał obronę 15 000, a realna pula to 0,25×HP,
+// czyli 125 000. Stąd te trzy funkcje — jedno źródło prawdy dla obu ekranów.
+
+// PULA PANCERZA jednostki. Publiczne okno na barrierArmorMax.
+export const pulaPancerza = (u, side) => barrierArmorMax(u, side);
+
+// Ile niesie JEDEN cios, rozbite na pulę pancerza i życie. Mirror gałęzi
+// 'barrier' w strike(), bez losowości, krytyka i bloku — czysta średnia.
+export function ciosRozbity(dmg, atakujacy = {}, obronca = {}) {
+  const clampRes = r => Math.min(C.combat.resistanceMax, Math.max(C.combat.resistanceMin, r ?? 0));
+  const split = atakujacy.damageSplit
+    ?? { [atakujacy.damageType ?? (atakujacy.dtype === 'mag' ? 'magic' : 'slash')]: 1 };
+  let doPuli = 0, doZycia = 0;
+  for (const [t, w] of Object.entries(split)) {
+    const portion = dmg * w * (1 - clampRes(obronca.resists?.[t]));
+    if (t === 'pierce' || t === 'magic') doZycia += portion;                    // omija pulę
+    else if (t === 'smash') doPuli += portion * C.combat.crushVsArmorMult;      // łamie szybciej
+    else doPuli += portion;                                                      // Cięcie neutralne
+  }
+  return { doPuli, doZycia, eff: doPuli + doZycia };
+}
+
+// Ile ciosów dzieli atakującego od położenia obrońcy — pod AKTUALNYM modelem.
+//
+// Pod barierą budżet to po prostu `pula + zdrowie`, bo każdy punkt obrażeń albo
+// zdejmuje pulę, albo idzie w HP: nadwyżka ciosu przelewa się przez pulę dalej
+// (`toHp += toPool - absorbed` w strike()). Podział broni nie zmienia SUMY,
+// zmienia KOLEJNOŚĆ — i dlatego `ciosowNaPule` liczy się osobno.
+export function projekcja(dmg, atakujacy, obronca, stronaObroncy, poziom = 1) {
+  const hp = obronca.maxHp ?? obronca.hp ?? 1;
+  if (C.combat.armorModel !== 'barrier') {
+    const kA = armorK(poziom);
+    const armor = (obronca.armor ?? 0) * (stronaObroncy === 'gracz' ? playerArmorEffect(poziom) : 1);
+    const eff = Math.max(1, dmg * (1 - armor / (armor + kA)));
+    return { pula: 0, doPuli: 0, doZycia: eff, eff, ciosowNaPule: 0, ciosow: Math.ceil(hp / eff) };
+  }
+  const pula = barrierArmorMax(obronca, stronaObroncy);
+  const { doPuli, doZycia } = ciosRozbity(dmg, atakujacy, obronca);
+  const eff = Math.max(1, doPuli + doZycia);
+  return {
+    pula, doPuli, doZycia, eff,
+    // Broń w pełni przebijająca (sztylet, łuk, magia) NIGDY nie zdejmie puli —
+    // i to jest prawda do pokazania, a nie dzielenie przez zero.
+    ciosowNaPule: doPuli > 0 ? Math.ceil(pula / doPuli) : Infinity,
+    ciosow: Math.ceil((pula + hp) / eff),
+  };
+}
+
 
 const mkUnit = (u, side, idx) => ({
   side, idx, name: u.name, kind: u.kind ?? 'gracz',
@@ -930,7 +982,11 @@ export function demo() {
         resists: { slash: 0.35, smash: -0.25 } }],
       potions: 0, abilities: [] }, 8128, 'turowa');
     beginTurn(F); step(F, { type: 'attack', strength: 'srednio' });
-    return 9999 - F.enemies[0].hp;
+    const w = F.enemies[0];
+    // Pod barierą cios ląduje w PULI pancerza, nie w HP — mierzymy oba naraz.
+    // Sam ubytek HP dawał po włączeniu bariery zero po obu stronach i test
+    // porównywał zero z zerem, czyli nie sprawdzał już niczego.
+    return ((w.armorMax ?? 0) - (w.armorNow ?? 0)) + (9999 - w.hp);
   };
   console.assert(ciosTypu('smash') > ciosTypu('slash'), 'Smash przebija podatnosc lepiej niz Slash odporność');
 

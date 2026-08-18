@@ -180,12 +180,29 @@ dwóch przeciwników od piętra 3.** Wszystko zamknięte i zacommitowane.
 ## NEXT STEP
 
 **ZACZNIJ OD ostatniego wpisu w `RAIDFOLK_IDLE_SESSION_LOG.md`** (sesja
-2026-08-18/19). Duża przebudowa rdzenia: **pancerz = pula (model bariery, LIVE)**,
-**atrybuty 4→7**, **typy broni z podziałem**, dużo czytelności. Commit `74999bc`.
+2026-08-19). Rdzeń stoi na **pancerzu jako puli (model bariery, LIVE)**,
+atrybutach 4→7 i typach broni z podziałem — to przyszło z sesji 2026-08-18/19
+(commit `74999bc`).
 
-TODO „na koniec" (z końca wpisu sesji): ekrany Kolosa/Tytana liczą staty starym
-wzorem redukcji — pod barierą kłamią, przeliczyć. Strojenie afiksów nowych
-atrybutów, mnożnika `barrierPlayerArmorMult`, ranged divisor (130→100).
+~~Ekrany Kolosa/Tytana pod barierę~~ — **ZROBIONE** (sesja 2026-08-19).
+Liczą teraz `projekcją` z `game/combat.js`, wspólnym `widokSpozaWiezy` po stronie
+serwera i `panelSpozaWiezy` po stronie klienta. Stary ekran zaniżał cios 6×
+i zawyżał długość walki 5×.
+
+**DWIE DECYZJE CZEKAJĄ NA AUTORA** (szczegóły i liczby w końcówce wpisu sesji):
+
+1. **Zmiażdżenie bije 1,3× także po zdarciu puli.** Młot kładzie Kolosa w 218
+   ciosach, każda inna broń w 283 — 23% przewagi na całej walce zamiast samego
+   szybszego łamania pancerza. Poprawka to jedna linijka w `strike()`, ale to
+   zmiana balansu, więc nie została zrobiona bez decyzji.
+2. **Testy są miękkie.** `console.assert` w Node nie przerywa i nie ustawia kodu
+   wyjścia, a „wszystkie testy przeszly" drukuje się bezwarunkowo — więc
+   `node game/combat.js` ZAWSZE kończy się sukcesem. Jedna stara asercja tak
+   właśnie milczała (naprawiona).
+
+Reszta kolejki po barierze: strojenie afiksów nowych atrybutów
+(precyzja/szczęście/witalność/twarda skóra), mnożnik `barrierPlayerArmorMult`
+(2.0) na prawdziwych buildach, ranged divisor (130→100 — czy dystans nie za mocny).
 
 Starsze w kolejce: sloty drużyny 2–3, druga wyprawa (Mokradła Szeptu — definicja
 już stoi w `config.expedition.lista`, brakuje jej tabeli dropów).

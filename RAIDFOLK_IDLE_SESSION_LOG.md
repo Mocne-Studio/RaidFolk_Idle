@@ -1123,3 +1123,93 @@ Layout areny: usunięty label PRZÓD/ŚRODEK/TYŁ, samotny wróg nie pływa.
 - **Afiksy dla nowych atrybutów działają**, ale mag/dystans build sprawdzić w praniu.
 - Ranking na komputerze ziomka pokazywał czerwoną kartę „serwer nie zna rankingu"
   — to STARY serwer u niego, nie bug (kod OK, view() zawsze wysyła ranking).
+
+---
+
+## Sesja 2026-08-19 — ekrany Kolosa i Tytana pod model bariery
+
+Pierwszy punkt z NEXT STEP poprzedniej sesji. Wersja `2026-08-19.1140`.
+
+**Problem.** `kolosWidok`/`tytanWidok` w `server.js` miały WKLEJONY wzór redukcji
+`armor/(armor+K)`. Po włączeniu bariery ekran „Ile Ci brakuje" kłamał, i to nie
+o kilka procent. Postać na piętrze 50 w legendach +3 (atak 2212) widziała:
+
+```
+                  STARY EKRAN     PRAWDA POD BARIERĄ
+jego pancerz         15 000          125 000  (pula = 0,25 × HP)
+twój cios               364            2 212  (pula nie zbija ciosu!)
+ciosów do zabicia     1 374              283
+```
+
+Ekran zaniżał cios sześciokrotnie i zawyżał długość walki pięciokrotnie.
+Powód jest prosty: pod barierą pancerz **nie redukuje obrażeń**, tylko stoi jako
+druga pula życia. Wzór redukcji nie ma tu czego liczyć.
+
+**Rozwiązanie — jedno źródło prawdy.** Do `game/combat.js` doszły trzy eksporty:
+
+- `pulaPancerza(u, side)` — publiczne okno na `barrierArmorMax`
+- `ciosRozbity(dmg, atakujacy, obronca)` — jeden cios rozbity na pulę i życie,
+  mirror gałęzi `barrier` w `strike()` bez losowości, krytyka i bloku
+- `projekcja(dmg, atakujacy, obronca, strona, poziom)` — pula, cios, ciosy na
+  zdarcie pancerza, ciosy do śmierci. **Obsługuje OBA modele** — po przełączeniu
+  `armorModel` z powrotem na `'reduction'` ekran wraca do starych liczb sam
+
+Kluczowa obserwacja, na której stoi `ciosow`: pod barierą **budżet to
+`pula + zdrowie`**, bo nadwyżka ciosu przelewa się przez pulę dalej w HP
+(`toHp += toPool - absorbed` w `strike()`). Podział broni nie zmienia SUMY,
+zmienia KOLEJNOŚĆ — dlatego `ciosowNaPule` liczy się osobno.
+
+**Serwer.** `kolosWidok` i `tytanWidok` to teraz dwie linijki nad wspólnym
+`widokSpozaWiezy(ch, K, pokonany)`. Nowe pola widoku: `barierowy`, `jegoPula`,
+`twojaPula`, `twojCiosWPule`, `twojCiosWZycie`, `ciosowNaPancerz`
+(`null` = ta broń w ogóle nie rusza puli). Jednostki budowane DOKŁADNIE tak jak
+w `startKolos`/`startTytan`, z `variant: 'kolos'` — z niego bierze się rozmiar puli.
+Martwe importy `armorK`/`playerArmorEffect` wyleciały z `server.js`.
+
+**Klient.** Oba ekrany dzieli teraz `panelSpozaWiezy(K, ogon)` w `public/app.js`.
+Pod barierą: box „Pancerz · pula" zamiast „Obrona", wiersz „Ciosów na zdarcie
+pancerza", rozbicie ciosu w podlinijce, informacja o Twojej puli przy turach do
+śmierci. Pod starym modelem panel wraca do czterech wierszy i słowa „Obrona".
+Broń w pełni przebijająca pisze **„omijasz go"** zamiast dzielenia przez zero.
+
+### Sprawdzone liczbami — Kolos, gracz bije 2212
+
+```
+broń                 w pulę  w życie   ciosów na pancerz   ciosów razem
+Miecz 2H (slash)      2212        0                  57            283
+Miecz 1H (80/20)      1770      442                  71            283
+Młot (smash)          2876        0                  44            218
+Sztylet / Łuk / Różdżka  0     2212               nigdy            283
+```
+
+### DO DECYZJI: Zmiażdżenie bije 1,3× także po zdarciu puli
+
+Widać to w tabeli: Młot kładzie Kolosa w **218** ciosach, wszystko inne w **283**.
+To **23% przewagi na całej walce**, nie tylko na zdzieraniu pancerza.
+
+Bierze się z `strike()`: `smash` dostaje `crushVsArmorMult` przy wejściu do puli,
+a gdy pula jest pusta, cała ta **zawyżona** wartość przelewa się w HP. Zamiar był
+inny — „Zmiażdżenie łamie pulę szybciej", a nie „młot bije mocniej w gołe ciało".
+
+**Nie ruszone**, bo to zmiana balansu, nie czytelności. Poprawka to jedna linijka:
+mnożnik ma dotyczyć wyłącznie części pochłoniętej przez pulę, a przelew liczyć
+z wartości surowej.
+
+### Przy okazji: test Smash/Slash nie sprawdzał niczego
+
+`node game/combat.js` wypisywało `Assertion failed: Smash przebija podatnosc
+lepiej niz Slash odporność` i mimo to kończyło się „wszystkie testy przeszly”.
+Test mierzył sam ubytek HP, a pod barierą oba ciosy lądowały w puli — porównywał
+zero z zerem. Mierzy teraz **pulę i HP naraz**. Przechodzi.
+
+**Zostaje do decyzji:** `console.assert` w Node NIE przerywa i NIE ustawia kodu
+wyjścia. Cały zestaw testów jest miękki, a końcowe „wszystkie testy przeszly"
+drukuje się bezwarunkowo. Awaria jest widoczna tylko dla kogoś, kto czyta wyjście
+oczami — dla automatu `node game/combat.js` zawsze kończy się sukcesem.
+
+### Stan po sesji
+```
+node game/combat.js        wszystkie testy przeszly (bez Assertion failed)
+node game/character.js     wszystkie testy przeszly
+node tools/balans.js --cel 7/7 celów trafionych, exit 0
+```
