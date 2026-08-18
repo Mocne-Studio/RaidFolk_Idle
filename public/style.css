@@ -20,7 +20,8 @@
   /* PASKI PRZEWIJANIA — patrz sekcja PRZEWIJANIE. Kolory idą z palety motywu,
      więc pasek zmienia się razem z motywem i nie ma pięciu miejsc do poprawiania. */
   --pasek-gr:9px;
-}
+
+  --belka:#161310;   /* tlo gornej belki i dolnego menu */}
 *{box-sizing:border-box}
 html,body{height:100dvh}
 body{
@@ -116,7 +117,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --ink:#E9E0D2; --ink-dim:#A29686; --ink-mute:#8F8375;
   --brass:#C89A4A; --copper:#9A5B34; --blood:#D1655D; --heal:#4E9E6A; --skill:#4F8CAF;
   --void:#0C0A09; --press:#26211B; --on-brass:#17120B; --glow:none;
-}
+
+  --belka:#161310;   /* tlo gornej belki i dolnego menu */}
 /* MOSIĄDZ ŚWIETLISTY — jedyny z gradientem. Tło żyje, panele mają ciepły odblask. */
 [data-theme="mosiadz"]{
   --ground:#171008; --stone:#241A0E; --stone-hi:#2F2213;
@@ -126,7 +128,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --void:#120C05; --press:#3A2A15; --on-brass:#1A1004;
   --glow:radial-gradient(120% 70% at 50% -10%,rgba(240,196,92,.22),transparent 62%),
          radial-gradient(90% 60% at 50% 110%,rgba(200,122,56,.16),transparent 60%);
-}
+
+  --belka:#1F160C;   /* tlo gornej belki i dolnego menu */}
 /* OTCHŁAŃ — zimny fiolet i stal. */
 [data-theme="otchlan"]{
   --ground:#0B0D16; --stone:#121623; --stone-hi:#1A1F30;
@@ -135,7 +138,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --brass:#8E9BF0; --copper:#6E5CC4; --blood:#CC697D; --heal:#46A98C; --skill:#4FA0D8;
   --void:#070911; --press:#1F2537; --on-brass:#0B0D16;
   --glow:radial-gradient(120% 70% at 50% -10%,rgba(142,155,240,.12),transparent 62%);
-}
+
+  --belka:#0F131E;   /* tlo gornej belki i dolnego menu */}
 /* KREW — czerń i rdza. Najciemniejszy z całej piątki. */
 [data-theme="krew"]{
   --ground:#0D0808; --stone:#160E0E; --stone-hi:#1F1414;
@@ -143,7 +147,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --ink:#EEDCDA; --ink-dim:#B0918E; --ink-mute:#947977;
   --brass:#CB5E56; --copper:#8E3A2E; --blood:#E0564B; --heal:#4E9E6A; --skill:#9D70AB;
   --void:#080505; --press:#241717; --on-brass:#150908;
-}
+
+  --belka:#130C0C;   /* tlo gornej belki i dolnego menu */}
 /* PERGAMIN — jedyny jasny. Sprawdza, czy kontrasty gry stoją także na papierze. */
 [data-theme="pergamin"]{
   --ground:#DCD2BC; --stone:#EFE6D3; --stone-hi:#F8F2E3;
@@ -152,7 +157,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --brass:#795214; --copper:#9A5B34; --blood:#A62F27; --heal:#276742; --skill:#2A5F81;
   --void:#E4DAC3; --press:#E2D7BE; --on-brass:#FFF8E8;
   --sep:rgba(43,35,24,.12);
-}
+
+  --belka:#E8DECA;   /* tlo gornej belki i dolnego menu */}
 /* Poświatę niesie tło aplikacji. Bez motywu gradientowego --glow jest none
    i przeglądarka nic nie rysuje. */
 #app{background-image:var(--glow)}
@@ -166,9 +172,10 @@ button{font:inherit;color:inherit;background:none;border:0}
 
 /* ---------- nagłówek ---------- */
 .topbar{flex:none;display:flex;align-items:center;gap:10px;padding:10px 14px;
-  /* BELKA JEST CIEMNIEJSZA OD TREŚCI. Treść i strona dzielą --stone; górna belka
-     i dolne menu siedzą na --ground, więc odcinają się samym tłem, a nie kreską. */
-  background:var(--ground);border:0;border-bottom:1px solid var(--edge)}
+  /* BELKA JEST CIEMNIEJSZA OD TREŚCI, ale tylko o tyle, żeby oko widziało
+     krawędź. Pełny --ground dzielił ekran na dwa światy — stąd --belka,
+     policzona jako punkt między tłem treści a --ground. */
+  background:var(--belka);border:0;border-bottom:1px solid var(--edge)}
 .who{flex:1;min-width:0}
 .who .n{font-family:var(--display);font-size:16px;line-height:1.1}
 .who .m{font-family:var(--mono);font-size:12px;color:var(--ink-mute);letter-spacing:.05em;margin-top:2px}
@@ -197,9 +204,16 @@ button{font:inherit;color:inherit;background:none;border:0}
   .two-col>.col{flex:1;min-height:0;overflow-y:auto}
   .three-col{flex-direction:row;overflow:hidden}
   .three-col>.col{min-height:0;overflow-y:auto}
-  .three-col>.skill-list{flex:0 0 168px}
   .three-col>.skill-mid{flex:1.2}
   .three-col>.skill-now{flex:1}
+  /* ZBIERACKIE MAJĄ WŁASNY UKŁAD: siatka profesji na całą szerokość u góry,
+     szczegół wybranej profesji w dwóch kolumnach pod nią. Wcześniej lista
+     była wąskim słupkiem 168 px z boku i nie mieściła wszystkich siedmiu. */
+  .three-col.zbierackie{flex-direction:row;flex-wrap:wrap;align-content:flex-start;
+    overflow-y:auto}
+  .three-col.zbierackie>.skill-list{flex:0 0 100%;order:-1}
+  .three-col.zbierackie>.skill-mid,
+  .three-col.zbierackie>.skill-now{min-height:0;overflow:visible}
 }
 
 .scr-head{font-family:var(--display);font-size:15px;color:var(--ink);
@@ -643,7 +657,7 @@ button.card:active{background:var(--press)}
 
 /* ---------- zakładki ---------- */
 .tabs{flex:none;display:grid;grid-template-columns:repeat(6,1fr);
-  background:var(--ground);border-top:1px solid var(--edge);
+  background:var(--belka);border-top:1px solid var(--edge);
   padding-bottom:env(safe-area-inset-bottom);
   /* druga linia obrony: nawet gdyby coś przepchnęło układ, pasek zostaje na dole */
   position:sticky;bottom:0;z-index:5}
@@ -1131,14 +1145,23 @@ textarea:focus{outline:none;border-color:var(--brass)}
 
 /* ---------- skille zbierackie ---------- */
 /* Na telefonie lista profesji leży poziomo jako pasek — pionowa zjadłaby ekran. */
-.three-col>.skill-list{display:flex;flex-direction:row;gap:5px;overflow-x:auto;flex:none;padding-bottom:6px}
+/* SIATKA PROFESJI — TRZY KOLUMNY, WSZYSTKIE NARAZ.
+   Był tu pasek jadący w bok (na szerokim ekranie wąski słupek 168 px), więc
+   siódma profesja zawsze siedziała poza widokiem i trzeba było przewijać.
+   Siedem kafli w trzech kolumnach to trzy rzędy — mieszczą się bez ruchu. */
+.three-col>.skill-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;overflow:visible;flex:none;padding-bottom:0}
 /* Tu też pasek był schowany — z tego samego powodu wrócił. */
-.skillrow{display:flex;align-items:center;gap:6px;flex:none;font:inherit;color:var(--ink-dim);
-  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
-  padding:7px 9px;cursor:pointer;position:relative}
-.skillrow .ic{font-size:16px;line-height:1}
-.skillrow .grow{display:flex;flex-direction:column;gap:1px;text-align:left}
-.skillrow .nm{font-size:13px;white-space:nowrap}
+.skillrow{display:flex;flex-direction:column;align-items:center;gap:3px;flex:none;
+  font:inherit;color:var(--ink-dim);text-align:center;
+  background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:var(--r-md);
+  padding:11px 8px 9px;cursor:pointer;position:relative;min-height:var(--tap)}
+/* Ikona jest DUŻA — to ona niesie rozpoznanie profesji, nie napis. */
+.skillrow .ic{font-size:30px;line-height:1.05;margin-bottom:1px}
+.skillrow .nm{font-size:15px;line-height:1.15}
+/* Co ta profesja daje. Jedno zdanie, żeby nie trzeba było w nią wchodzić,
+   żeby się dowiedzieć, po co w ogóle istnieje. */
+.skillrow .op{font-size:11px;line-height:1.25;color:var(--ink-mute)}
 .skillrow .lv{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
 .skillrow.on{border-color:var(--brass);background:rgba(200,154,74,.12);color:var(--brass)}
 .skillrow.on .lv{color:var(--brass)}
@@ -1153,8 +1176,6 @@ textarea:focus{outline:none;border-color:var(--brass)}
   .three-col > .skill-now{order:-1}
 }
 @media (min-width:760px){
-  .three-col>.skill-list{flex-direction:column;overflow-x:visible;padding-bottom:0}
-  .skillrow{flex:none}
   .skillrow .nm{white-space:normal}
 }
 

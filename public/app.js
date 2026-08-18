@@ -3094,18 +3094,20 @@ function sekcjaZbierackie() {
   const akt = S.activity;
 
   let h = '';
-  h += `<div class="three-col">`;
+  h += `<div class="three-col zbierackie">`;
 
-  // ---- lewa: lista profesji ----
+  // ---- góra: WSZYSTKIE profesje naraz, siatka trzech kolumn ----
+  // Był tu pionowy słupek (na telefonie poziomy pasek), więc żeby zobaczyć
+  // siódmą profesję, trzeba było przewijać. Siedem kafli w trzech kolumnach
+  // mieści się w trzech rzędach i widzi się je wszystkie bez ruchu.
   h += `<div class="col skill-list">`;
   for (const [id, sk] of Object.entries(S.skills)) {
     const kopie = akt?.skill === id;
     h += `<button class="skillrow ${id === skillOpen ? 'on' : ''}" data-act="skill" data-id="${id}">
       <span class="ic">${sk.ic}</span>
-      <span class="grow">
-        <span class="nm">${esc(sk.label)}</span>
-        <span class="lv">${sk.grywalne ? `Lv. ${sk.lvl}` : 'wkrótce'}</span>
-      </span>
+      <span class="nm">${esc(sk.label)}</span>
+      <span class="lv">${sk.grywalne ? `Lv. ${sk.lvl}` : 'wkrótce'}</span>
+      <span class="op">${esc(sk.daje ?? '')}</span>
       ${kopie ? '<span class="dot"></span>' : ''}
     </button>`;
   }

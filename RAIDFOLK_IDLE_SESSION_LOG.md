@@ -1213,3 +1213,63 @@ node game/combat.js        wszystkie testy przeszly (bez Assertion failed)
 node game/character.js     wszystkie testy przeszly
 node tools/balans.js --cel 7/7 celów trafionych, exit 0
 ```
+
+---
+
+## Sesja 2026-08-19 (druga) — repo na GitHubie, czytelność pod iOS, układ
+
+### Repozytorium
+Projekt stoi na **github.com/Seebuchowy/raidfolk-idle** (prywatne). W repo NIE MA
+`raidfolk.db`, APK, `node_modules` ani kluczy. Tożsamość gitowa autora poprawiona
+na **Seebuchowy** — stare commity są autorstwa Adama i **zostają nietknięte**.
+
+### Szerokość i tło
+- **Stała kolumna 1180 px**, wyśrodkowana (`--gra-szer`). To DRUGI zwrot w tym
+  miejscu: limit → pełna szerokość z `zoom` → z powrotem limit
+- **`zoom` skasowany** — skalował cały `#app`, więc „stałe 1180" na monitorze
+  1900 px dawało 1843 px. Stała szerokość i skalowanie okna wykluczają się
+- **Jedno tło na całą stronę**: strona i treść dzielą `--stone`, bez bocznych
+  ramek. Odcinają się WYŁĄCZNIE belki — górna i dolne menu — na `--belka`,
+  policzonej jako 38% drogi od treści do `--ground`. Pełny `--ground` był za
+  ciemny i dzielił ekran na dwa światy
+
+### Paski przewijania
+Sekcja `PRZEWIJANIE` w `style.css` celuje w `*`, więc każde nowe pudełko dostaje
+pasek samo. Kolory z palety motywu. Zmierzone: 10 px zamiast systemowych 15–17.
+Dwa miejsca chowały pasek całkowicie — **odkryte**, bo ukrywały fakt, że lista
+jedzie dalej w bok.
+
+### Czytelność pod iOS HIG
+**Biały obrys górnej belki**: `.topbar` to `<button>` z samym `border-bottom`,
+więc góra i boki zostawały na domyślnej ramce przeglądarki `2px outset`, która
+na ciemnym tle renderuje się jako jasna faza 3D. Reset `button{border:0}`.
+
+**166 deklaracji rozmiaru podniesionych.** Gra sypała czcionkami 5,5–8,5 px przy
+progu iOS 11 pt. Mapowanie na kroki Dynamic Type, NIGDY nie zmniejsza:
+```
+<9 px → 11    9–10,5 → 12    11–12,5 → 13    13–14 → 15    15 → 16    16 → 17
+```
+Treść siedzi na 13–16 px, nie na 17 px Body — to gęsty pulpit danych, a nie ekran
+do czytania; iOS w Ustawieniach robi tak samo. Próg 11 pt i cel 44 pt są ścisłe.
+
+**Kontrasty: było 49 par poniżej 4,5:1, jest 0.** Liczone WCAG dla 5 motywów
+na 4 tłach. `--ink-mute` oblewał we WSZYSTKICH pięciu, a to kolor prawie każdego
+podpisu w grze. Poprawki ruszają wyłącznie jasnością (HSL) — odcień zostaje.
+
+**Zasada jednego ekranu przetrwała.** Zmierzone po podniesieniu czcionek: dolne
+menu kończy się na 812/812 na wszystkich sześciu zakładkach przy 375 px.
+
+### Skille zbierackie — siatka zamiast paska
+Lista profesji była wąskim słupkiem 168 px (na telefonie paskiem jadącym w bok),
+więc siódmej profesji nigdy nie było widać. Teraz **siatka trzech kolumn na całą
+szerokość**: ikona 30 px na górze, nazwa, poziom i zdanie „co ta profesja daje".
+Siedem kafli w trzech rzędach. Zmierzone: wszystkie widoczne bez przewijania na
+1180 px i na 375 px, tekst nigdzie nieprzycięty, cel dotyku 121 px.
+
+### Zaczęte, niedokończone
+`public/i18n.js` — mechanizm PL/EN. **Polski tekst jest kluczem** (jak gettext):
+`t('Ekwipunek')` oddaje 'Equipment' albo sam polski, gdy brak wpisu. Dzięki temu
+komunikaty błędów z serwera tłumaczą się tym samym słownikiem i serwer nie musi
+wiedzieć o istnieniu języków. **Jeszcze niepodpięty do `app.js`.**
+UWAGA przy podpinaniu: w `app.js` `t` jest już używane jako nazwa parametru
+w czterech miejscach — trzeba je przemianować albo importować pod inną nazwą.
