@@ -905,6 +905,29 @@ button.card:active{background:var(--press)}
   color:var(--ink-mute);margin-top:2px;display:block}
 .stat-box .skad b{font-weight:400;color:var(--brass)}
 .staty-rozbite .stat-box{align-items:flex-start;text-align:left}
+
+/* KARTY STATYSTYK — pełny wykład zamiast samej liczby.
+   Każda mówi: co ta statystyka robi, z czego się składa, co ją podnosi
+   i gdzie ma granicę. Liczby w opisach generują się z config.js, więc
+   po zmianie balansu tekst poprawia się sam. */
+.statcards{display:flex;flex-direction:column;gap:9px}
+.statcard{background:var(--stone-hi);border:1px solid var(--edge-soft);
+  border-radius:var(--r-md);padding:11px 13px}
+.statcard-head{display:flex;align-items:baseline;gap:10px;margin-bottom:5px}
+.statcard-head .nm{font-family:var(--display);font-size:16px;color:var(--ink);flex:1}
+.statcard-head .val{font-family:var(--mono);font-size:17px;color:var(--brass)}
+.statcard .co{margin:0 0 7px}
+.statcard .co b{font-weight:400;color:var(--ink-dim)}
+.statcard-linia{display:flex;gap:9px;font-size:11px;line-height:1.35;
+  padding-top:5px;border-top:1px solid var(--sep)}
+.statcard-linia .et{font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-mute);flex:0 0 88px}
+.statcard-linia .tr{flex:1;min-width:0;color:var(--ink-dim)}
+.statcard-linia .tr b{font-weight:400;color:var(--brass)}
+@media (max-width:520px){
+  .statcard-linia{flex-direction:column;gap:1px}
+  .statcard-linia .et{flex:none}
+}
 .stat-box .v{font-family:var(--mono);font-size:13px;color:var(--ink);
   font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   min-width:0}

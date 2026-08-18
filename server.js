@@ -443,6 +443,35 @@ function view(ch) {
     // jest policzenie WSZYSTKIEGO drugi raz z pustymi slotami i odjęcie.
     // Żadnej równoległej matematyki, która rozjedzie się z computeStats().
     statsBase: computeStats({ ...ch, equipped: {} }),
+    // STAŁE WZORÓW dla ekranu „Co z tego wychodzi". Opisy statystyk mają podawać
+    // PRAWDZIWE liczby, a nie prozę, która rozjedzie się po pierwszym strojeniu
+    // balansu — więc idą prosto z config.js, jak wszystko inne w tej grze.
+    formuly: {
+      hpPerStamina: C.character.hpPerStamina,
+      hpPerLevel: C.character.hpPerLevel,
+      startHp: C.character.startHp,
+      staArmorPerPoint: C.character.staArmorPerPoint,
+      twardaSkoraPct: C.character.twardaSkoraPct,
+      hpRegenPerVit: C.character.hpRegenPerVit,
+      agiSpeedDivisor: C.character.agiSpeedDivisor,
+      agiCritDivisor: C.character.agiCritDivisor,
+      manaBase: C.character.manaBase,
+      manaPerInt: C.character.manaPerInt,
+      manaRegenPerTurn: C.character.manaRegenPerTurn,
+      offAttrWeight: C.character.offAttrWeight,
+      baseDamage: C.character.baseDamage,
+      accuracyMin: C.combat.accuracyMin,
+      accuracyMax: C.combat.accuracyMax,
+      critBase: C.combat.critBase,
+      critMultBase: C.combat.critMultBase,
+      speedToInterval: C.combat.speedToInterval,
+      armorModel: C.combat.armorModel,
+      barrierPlayerArmorMult: C.combat.barrierPlayerArmorMult,
+      crushVsArmorMult: C.combat.crushVsArmorMult,
+      weaponAttr: C.character.weaponAttr,
+      dmgDivisor: C.classes.bohater.dmgDivisor,
+      attrPointsPerFloor: C.character.attrPointsPerFloor,
+    },
     tree: treeView(ch), treeRespec: respecCost(ch),
     attrs: ch.attrs, unspentAttr: ch.unspentAttr, treePoints: ch.treePoints,
     gold: ch.gold, currency: ch.currency,

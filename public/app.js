@@ -2816,21 +2816,38 @@ let smithSelected = null;
 const lifeFilter = { rybolowstwo: 'all', rolnictwo: 'all', gotowanie: 'all' };
 let cookingSelected = null;
 let cookingSearch = '';
-let attrStep = 1;          // ile punktów atrybutu na klik (możesz wpisać)
 let attrHold = null;       // trwający przytrzymany przycisk „+"
 
-// Przytrzymanie „+" dodaje coraz szybciej i coraz więcej. Operuje na danych
-// (nazwa atrybutu), nie na węźle DOM — render() przebudowuje przyciski.
+// PRZYTRZYMANIE „+" — PŁYNNE NARASTANIE DO 10 PUNKTÓW NA SEKUNDĘ.
+//
+// Poprzednia wersja przyspieszała I zwiększała porcję naraz: po chwili wrzucała
+// po pięćdziesiąt punktów na raz, więc licznik SKAKAŁ i nie dało się trafić
+// w żądaną wartość. Teraz porcja jest ZAWSZE JEDNOPUNKTOWA, a zmienia się
+// wyłącznie tempo — więc liczba rośnie na żywo, równo, bez przeskoków.
+//
+// Tempo idzie po smoothstep, a nie liniowo: krzywa startuje i kończy łagodnie,
+// więc nie ma szarpnięcia ani w chwili wejścia w rozpęd, ani przy osiągnięciu
+// sufitu. Gracz czuje narastanie, a nie przełącznik.
+const ATTR_START_MS = 320;   // pierwsze powtórzenia: ~3 na sekundę
+const ATTR_MIN_MS   = 100;   // sufit: równo 10 na sekundę
+const ATTR_RAMP_MS  = 1800;  // po tylu milisekundach trzymania jesteśmy na suficie
+
+function attrDelay(odKiedy) {
+  const p = Math.min(1, (Date.now() - odKiedy) / ATTR_RAMP_MS);
+  const ease = p * p * (3 - 2 * p);                       // smoothstep
+  return ATTR_START_MS + (ATTR_MIN_MS - ATTR_START_MS) * ease;
+}
+
+// Operuje na danych (nazwa atrybutu), nie na węźle DOM — render() przebudowuje
+// przyciski, więc uchwyt do elementu przestaje być ważny po pierwszym tiku.
 async function attrTick(attr) {
   if (!attrHold || attrHold.attr !== attr) return;
-  const d = await api('attr', { attr, n: attrHold.add });
+  const d = await api('attr', { attr, n: 1 });
   if (d.error || !attrHold) { attrHold = null; render(); return; }
   render();
   if (!attrHold) return;                       // puszczono w trakcie żądania
   if ((S.unspentAttr ?? 0) <= 0) { attrHold = null; return; }
-  attrHold.add = Math.min(50, attrHold.add + attrStep);   // dodaje więcej
-  attrHold.delay = Math.max(70, attrHold.delay - 30);     // i szybciej
-  attrHold.timer = setTimeout(() => attrTick(attr), attrHold.delay);
+  attrHold.timer = setTimeout(() => attrTick(attr), attrDelay(attrHold.od));
 }
 function stopAttrHold() { if (attrHold) { clearTimeout(attrHold.timer); attrHold = null; } }
 document.addEventListener('pointerdown', (ev) => {
@@ -2838,7 +2855,7 @@ document.addEventListener('pointerdown', (ev) => {
   if (!b || b.disabled) return;
   ev.preventDefault();
   stopAttrHold();
-  attrHold = { attr: b.dataset.attr, add: attrStep, delay: 340 };
+  attrHold = { attr: b.dataset.attr, od: Date.now() };
   attrTick(b.dataset.attr);
 });
 ['pointerup', 'pointercancel'].forEach(e => document.addEventListener(e, stopAttrHold));
@@ -3065,10 +3082,6 @@ function sekcjaAtrybuty() {
     <span class="num big-n">${S.unspentAttr}</span>
     ${rozdane ? `<button class="btn ghost" data-act="attrreset" title="Zwraca wszystkie rozdane punkty do puli — za darmo">Reset</button>` : ''}
   </div>`;
-  h += `<div class="card row compact">
-    <div class="grow"><div class="t2">Punktów na klik. Przytrzymaj „+", żeby dodawać coraz szybciej i więcej.</div></div>
-    <input id="attrstep" class="attr-step" type="number" min="1" value="${attrStep}" aria-label="Punktów na klik">
-  </div>`;
   for (const k of ['sila', 'precyzja', 'intelekt', 'zrecznosc', 'szczescie', 'witalnosc', 'twardaskora']) {
     const total = st.attrs[k] ?? 0;
     const baza = st.attrsBase?.[k] ?? total;
@@ -3084,7 +3097,7 @@ function sekcjaAtrybuty() {
 
   h += `<div class="col scrollbox">
     <div class="sec">Co z tego wychodzi</div>
-    ${statyPelne(st, bz)}
+    ${statyPelne(st, bz, true)}
     <div class="t2" style="margin-top:8px">Pierwsza liczba to wartość łączna. Pod nią widać,
       ile z niej niosą Twoje punkty i poziom, a ile dokłada założony sprzęt.</div>
   </div>`;
@@ -3092,47 +3105,145 @@ function sekcjaAtrybuty() {
   return h + `</div>`;
 }
 
-// PEŁNY KOMPLET STATYSTYK WYNIKOWYCH. Jedno miejsce dla ekranu atrybutów
-// i karty gracza — inaczej Celność i Unik trzeba by dopisywać dwa razy.
+// PEŁNY KOMPLET STATYSTYK WYNIKOWYCH — jedno miejsce dla ekranu atrybutów
+// i karty gracza, inaczej Celność i Unik trzeba by dopisywać dwa razy.
 //
 // `baza` to te same statystyki policzone Z PUSTYMI SLOTAMI (`statsBase` z serwera).
 // Różnica między nią a stanem faktycznym JEST wkładem sprzętu — nie ma tu drugiego
 // wzoru, który mógłby się rozjechać z computeStats().
-function statyPelne(st, baza = null) {
+//
+// `pelne` przełącza na wykład: skąd liczba się bierze, co ją podnosi i gdzie ma
+// sufit. Karta gracza woła bez tego i dostaje ciasną siatkę jak dotąd.
+function statyPelne(st, baza = null, pelne = false) {
   const pct = v => `${(v * 100).toFixed(1)}%`;
   const dwa = v => v.toFixed(2);
-  const w = (k, v, tip, skad) => `<div class="stat-box" title="${esc(tip)}">
-    <span class="k">${k}</span><span class="v">${v}</span>${skad ? `<span class="skad">${skad}</span>` : ''}</div>`;
+  const F = S.formuly ?? {};
+  const A = st.attrs ?? {};
+  const B = st.breakdown ?? {};
 
-  // Rozbicie „ile jest Twoje, ile daje sprzęt". Bez `baza` znika bez śladu,
-  // więc karta gracza może dalej wołać statyPelne(st) z jednym argumentem.
   const R = (klucz, fmt = nf) => {
     if (!baza) return '';
     const b = baza[klucz], t = st[klucz];
     if (b == null || t == null) return '';
     const d = t - b;
     if (Math.abs(d) < 0.005) return `Twoje ${fmt(b)}`;
-    const znak = d > 0 ? '+' : '−';
-    return `Twoje ${fmt(b)} · sprzęt <b>${znak}${fmt(Math.abs(d))}</b>`;
+    return `Twoje ${fmt(b)} · sprzęt <b>${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}</b>`;
   };
 
-  return `<div class="statgrid staty-rozbite">
-    ${w('Zdrowie', nf(st.maxHp), 'Nie wraca między falami.', R('maxHp'))}
-    ${w('Atak', nf(st.damage), 'Obrażenia jednego ciosu, przed pancerzem wroga.', R('damage'))}
-    ${w('Obrona', nf(st.armor), 'Pancerz. Zbija otrzymywane obrażenia.', R('armor'))}
-    ${w('Attack Speed', dwa(st.attackSpeed ?? st.speed / 20),
-      'Ile ciosów na sekundę. Ta sama skala u Ciebie i u mobów.',
+  if (!pelne || !F.hpPerStamina) {
+    // Zwięzła siatka: karta gracza, a także awaryjnie stary serwer bez S.formuly.
+    const w = (k, v, tip, skad) => `<div class="stat-box" title="${esc(tip)}">
+      <span class="k">${k}</span><span class="v">${v}</span>${skad ? `<span class="skad">${skad}</span>` : ''}</div>`;
+    return `<div class="statgrid staty-rozbite">
+      ${w('Zdrowie', nf(st.maxHp), 'Nie wraca między falami.', R('maxHp'))}
+      ${w('Atak', nf(st.damage), 'Obrażenia jednego ciosu.', R('damage'))}
+      ${w('Obrona', nf(st.armor), 'Pancerz.', R('armor'))}
+      ${w('Attack Speed', dwa(st.attackSpeed ?? st.speed / 20), 'Ciosy na sekundę.', R('attackSpeed', dwa))}
+      ${w('Celność', pct(st.accuracy), 'Szansa na trafienie.', R('accuracy', pct))}
+      ${w('Unik', pct(st.evasion), 'Szansa na uniknięcie ciosu.', R('evasion', pct))}
+      ${w('Kryt', pct(st.crit), 'Szansa na krytyka.', R('crit', pct))}
+      ${w('Siła kryta', `×${dwa(st.critMult)}`, 'Mnożnik krytyka.', R('critMult', dwa))}
+      ${w('Moc', nf(st.power), 'Atak, zdrowie i pancerz w jednej liczbie.', R('power'))}
+      ${st.block ? w('Blok', pct(st.block), 'Wymaga tarczy.', R('block', pct)) : ''}
+      ${st.maxMana ? w('Mana', nf(st.maxMana), 'Zaklęcia nią płacą.', R('maxMana')) : ''}
+    </div>`;
+  }
+
+  // ---- wersja pełna: karta na statystykę ----
+  // Każda mówi cztery rzeczy: CO TO ROBI, Z CZEGO SIĘ SKŁADA, CO JĄ PODNOSI
+  // i GDZIE MA GRANICĘ. Liczby w opisach idą z S.formuly, czyli prosto z config.js —
+  // po zmianie balansu opis poprawia się sam i nie zaczyna kłamać.
+  const karta = (nazwa, wartosc, co, sklad, zalezy, zakres) => `
+    <div class="statcard">
+      <div class="statcard-head"><span class="nm">${nazwa}</span><span class="val">${wartosc}</span></div>
+      <div class="t2 co">${co}</div>
+      ${sklad ? `<div class="statcard-linia"><span class="et">Składa się z</span><span class="tr">${sklad}</span></div>` : ''}
+      ${zalezy ? `<div class="statcard-linia"><span class="et">Rośnie od</span><span class="tr">${zalezy}</span></div>` : ''}
+      ${zakres ? `<div class="statcard-linia"><span class="et">Warto wiedzieć</span><span class="tr">${zakres}</span></div>` : ''}
+    </div>`;
+
+  const hp = B.hp ?? {};
+  const dmg = B.dmg ?? {};
+  const attrGlowny = { dwureczna: 'Siła', jednoreczna: 'Siła',
+    dystansowe: 'Precyzja', magiczne: 'Intelekt' }[st.wtype] ?? 'Siła';
+  const asZaPunkt = (1 / (F.agiSpeedDivisor ?? 200) * (F.speedToInterval ?? 1000) / 1000 * 20).toFixed(3);
+
+  return `<div class="statcards">
+    ${karta('Zdrowie', nf(st.maxHp),
+      'Ile obrażeń przyjmiesz, zanim padniesz. <b>Nie wraca między falami ani po porażce</b> — oddaje je mikstura, ognisko na wyprawie albo jedzenie z Gotowania.',
+      `baza ${nf(hp.baza ?? F.startHp)} · z Witalności ${nf(hp.zWytrzymalosci ?? 0)} · z poziomu ${nf(hp.zPoziomu ?? 0)} · z afiksów ${nf(hp.zAfiksow ?? 0)}`,
+      `<b>Witalność</b> +${F.hpPerStamina} HP za punkt · <b>poziom</b> +${F.hpPerLevel} HP za każde zdobyte piętro · afiksy zdrowia na sprzęcie`,
+      R('maxHp'))}
+
+    ${karta('Atak', nf(st.damage),
+      `Obrażenia jednego ciosu, <b>zanim</b> zetknie się z pancerzem wroga. To <b>broń decyduje</b>, który atrybut je niesie — u Ciebie teraz <b>${attrGlowny}</b>. Pozostałe atrybuty liczą się nadal, tylko słabiej, z wagą ${F.offAttrWeight} — dzięki temu żaden afiks nie jest martwy.`,
+      `płaskie ${nf(dmg.plaskie ?? F.baseDamage)} × mnożnik z atrybutów ${dwa(dmg.attrMult ?? 1)}${(dmg.bonusMult ?? 1) !== 1 ? ` × bonusy ${dwa(dmg.bonusMult)}` : ''}`,
+      `<b>${attrGlowny}</b> · obrażenia samej broni (rosną z jej ilvl i z „+") · afiksy · drzewka skilli bojowych`,
+      R('damage'))}
+
+    ${karta('Obrona', nf(st.armor),
+      F.armorModel === 'barrier'
+        ? `Pancerz to <b>druga pula życia</b>, a nie procent redukcji. Cios najpierw zdziera pulę i dopiero jej nadwyżka sięga zdrowia. Twoja pula ma <b>${nf(st.armorPool ?? st.armor)}</b> punktów — to pancerz ×${F.barrierPlayerArmorMult}. Pula wraca co walkę, zdrowie nie.`
+        : 'Zbija otrzymywane obrażenia procentowo. Im wyżej w wieży, tym mniej wart jeden punkt.',
+      `pancerz z części sprzętu${A.twardaskora ? ` · Twarda Skóra +${Math.round(A.twardaskora * F.twardaSkoraPct * 100)}%` : ''}`,
+      `<b>Twarda Skóra</b> +${Math.round(F.twardaSkoraPct * 100)}% pancerza za punkt · pancerz każdej części · ulepszanie u kowala`,
+      F.armorModel === 'barrier'
+        ? `Przebicie i magia <b>omijają pulę</b> i biją prosto w zdrowie · Zmiażdżenie łamie ją ×${F.crushVsArmorMult}`
+        : R('armor'))}
+
+    ${karta('Attack Speed', dwa(st.attackSpeed ?? st.speed / 20),
+      'Ile ciosów zadajesz na sekundę. <b>Jedna skala dla wszystkich</b> — Twoja, sojuszników, petów i mobów — więc porównanie z paskiem przeciwnika jest uczciwe.',
+      `bazowe tempo broni · Zręczność ${nf(A.zrecznosc ?? 0)}`,
+      `<b>Zręczność</b> +${asZaPunkt} AS za punkt · afiks Attack Speed, który wypada na broni <b>i na każdej części garderoby</b>`,
       R('attackSpeed', dwa))}
-    ${w('Celność', pct(st.accuracy),
-      'Szansa, że cios trafi. Pudło to stracona tura. Rośnie z Precyzji.', R('accuracy', pct))}
-    ${w('Unik', pct(st.evasion),
-      'Szansa, że cios wroga Cię minie. Rośnie ze Zręczności.', R('evasion', pct))}
-    ${w('Kryt', pct(st.crit), 'Szansa na trafienie krytyczne. Rośnie ze Szczęścia.', R('crit', pct))}
-    ${w('Siła kryta', `×${dwa(st.critMult)}`, 'Ile razy mocniejszy jest krytyk.', R('critMult', dwa))}
-    ${w('Moc', nf(st.power), 'Atak, zdrowie i pancerz w jednej liczbie.', R('power'))}
-    ${st.block ? w('Blok', `${Math.round(st.block * 100)}%`,
-      'Wymaga tarczy. Zablokowany cios traci połowę obrażeń.', R('block', pct)) : ''}
-    ${st.maxMana ? w('Mana', nf(st.maxMana), 'Zaklęcia nią płacą. Rośnie z Intelektu.', R('maxMana')) : ''}
+
+    ${karta('Celność', pct(st.accuracy),
+      'Szansa, że cios trafi. Pudło to <b>cała stracona tura</b> — dlatego Celność bywa warta więcej niż surowe obrażenia.',
+      `bazowa celność · Precyzja ${nf(A.precyzja ?? 0)} · afiksy`,
+      '<b>Precyzja</b> · afiksy celności · siła ciosu wybrana w turze — mocniejszy cios trafia rzadziej',
+      `nigdy nie spada poniżej ${pct(F.accuracyMin)} i nigdy nie przekracza ${pct(F.accuracyMax)} — pewnego trafienia w tej grze nie ma`)}
+
+    ${karta('Unik', pct(st.evasion),
+      'Szansa, że cios wroga Cię minie. Liczy się <b>przeciw celności atakującego</b>, więc mocniejszy przeciwnik przebija ten sam unik częściej.',
+      `Zręczność ${nf(A.zrecznosc ?? 0)} · afiksy uniku`,
+      '<b>Zręczność</b> · afiksy uniku na sprzęcie',
+      R('evasion', pct))}
+
+    ${karta('Kryt', pct(st.crit),
+      'Szansa na trafienie krytyczne. Krytyk mnoży obrażenia przez Siłę kryta z karty obok.',
+      `baza ${pct(F.critBase)} · Szczęście ${nf(A.szczescie ?? 0)} · afiksy`,
+      `<b>Szczęście</b> +${(100 / (F.agiCritDivisor ?? 500)).toFixed(1)}% kryta za punkt · afiksy krytyka · węzły drzewek`,
+      R('crit', pct))}
+
+    ${karta('Siła kryta', `×${dwa(st.critMult)}`,
+      `Ile razy mocniejszy jest krytyk. Bez żadnych afiksów mnoży przez bazowe ×${dwa(F.critMultBase)}. Sama Siła kryta nic nie daje bez szansy na kryta — te dwie liczby działają wyłącznie razem.`,
+      `baza ×${dwa(F.critMultBase)} · afiksy siły kryta`,
+      'afiksy „siła kryta" · węzły drzewek skilli bojowych',
+      R('critMult', dwa))}
+
+    ${karta('Moc', nf(st.power),
+      'Jedna liczba na porównanie postaci — <b>to ona ustawia Cię w rankingu</b> pod hełmem w nagłówku. Do samej walki NIE wchodzi: silnik liczy osobno z Ataku, Zdrowia i Pancerza.',
+      `Atak ${nf(st.damage)} ×3 · Zdrowie ${nf(st.maxHp)} ×0,5 · Pancerz ${nf(st.armor)} ×1,5`,
+      'wszystko, co podnosi Atak, Zdrowie albo Pancerz — atrybuty, sprzęt, ulepszenia u kowala i drzewka skilli',
+      R('power'))}
+
+    ${st.block ? karta('Blok', pct(st.block),
+      'Szansa, że przyjmiesz cios tarczą. <b>Wymaga tarczy w drugiej ręce</b>, więc broń dwuręczna wyklucza blok całkowicie. Zablokowany krytyk boli tyle, co zwykły cios.',
+      'tarcza · afiksy bloku',
+      '<b>tarcza w drugiej ręce</b> · afiksy bloku',
+      R('block', pct)) : ''}
+
+    ${st.maxMana ? karta('Mana', nf(st.maxMana),
+      'Zaklęcia płacą maną, a nie ładunkami paska. Pasek ultimate został przy umiejętnościach zwykłych — to <b>dwa osobne zasoby</b> i dwie osobne decyzje.',
+      `baza ${nf(F.manaBase)} · Intelekt ${nf(A.intelekt ?? 0)} × ${F.manaPerInt}`,
+      `<b>Intelekt</b> +${F.manaPerInt} many za punkt`,
+      `wraca ${F.manaRegenPerTurn} na każdą Twoją turę`) : ''}
+
+    ${A.witalnosc ? karta('Regeneracja w walce', `+${nf(Math.round(A.witalnosc * F.hpRegenPerVit))} HP / turę`,
+      'Witalność leczy Cię <b>w trakcie walki</b>, co turę. Poza walką nie działa — między sesjami wraca osobne 2% na minutę.',
+      `Witalność ${nf(A.witalnosc)} × ${F.hpRegenPerVit}`,
+      `<b>Witalność</b> +${F.hpRegenPerVit} HP na turę za punkt`,
+      '') : ''}
   </div>`;
 }
 
@@ -4267,9 +4378,9 @@ document.addEventListener('input', (ev) => {
   } else if (t.id === 'glosnosc') {
     UST.volume = Number(t.value) / 100;
     applyUI();
-  } else if (t.id === 'attrstep') {
-    attrStep = Math.max(1, Math.floor(Number(t.value) || 1));
   }
+  // Pole „punktów na klik" zniknęło razem z kartą — tempo ustala teraz samo
+  // przytrzymanie „+", więc nie ma tu już trzeciej gałęzi.
 });
 
 // Głośność zapisuje się dopiero po puszczeniu suwaka — inaczej leciałoby
