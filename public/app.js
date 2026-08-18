@@ -150,13 +150,24 @@ function buildPickers() {
   wire('#pickInk', 'ink');
 }
 
+// Zdejmuje ekran ładowania — dopiero wtedy, gdy wiadomo, co pod nim stoi.
+function schowajLadowanie() {
+  const el = $('#ladowanie');
+  if (!el || el.hidden) return;
+  el.classList.add('znika');
+  setTimeout(() => { el.hidden = true; }, 260);
+}
+
 async function boot() {
   if (TOKEN) {
     const d = await fetch('/api/state?token=' + TOKEN).then(r => r.json()).catch(() => ({}));
-    if (d.state) { S = d.state; enterGame(); return; }
+    if (d.state) { S = d.state; enterGame(); schowajLadowanie(); return; }
     localStorage.removeItem('rf_token'); TOKEN = null;
   }
 
+  // Nie ma postaci — odsłaniamy tworzenie herbu i dopiero wtedy gasimy ładowanie.
+  $('#start').hidden = false;
+  schowajLadowanie();
   crest = randomCrest();
   buildPickers();
   paintMaker();
@@ -191,7 +202,27 @@ async function boot() {
   $('#code').addEventListener('keydown', e => { if (e.key === 'Enter') restore(); });
 }
 
+// GDZIE GRACZ BYŁ OSTATNIO. Odświeżenie strony wracało na Przygody, choć gra
+// biegnie dalej — na telefonie zdarza się to samo z siebie, gdy system uwolni
+// pamięć karty, i wygląda to jak wyrzucenie z ekranu w środku roboty.
+// Trzymamy to w localStorage, nie na serwerze: to stan PRZEGLĄDANIA, nie postaci.
+const MIEJSCE_KEY = 'rf_miejsce';
+const zapiszMiejsce = (co) => {
+  try {
+    const stare = JSON.parse(localStorage.getItem(MIEJSCE_KEY) ?? '{}');
+    localStorage.setItem(MIEJSCE_KEY, JSON.stringify({ ...stare, ...co }));
+  } catch {}
+};
+const czytajMiejsce = () => {
+  try { return JSON.parse(localStorage.getItem(MIEJSCE_KEY) ?? '{}'); } catch { return {}; }
+};
+// ODCZYT MUSI NASTĄPIĆ RAZ, PRZY ŁADOWANIU MODUŁU. Start gry woła openTab()
+// zanim dojdzie do przywracania pozycji, a openTab zapisuje — więc zapamiętane
+// miejsce ginie kilka milisekund przed tym, jak miałoby zostać użyte.
+const MIEJSCE_START = czytajMiejsce();
+
 function openTab(name) {
+  zapiszMiejsce({ tab: name });
   $$('.tabs button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   $$('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
   $('.screens').scrollTop = 0;
@@ -201,12 +232,21 @@ function openTab(name) {
 }
 
 function enterGame() {
+  // POZYCJĘ PRZYWRACAMY, ZANIM GRA STANIE SIĘ WIDOCZNA. Gdy robiło się to po
+  // odsłonięciu #app, gracz widział przez ułamek sekundy domyślną zakładkę,
+  // a potem przeskok na właściwą — ekran „skakał" przy każdym odświeżeniu.
+  const M = MIEJSCE_START;
+  if (M.skillTab && ['zbierackie', 'bojowe', 'atrybuty'].includes(M.skillTab)) skillTab = M.skillTab;
+  if (M.skillOpen && S.skills?.[M.skillOpen]) skillOpen = M.skillOpen;
+  if (M.tab && $(`.tabs button[data-tab="${M.tab}"]`)) openTab(M.tab);
+
   $('#start').hidden = true;
   $('#app').hidden = false;
   // Strona przestaje się przewijać — dolne menu ma stać w miejscu.
   document.body.classList.add('wgrze');
   // Serwer jest właścicielem ustawień — po wczytaniu postaci jego wersja wygrywa.
   if (S.settings) { UST = { ...UST, ...S.settings }; applyUI(); }
+
   render();
   // Kopanie przetrwało odświeżenie strony — serwer pamięta, co gracz robił.
   if (S.activity) {
@@ -4161,7 +4201,7 @@ document.addEventListener('click', async (ev) => {
       if (!d.error) render();
 
     } else if (act === 'skill') {
-      skillOpen = btn.dataset.id; render();
+      skillOpen = btn.dataset.id; zapiszMiejsce({ skillOpen }); render();
 
     } else if (act === 'smithcat') {
       smithCategory = btn.dataset.c;
@@ -4289,11 +4329,12 @@ document.addEventListener('click', async (ev) => {
       if (!d.error) { toast(`Wróciło ${d.wrocilo} punktów`); render(); }
 
     } else if (act === 'skilltab') {
-      skillTab = btn.dataset.t; render();
+      skillTab = btn.dataset.t; zapiszMiejsce({ skillTab }); render();
 
     } else if (act === 'skillgo') {
       skillTab = btn.dataset.t;
       if (btn.dataset.skill) skillOpen = btn.dataset.skill;
+      zapiszMiejsce({ skillTab, skillOpen });
       openTab('skille'); render();
 
     } else if (act === 'eqskill') {
