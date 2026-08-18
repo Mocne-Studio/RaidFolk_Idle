@@ -317,11 +317,10 @@ function paintMineBar() {
   const akt = S.activity;
 
   if (!akt) {
-    // STAN SPOCZYNKU. Nie znika — pusty slot z zachętą, żeby układ nie skakał
-    // przy każdym starcie i końcu zbierania, a gracz widział, że coś tu bywa.
-    el.innerHTML = `<button class="akt-chip pusty" data-act="tab" data-tab="skille"
-      title="Nic nie zbierasz. Wejdź w Skille i wybierz surowiec — zbieranie leci samo, także gdy oglądasz inne zakładki.">
-      <span class="ic">⛏</span><span class="tx">Nic w tle</span></button>`;
+    // NIC NIE LECI — SLOT ZNIKA. Stała zachęta „Nic w tle" zajmowała miejsce
+    // w belce po to, żeby powiedzieć, że nie ma nic do powiedzenia.
+    // Układ i tak nie skacze, bo belka ma stałą wysokość od imienia i liczników.
+    el.innerHTML = '';
     return;
   }
 
@@ -345,7 +344,7 @@ function paintMineBar() {
     'Leci w tle na każdej zakładce — kliknij, żeby przejść do tej profesji.',
   ].filter(Boolean).join(' · ');
   el.innerHTML = `<button class="akt-chip" data-act="skillgo" data-t="zbierackie"
-      data-skill="${esc(akt.skill)}" title="${esc(tip)}"
+      data-skill="${esc(akt.skill)}" data-tip="${esc(tip)}"
       aria-label="${esc(`${sk?.label ?? 'Zbieranie'}: ${nazwa}`)}">
       <span class="ring" style="--p:${pct}"><span class="ic">${sk?.ic ?? '⛏'}</span></span>
     </button>`;
