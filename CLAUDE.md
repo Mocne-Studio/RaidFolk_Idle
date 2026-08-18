@@ -49,11 +49,12 @@ pierwszy kawałek. Nie traktuj różnicy jako błędu do naprawienia — to plan
 - **Skille = trzy sekcje**: Zbierackie · Bojowe · Atrybuty. Tam rozdajesz punkty
 - **Stały pasek walki** nad zakładkami, żyje na każdym ekranie
 - **Układ jednoekranowy**, przełamania 430 / 760 / 1100 px
-- **SZEROKOŚĆ NA PC JEST STAŁA: 1440 px, wyśrodkowana** (`--gra-szer` w `style.css`).
+- **SZEROKOŚĆ NA PC JEST STAŁA: 1180 px, wyśrodkowana** (`--gra-szer` w `style.css`).
   To już DRUGI zwrot w tym miejscu: najpierw limit 520/900/1180, potem pełna
   szerokość okna z powiększaniem schodkami (`zoom`), teraz z powrotem stała
-  kolumna. **Zoom został skasowany świadomie** — skalował cały `#app`, więc
-  „stałe 1440 px" na monitorze 1900 px dawało w rzeczywistości 1843 px.
+  kolumna — 1180 px, ta sama liczba co w pierwszej wersji.
+  **Zoom został skasowany świadomie** — skalował cały `#app`, więc
+  „stałe 1180 px" na monitorze 1900 px dawało w rzeczywistości 1843 px.
   Stała szerokość i skalowanie okna wykluczają się; nie przywracaj zoomu
   bez decyzji o porzuceniu stałej kolumny
 - **KAŻDY PASEK PRZEWIJANIA MA WSPÓLNY WYGLĄD** — sekcja `PRZEWIJANIE`
