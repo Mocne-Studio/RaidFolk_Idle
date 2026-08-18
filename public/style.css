@@ -1305,6 +1305,25 @@ textarea:focus{outline:none;border-color:var(--brass)}
 @media (max-width:759px){
   .three-col > .skill-list{order:-2}
   .three-col > .skill-now{order:-1}
+
+  /* WSZYSTKIE PROFESJE WIDOCZNE NARAZ. Lista jechała w bok jako poziomy pasek,
+     więc z siedmiu profesji widać było trzy, a o reszcie trzeba było wiedzieć,
+     że tam jest. Siatka trzech kolumn mieści komplet w trzech rzędach. */
+  .three-col>.skill-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:5px;overflow:visible;padding-bottom:0}
+  .skillrow{flex-direction:column;align-items:center;text-align:center;gap:2px;
+    padding:7px 4px;min-height:var(--tap)}
+  .skillrow .ic{font-size:19px}
+  .skillrow .grow{align-items:center;text-align:center}
+  .skillrow .nm{font-size:12px;white-space:normal;line-height:1.15}
+  .skillrow .lv{font-size:11px}
+
+  /* SUROWCE NA DWIE KOLUMNY. Jedna kolumna znaczyła, że dziesięć rud to dziesięć
+     ekranów przewijania — a to jest ekran, na którym się wybiera, nie czyta. */
+  .three-col>.skill-mid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;align-content:start}
+  .three-col>.skill-mid>*{grid-column:1/-1}
+  .three-col>.skill-mid>.res-row{grid-column:auto;margin:0}
 }
 @media (min-width:760px){
   .three-col>.skill-list{flex-direction:column;overflow-x:visible;padding-bottom:0}
