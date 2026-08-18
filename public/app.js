@@ -22,7 +22,7 @@ const oporHtml = (resists = {}, compact = false) => `<div class="resist-profile 
 // Znacznik wersji GRY (plików z public/). Serwer niesie swój własny w stanie.
 // Różnica znaczy jedno: proces serwera jest starszy niż pliki na dysku, więc
 // ekrany są nowe, a liczby stare. ZMIENIAJ RAZEM z WERSJA w server.js.
-const WERSJA_GRY = '2026-08-18.1710';
+const WERSJA_GRY = '2026-08-19.0210';
 
 let TOKEN = localStorage.getItem('rf_token') || null;
 let S = null;               // stan z serwera
@@ -353,6 +353,11 @@ function unitBox(u, opts = {}) {
   const pct = Math.round(u.hp / u.maxHp * 100);
   const dead = !u.alive || u.hp <= 0;
   const portrait = u.portrait ?? opts.portrait ?? null;
+  // Pancerz jako pula (model bariery). Pasek jest cienkim wizualem, a LICZBA
+  // obok HP mówi wprost, ile go jeszcze zostało do przebicia.
+  const armorMax = u.armorMax ?? u.armor ?? 0;
+  const armorNow = Math.max(0, u.armorNow ?? 0);
+  const maArmor = S.armorModel === 'barrier' && armorMax > 0;
   const tag = opts.targetable && !dead ? 'button' : 'div';
   const targetAttrs = tag === 'button'
     ? ` type="button" data-act="fighttarget" data-target="${u.idx}" aria-pressed="${!!opts.priority}" title="Wybierz cel drużyny"`
@@ -363,11 +368,11 @@ function unitBox(u, opts = {}) {
       ? `<img src="${esc(portrait)}" alt="">` : (opts.icon ?? '👹')}</div>
       <div class="unit-copy"><div class="nm">${esc(u.name)}</div>
       <div class="unit-role">${esc(u.role ?? opts.label ?? (opts.foe ? 'wróg' : 'bohater'))}</div></div></div>
+    ${maArmor ? `<div class="bar armor" title="Pancerz — trzeba go przebić, żeby sięgnąć HP"><i style="width:${Math.round(armorNow / armorMax * 100)}%"></i></div>` : ''}
     <div class="bar ${opts.foe ? 'foe' : 'hp'}"><i style="width:${pct}%"></i></div>
-    <div class="hpn">${nf(u.hp)} / ${nf(u.maxHp)}</div></${tag}>`;
+    <div class="hpn"><span class="hp-n">${nf(u.hp)} / ${nf(u.maxHp)}</span>${maArmor ? ` <span class="arm-n" title="Pancerz do przebicia">🛡 ${nf(armorNow)}</span>` : ''}</div></${tag}>`;
 }
 
-const RZAD_WALKI = [null, 'PRZÓD', 'ŚRODEK', 'TYŁ'];
 
 function formacjaHtml(units, { foe = false, defs = [], focus = null, lateral = false,
                                queued = 0, priorityTarget = null, targetable = false } = {}) {
@@ -388,7 +393,7 @@ function formacjaHtml(units, { foe = false, defs = [], focus = null, lateral = f
       const def = defs[u.idx ?? units.indexOf(u)] ?? {};
       const actor = focus?.actor?.side === (foe ? 'wrog' : 'gracz') && focus.actor.idx === u.idx;
       const target = focus?.target?.side === (foe ? 'wrog' : 'gracz') && focus.target.idx === u.idx;
-      return `<div class="formation-unit-wrap"><span class="formation-rank">${RZAD_WALKI[u.row ?? 1]}</span>${unitBox(u, {
+      return `<div class="formation-unit-wrap">${unitBox(u, {
         foe, actor, target, me: !foe && u.slot === 0,
         targetable: foe && targetable, priority: foe && priorityTarget === u.idx,
         icon: foe ? (u.ic ?? def.ic ?? (S.isBoss && u.idx === 0 ? '👑' : '👹'))
@@ -530,6 +535,15 @@ function fightResultAction(f) {
     title = f.runKind === 'dungeon' ? 'Dungeon ukończony' : 'Wyprawa ukończona';
     sub = f.runLabel ?? 'Boss pokonany';
     act = 'afterrun'; label = f.runKind === 'dungeon' ? 'Wybierz następny Dungeon' : 'Wybierz następną Wyprawę';
+  } else if (f.tytan) {
+    title = 'Tytan pokonany';
+    sub = 'Boska tarcza jest Twoja — wracasz do menu';
+    act = 'closefight'; label = 'Powrót do menu';
+  } else if (f.kolos) {
+    // Kolos to pojedynek poza wieżą — po nim wraca się do menu, nie do fal.
+    title = 'Kolos pokonany';
+    sub = 'Wracasz do menu Przygód';
+    act = 'closefight'; label = 'Powrót do menu';
   } else {
     title = 'Walka wygrana';
     sub = S.expedition ? 'Droga prowadzi do następnego etapu' : 'Następna fala jest gotowa';
@@ -892,6 +906,7 @@ function drawFightView() {
 
 let advView = 'hub';     // 'hub' | 'wieza' | 'exp' | 'dungeon' | 'bosses' | 'kolos'
 let towerHealingOpen = false;
+let atakBreakdownOpen = false;   // karta „skąd bierze się Twój atak" w Ekwipunku
 let towerDetailsOpen = false;
 
 const TRYBY = [
@@ -1033,7 +1048,7 @@ function renderDungeonTryb() {
       <div class="stat"><span class="k">Każda dodatkowa jednostka</span><span class="v">+${Math.round((d.partyScaling?.hp ?? 0) * 100)}% HP · +${Math.round((d.partyScaling?.damage ?? 0) * 100)}% ATK wrogów</span></div>
     </div></div><div class="col">
     <div class="sec">Dokładna pula · ${d.drops.length} przedmiotów</div><div class="droptab">
-      ${d.drops.map(it => `<div class="dr znany"><span class="di">${SLOT_ICON[it.slot] ?? '▪'}</span>
+      ${d.drops.map(it => `<div class="dr znany"><span class="di">${itemIcon(it)}</span>
         <span class="dn">${esc(it.base)}${it.hands === 2 ? ' · 2H' : ''}</span></div>`).join('')}</div>
     <div class="card hi" style="margin-top:8px"><div class="stat"><span class="k">Poziom wyposażenia</span><span class="v">${d.ilvl[0]}–${d.ilvl[1]}</span></div>
       <div class="stat"><span class="k">Regeneracja po komnacie</span><span class="v up">12% maks. HP</span></div>
@@ -1210,7 +1225,7 @@ function renderWyprawaTryb() {
     h += `<div class="sec">Przedmiot</div>`;
     h += E.sakwa.length
       ? E.sakwa.map(it => `<button class="card row compact" data-act="expsafe" data-item="${it.id}">
-          <div class="icon" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+          <div class="icon" style="border-color:${rarityColor(it.rarity)}">${itemIcon(it)}</div>
           <div class="grow"><div class="t1" style="color:${rarityColor(it.rarity)}">${esc(nazwaIt(it))}</div>
             <div class="t2">${esc(S.rarities[it.rarity]?.label ?? '')}</div></div>
           <span class="badge on">ODEŚLIJ</span></button>`).join('')
@@ -1430,10 +1445,12 @@ function renderBossowie() {
       <div class="t2">Drużyny z całego serwera wspólnie biją jednego przeciwnika.</div>
     </div><span class="badge">WKRÓTCE</span></button>`;
 
-  h += `<button class="card row mode-card boss-team-mode compact off" disabled>
-    <div class="icon lg">☄</div><div class="grow"><div class="t1">Tytan</div>
-      <div class="t2">Końcowa próba dla pełnego, rozwiniętego składu.</div>
-    </div><span class="badge">WKRÓTCE</span></button>`;
+  const T = S.tytan ?? {};
+  h += `<button class="card row mode-card boss-team-mode compact ${T.otwarty ? 'hi' : 'off'}"
+    ${T.otwarty ? 'data-act="opentytan"' : 'disabled'}>
+    <div class="icon lg">☠</div><div class="grow"><div class="t1">Tytan</div>
+      <div class="t2">Końcowa próba dla pełnego składu. Boska tarcza w łupie.${T.otwarty ? '' : ` Otwiera się na poziomie ${T.unlockFloor ?? 50}.`}</div>
+    </div><span class="badge ${T.otwarty ? 'on' : ''}">${T.otwarty ? (T.pokonany ? 'POKONANY' : 'OTWARTE') : '🔒'}</span></button>`;
   return h + `</div>`;
 }
 
@@ -1512,6 +1529,84 @@ function renderKolos() {
   return h;
 }
 
+// ---------------------------------------------------------------- TYTAN
+// Ten sam ekran co Kolos, inne liczby i boska tarcza w łupie.
+function renderTytan() {
+  const K = S.tytan ?? {};
+  const st = S.stats;
+  const hpPct = Math.round(st.hp / st.maxHp * 100);
+  const godColor = rarityColor('god');
+
+  let h = `<div class="scr-head">
+    <button class="lnk" data-act="openbosses">‹ Bossowie Drużynowi</button>
+    <span>TYTAN</span></div>`;
+
+  h += `<div class="two-col"><div class="col">
+    <div class="kolos-fot">
+      <img src="${esc(K.obraz ?? '/img/tytan.png')}" alt="${esc(K.label ?? 'Tytan')}">
+      <div class="kolos-nazwa">${esc(K.label ?? 'Tytan')}</div>
+    </div>
+    <div class="card"><div class="t2">${esc(K.opis ?? '')}</div></div>
+    <div class="card bad"><div class="t1">Jak bije</div>
+      <div class="t2">${esc(K.ostrzezenie ?? '')}</div></div>
+  </div>`;
+
+  h += `<div class="col">
+    <div class="sec">Jego liczby</div>
+    <div class="statgrid">
+      <div class="stat-box"><span class="k">Zdrowie</span><span class="v">${nf(K.hp)}</span></div>
+      <div class="stat-box"><span class="k">Atak</span><span class="v">${nf(K.damage)}</span></div>
+      <div class="stat-box"><span class="k">Obrona</span><span class="v">${nf(K.armor)}</span></div>
+    </div>
+
+    <div class="sec">Ile Ci brakuje</div>
+    <div class="ios-list">
+      <div class="stat"><span class="k">Twój cios przez jego pancerz</span>
+        <span class="v">${nf(K.twojCios ?? 0)}</span></div>
+      <div class="stat"><span class="k">Ciosów do jego zabicia</span>
+        <span class="v" style="color:var(--blood)">${nf(K.ciosowPotrzeba ?? 0)}</span></div>
+      <div class="stat"><span class="k">Jego cios w Ciebie</span>
+        <span class="v">${nf(K.jegoCios ?? 0)} ×${K.ataki ?? 3}</span></div>
+      <div class="stat"><span class="k">Jego tur do Twojej śmierci</span>
+        <span class="v" style="color:var(--blood)">${nf(K.ciosowNaCiebie ?? 0)}</span></div>
+    </div>
+    <div class="t2">Te liczby są policzone z Twoich statystyk tą samą formułą, co walka.
+      Tytan jest z założenia poza dzisiejszą skalą — to próba na później.</div>
+
+    <div class="sec">Łup</div>
+    <div class="card ${K.pokonany ? '' : 'hi'}">
+      <div class="row">
+        <div class="icon lg" style="border-color:${godColor}">🛡</div>
+        <div class="grow">
+          <div class="t1" style="color:${godColor}">${esc(K.nagroda?.base ?? 'Aegis Tytana')}</div>
+          <div class="t2">${esc(K.nagroda?.opis ?? '')}</div>
+        </div>
+      </div>
+      ${(K.nagroda?.affixes ?? []).length ? `<div class="t2" style="margin-top:6px;color:${godColor}">${
+        K.nagroda.affixes.map(a => `+${a.value}${a.pct || a.as ? '%' : ''} ${esc(a.label)}`).join(' · ')
+      }</div>` : ''}
+      ${K.pokonany
+        ? `<div class="t2" style="margin-top:6px;color:var(--brass)">Już ją masz. Kolejne zwycięstwa oddają ${nf(K.zlotoZaPowtorke ?? 0)} zł.</div>`
+        : ''}
+    </div>
+
+    <div class="card ${hpPct < 40 ? 'bad' : ''}" style="margin-top:8px">
+      <div class="row" style="margin-bottom:6px">
+        <div class="grow"><div class="t1">Zdrowie ${nf(st.hp)} / ${nf(st.maxHp)}</div>
+          <div class="t2">Walka jest turowa. Mikstur: ${S.potions}</div></div>
+        <span class="num" style="font-size:17px">${hpPct}%</span>
+      </div>
+      <div class="bar hp big"><i style="width:${hpPct}%"></i></div>
+    </div>
+
+    <button class="btn solid big wide" style="margin-top:10px" data-act="tytan"
+      ${K.otwarty ? '' : 'disabled'}>Stań do Tytana</button>
+    <div class="t2" style="margin-top:6px">Przegrana nie kosztuje nic poza zdrowiem —
+      na dziś to próba, nie walka do wygrania.</div>
+  </div></div>`;
+  return h;
+}
+
 function renderWyprawa() {
   if (FIGHT) return renderFightView();
   // Trwający run zawsze wygrywa nad hubem — inaczej gracz gubi, gdzie jest.
@@ -1520,6 +1615,7 @@ function renderWyprawa() {
   if (advView === 'dungeon') return renderDungeonTryb();
   if (advView === 'bosses') return renderBossowie();
   if (advView === 'kolos') return renderKolos();
+  if (advView === 'tytan') return renderTytan();
   return advView === 'wieza' ? renderWieza() : renderHub();
 }
 
@@ -1560,7 +1656,7 @@ function itemRow(it, opts = {}) {
   const affix = (it.affixes ?? []).map(a =>
     `${a.label} +${a.value}${a.pct ? '%' : ''}`).join(' · ');
   return `<div class="card row" data-item="${it.id}">
-    <div class="icon" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+    <div class="icon" style="border-color:${rarityColor(it.rarity)}">${itemIcon(it)}</div>
     <div class="grow">
       <div class="t1" style="color:${rarityColor(it.rarity)}">${esc(nazwaIt(it))}</div>
       <div class="t2 num" title="Poziom przedmiotu — tyle pięter trzeba zdobyć, żeby go założyć.">${rar.label} · poz. ${it.ilvl}${it.damage ? ` · atak ${it.damage}` : ''}${it.armor ? ` · obrona ${it.armor}` : ''}</div>
@@ -1576,6 +1672,18 @@ function itemRow(it, opts = {}) {
 const SLOT_ICON = { bron:'🗡', offhand:'🛡', helm:'🪖', napiersnik:'🥋',
                     buty:'👢', rekawice:'🧤', pierscien:'💍', amulet:'📿' };
 
+// Grafiki przedmiotów po NAZWIE BAZY. Dokładane pojedynczo, w miarę jak
+// powstają. Przedmiot z własnym `obraz` (np. łup bossa) wygrywa nad mapą.
+const ITEM_IMG = {
+  'Zbroja Runiczna': '/img/zbroja-runiczna.png',
+  'Aegis Tytana': '/img/tarcza-boska.png',
+};
+// Wnętrze ikony przedmiotu: obrazek, jeśli jest; inaczej emoji slotu.
+function itemIcon(it) {
+  const src = it?.obraz ?? ITEM_IMG[it?.base];
+  return src ? `<img src="${esc(src)}" alt="">` : (SLOT_ICON[it?.slot] ?? '▪');
+}
+
 // Jedna bramka: poziom postaci. Serwer sprawdza to samo w canEquip().
 function canEquipLocal(it) {
   return it.reqLevel > S.poziom
@@ -1583,16 +1691,20 @@ function canEquipLocal(it) {
     : { ok: true };
 }
 
-const ATTR_LABEL = { sila: 'Siła', intelekt: 'Intelekt', zrecznosc: 'Zręczność', wytrzymalosc: 'Wytrzymałość' };
+const ATTR_LABEL = { sila: 'Siła', precyzja: 'Precyzja', intelekt: 'Intelekt',
+  zrecznosc: 'Zręczność', szczescie: 'Szczęście', witalnosc: 'Witalność', twardaskora: 'Twarda Skóra' };
 // Warstwa uniwersalna działa u każdego; obrażenia tylko z atrybutu swojej klasy.
 // Opisy mówią prawdę o TYM buildzie: gracz nie ma klasy, więc o obrażenia
 // decyduje RODZINA TRZYMANEJ BRONI. Atrybut spoza niej liczy się słabiej
 // (character.offAttrWeight), ale nigdy nie jest martwy.
 const ATTR_DESC = {
-  sila: 'obrażenia bronią jedno- i dwuręczną',
-  intelekt: 'obrażenia przyrządem magicznym · mana',
-  zrecznosc: 'obrażenia bronią dystansową · Attack Speed · celność · unik · kryt',
-  wytrzymalosc: 'zdrowie rosnące z poziomem · pancerz',
+  sila: 'obrażenia bronią białą i dwuręczną',
+  precyzja: 'obrażenia bronią dystansową · celność',
+  intelekt: 'obrażenia magiczne i czary · mana',
+  zrecznosc: 'Attack Speed · unik',
+  szczescie: 'szansa na trafienie krytyczne',
+  witalnosc: 'zdrowie · regeneracja HP w walce',
+  twardaskora: 'pancerz procentowo — grubsza pula do przebicia',
 };
 
 // Makieta postaci przeniosła się do zakładki Ekwipunek — tam, gdzie gracz
@@ -1943,6 +2055,37 @@ const SKILL_SLOT_ICON = {
 // kategorii został po nim tylko jako „Wszystko" i „Surowce".
 let invCat = 'all';
 let detail = null;         // { id, where: 'bag' | 'worn' | 'slot' }
+let wearCache = {};        // id → { before, after } realnych statów po założeniu
+
+// Realny wpływ przedmiotu na staty bojowe: Atak/HP/Pancerz/Moc przed → po.
+// Liczone serwerowo tym samym computeStats co walka — gracz widzi PRAWDĘ,
+// nie surowe afiksy, których nie umie przełożyć na obrażenia.
+function wearSummaryHtml(id) {
+  const p = wearCache[id];
+  if (!p) return '<div class="t2">Liczę wpływ na staty…</div>';
+  const b = p.before, a = p.after;
+  const as = v => (v ?? 0).toFixed(2);
+  const pct = v => `${Math.round((v ?? 0) * 100)}%`;
+  const line = (label, bv, av, fmt = nf) => {
+    const d = av - bv;
+    if (Math.abs(d) < 0.0001) return '';
+    return `<div class="stat"><span class="k">${label}</span>
+      <span class="v">${fmt(bv)} → <b>${fmt(av)}</b>
+      <b class="${d > 0 ? 'up' : 'down'}">(${d > 0 ? '+' : ''}${fmt(d)})</b></span></div>`;
+  };
+  const rows = [
+    line('Atak', b.damage, a.damage),
+    line('Maks. HP', b.maxHp, a.maxHp),
+    line(S.armorModel === 'barrier' ? 'Pancerz (pula)' : 'Pancerz',
+      b.armorPool ?? b.armor, a.armorPool ?? a.armor),
+    line('Attack Speed', b.attackSpeed, a.attackSpeed, as),
+    line('Blok', b.block, a.block, pct),
+    line('Moc', b.power, a.power),
+  ].filter(Boolean).join('');
+  return rows
+    ? `<div class="sec">Po założeniu — Twoje realne staty</div>${rows}`
+    : '<div class="t2">Po założeniu: bez zmian w statystykach bojowych.</div>';
+}
 let equipmentMode = 'pve_a'; // 'pve_a' | 'pve_b' | 'pvp' | 'skill'
 
 const activeCombatEquipment = () => equipmentMode === 'pvp' ? (S.pvpEquipment ?? {})
@@ -1994,7 +2137,9 @@ function statsHtml() {
     ${w('Zdrowie', `${nf(st.hp)}/${nf(st.maxHp)}`, 'Wieża nie leczy między falami. Wyprawa oddaje 8% maksymalnego HP po zwycięstwie.', true)}
     ${w('Atak', nf(st.damage), 'Obrażenia z jednego ciosu, przed pancerzem wroga. Rosną z Siły, Intelektu i Zręczności.', true)}
     ${w('Typ ataku', `${typObrazen(st.damageType).ic} ${typObrazen(st.damageType).label}`, 'Rodzaj obrażeń decyduje, jak działają odporności przeciwnika.')}
-    ${w('Obrona', nf(st.armor), 'Pancerz. Zbija otrzymywane obrażenia — im więcej, tym mniejszy każdy cios.')}
+    ${S.armorModel === 'barrier'
+      ? w('Pancerz (pula)', nf(st.armorPool ?? st.armor), 'Druga pula życia. Cios najpierw zbija pancerz — dopiero po jego przebiciu sięga HP. Przebicie omija, Zmiażdżenie łamie szybciej. Wraca co walkę.')
+      : w('Obrona', nf(st.armor), 'Pancerz. Zbija otrzymywane obrażenia — im więcej, tym mniejszy każdy cios.')}
     ${w('Kryt', `${(st.crit * 100).toFixed(1)}% ×${st.critMult.toFixed(2)}`, 'Szansa na trafienie krytyczne i jego mnożnik.')}
     ${w('Attack Speed', (st.attackSpeed ?? st.speed / 20).toFixed(2),
       'Ile ciosów na sekundę. Ta sama skala u Ciebie, sojuszników, petów i mobów — widać wprost, kto uderzy ile razy. Rośnie ze Zręczności i z afiksu Attack Speed.')}
@@ -2002,6 +2147,39 @@ function statsHtml() {
     ${w('Celność', `${Math.round(st.accuracy * 100)}%`, 'Szansa, że cios trafi. Pudło to stracona tura.')}
     ${w('Unik', `${(st.evasion * 100).toFixed(1)}%`, 'Szansa, że cios wroga Cię minie.')}
     ${st.block ? w('Blok', `${Math.round(st.block * 100)}%`, 'Wymaga tarczy w drugiej ręce. Zablokowany cios traci połowę obrażeń.') : ''}
+  </div>`;
+}
+
+// Rozbicie ataku i HP tym samym wzorem, co liczy walka. Ma pokazać graczowi
+// SKĄD bierze się liczba — bez drugiej matematyki, bez chowania niczego.
+function breakdownHtml() {
+  const st = activeCombatStats();
+  const b = st.breakdown;
+  if (!b) return '';
+  const attr = STAT_NAZWA[b.glownyAttr] ?? b.glownyAttr;
+  const d = b.dmg, hp = b.hp;
+  const linia = (k, v) => `<div class="stat"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+  const suma = (k, v) => `<div class="stat"><span class="k"><b>${k}</b></span><span class="v" style="color:var(--brass)"><b>${v}</b></span></div>`;
+  return `<div class="card" style="margin-top:8px">
+    <button class="fight-fold grow" data-act="atakbreak" aria-expanded="${atakBreakdownOpen}">
+      <span><b>Skąd bierze się Twój atak</b><small>${attr} niesie Twoje obrażenia (broń w ręce o tym decyduje)</small></span>
+      <i>${atakBreakdownOpen ? '▲' : '▼'}</i></button>
+    ${atakBreakdownOpen ? `<div style="margin-top:6px">
+      <div class="sec">Atak</div>
+      ${linia('Płaskie obrażenia (baza + broń + afiksy)', nf(d.plaskie))}
+      ${linia(`× mnożnik z atrybutów (${nf(b.mainAttr)} ÷ ${b.divisor})`, `×${d.attrMult.toFixed(2)}`)}
+      ${d.bonusMult > 1.001 ? linia('× bonusy (drzewko, jedzenie)', `×${d.bonusMult.toFixed(2)}`) : ''}
+      ${suma('Atak na cios', nf(d.final))}
+      <div class="t2" style="margin-top:5px">Główny atrybut liczy się w pełni, pozostałe ×${b.offAttrWeight}.
+        Pancerz wroga zbija ten cios dopiero w walce — dlatego na tarczy widzisz pełną liczbę.</div>
+      <div class="sec">Zdrowie</div>
+      ${linia('Baza', nf(hp.baza))}
+      ${linia('Z Wytrzymałości', `+${nf(hp.zWytrzymalosci)}`)}
+      ${linia('Z poziomu (zdobyte piętro)', `+${nf(hp.zPoziomu)}`)}
+      ${hp.zAfiksow ? linia('Z afiksów', `+${nf(hp.zAfiksow)}`) : ''}
+      ${hp.bonusMult > 1.001 ? linia('× bonusy', `×${hp.bonusMult.toFixed(2)}`) : ''}
+      ${suma('Maks. zdrowie', nf(hp.final))}
+    </div>` : ''}
   </div>`;
 }
 
@@ -2017,8 +2195,9 @@ function itemStats(it) {
 }
 
 const STAT_NAZWA = {
-  dmg: 'Atak', arm: 'Obrona', sila: 'Siła', intelekt: 'Intelekt',
-  zrecznosc: 'Zręczność', wytrzymalosc: 'Wytrzymałość', wszystkie: 'Wszystkie staty',
+  dmg: 'Atak', arm: 'Obrona', sila: 'Siła', precyzja: 'Precyzja', intelekt: 'Intelekt',
+  zrecznosc: 'Zręczność', szczescie: 'Szczęście', witalnosc: 'Witalność', twardaskora: 'Twarda Skóra',
+  wytrzymalosc: 'Wytrzymałość', wszystkie: 'Wszystkie staty',
   hpFlat: 'Zdrowie', critChance: 'Szansa na kryt', critPower: 'Siła kryta',
   speed: 'Prędkość', accuracy: 'Celność', evasion: 'Unik', attackSpeed: 'Attack Speed',
   resistSlash: 'Odporność Slash', resistSmash: 'Odporność Smash',
@@ -2032,13 +2211,30 @@ const wartoscStatu = (k, v) => (STAT_AS.has(k)
   ? (v / 100).toFixed(2).replace('.', ',') + ' AS'
   : `${v}${STAT_PCT.has(k) ? '%' : ''}`);
 
-function typBroni(it) {
+// Mirror weaponDamageSplit z content.js (display-only). Główny + poboczny typ.
+function bronPodzial(it) {
   const nazwa = String(it?.base ?? it?.name ?? '').toLocaleLowerCase('pl');
-  if (it?.wtype === 'magiczne' || it?.wtype === 'magia') return 'magic';
-  if (/młot|mlot|maczug|kastet/.test(nazwa)) return 'smash';
-  if (/sztylet|łuk|luk|kusz|oszczep|włócz|wlocz/.test(nazwa) || it?.wtype === 'dystansowe') return 'pierce';
-  if (/topór|topor|miecz|scimitar|ostrze/.test(nazwa)) return 'slash';
-  return it?.wtype === 'dwureczna' ? 'smash' : 'slash';
+  const wt = it?.wtype;
+  if (wt === 'magiczne' || wt === 'magia' || /różdżk|rozdzk|kostur|orb|księg|ksieg|staff|berło|berlo/.test(nazwa)) return { magic: 1 };
+  if (/młot|mlot|maczug|buława|bulawa|obuch|kastet/.test(nazwa)) return { smash: 1 };
+  if (/sztylet|rapier|szpad/.test(nazwa)) return { pierce: 1 };
+  if (/łuk|luk|kusz/.test(nazwa)) return { pierce: 1 };
+  if (/oszczep|włócz|wlocz|javelin/.test(nazwa)) return { pierce: 0.9, slash: 0.1 };
+  if (/scimitar/.test(nazwa)) return { slash: 1 };
+  if (/topór|topor/.test(nazwa)) return { slash: 1 };
+  if (/dwuręczn|dwureczn|wielki miecz|greatsword/.test(nazwa)) return { slash: 1 };
+  if (/miecz|ostrze/.test(nazwa)) return { slash: 0.8, pierce: 0.2 };
+  if (wt === 'dystansowe') return { pierce: 1 };
+  if (wt === 'dwureczna') return { slash: 1 };
+  return { slash: 1 };
+}
+function typBroni(it) {
+  return Object.entries(bronPodzial(it)).sort((a, b) => b[1] - a[1])[0][0];
+}
+// „⚔ Cięcie 80% · ➶ Przebicie 20%" — tożsamość broni w jednym wierszu.
+function bronPodzialTekst(it) {
+  return Object.entries(bronPodzial(it)).sort((a, b) => b[1] - a[1])
+    .map(([t, w]) => `${typObrazen(t).ic} ${typObrazen(t).pl} ${Math.round(w * 100)}%`).join(' · ');
 }
 
 // Panel szczegółu: nazwa, rzadkość, typ, slot, RÓŻNICA wobec noszonego, opis.
@@ -2075,15 +2271,17 @@ function detailHtml() {
 
   return `<div class="compact-detail">
     <div class="d-head compact">
-      <div class="icon" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+      <div class="icon" style="border-color:${rarityColor(it.rarity)}">${itemIcon(it)}</div>
       <div class="grow"><div class="t1" style="color:${rarityColor(it.rarity)}">${esc(nazwaIt(it))}</div>
         <div class="t2">${esc(rar.label)} · ${esc(S.slots[it.slot]?.label ?? it.slot)} · poz. ${it.ilvl}${it.hands === 2 ? ' · 2H' : ''}</div></div>
     </div>
+    ${it.slot === 'bron' ? `<div class="detail-meta"><span>${bronPodzialTekst(it)}</span></div>` : ''}
     ${(it.source || it.quality) ? `<div class="detail-meta">${it.source ? `<span>${it.source === 'boss_crafted' ? 'Receptura bossa' : 'Kowalstwo'}</span>` : ''}
       ${it.quality ? `<span>${esc(S.smithing?.qualities?.[it.quality]?.label ?? it.quality)} ×${Number(it.qualityMult ?? 1).toFixed(2)}</span>` : ''}</div>` : ''}
     ${rows ? `<div class="cmp-head ${worn ? '' : 'single'}"><span>Statystyka</span>${worn ? '<span>Nosisz</span>' : ''}<span>${worn ? 'Nowy' : 'Wartość'}</span>${worn ? '<span>Różnica</span>' : ''}</div>
       <div class="cmp-table ${worn ? '' : 'single'}">${rows}</div>` : '<div class="t2">Ten przedmiot nie ma statystyk bojowych.</div>'}
     ${worn ? `<div class="cmp-names"><span>${esc(nazwaIt(worn))}</span><span>→</span><span>${esc(nazwaIt(it))}</span></div>` : ''}
+    ${detail.where === 'bag' ? wearSummaryHtml(it.id) : ''}
     ${detail.where === 'bag' && it.slot === 'bron' && it.hands === 2 && gear.offhand
       ? `<div class="compact-warn">Założenie zdejmie ${esc(gear.offhand.name)}.</div>` : ''}
     ${detail.where === 'bag' && it.slot === 'offhand' && hands?.offBlocked
@@ -2133,7 +2331,7 @@ function detailHtmlLegacy() {
 
   return `<div class="card detail" style="border-color:${rarityColor(it.rarity)}">
     <div class="d-head">
-      <div class="icon lg" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+      <div class="icon lg" style="border-color:${rarityColor(it.rarity)}">${itemIcon(it)}</div>
       <div class="grow">
         <div class="t1" style="color:${rarityColor(it.rarity)}">${esc(nazwaIt(it))}</div>
         <div class="t2">${esc(rar.label)} · ${esc(S.slots[it.slot]?.label ?? it.slot)}${it.wtype ? ` · ${esc(it.wtype)}` : ''}</div>
@@ -2264,7 +2462,7 @@ function bagList() {
       : true;
     return `<button class="inv-item ${on ? 'on' : ''}" data-act="pick" data-id="${it.id}"
       style="border-color:${on ? rarityColor(it.rarity) : ''}">
-      <div class="icon" style="border-color:${rarityColor(it.rarity)}">${SLOT_ICON[it.slot] ?? '▪'}</div>
+      <div class="icon" style="border-color:${rarityColor(it.rarity)}">${itemIcon(it)}</div>
       <div class="grow">
         <div class="t1" style="color:${rarityColor(it.rarity)}">${esc(nazwaIt(it))}</div>
         <div class="t2">${esc(S.slots[it.slot]?.label ?? '')} · poz. ${it.ilvl}</div>
@@ -2403,7 +2601,7 @@ function renderEq() {
 
   h += `<div class="eq-top">
     <div class="eq-doll">${dollHtml()}</div>
-    <div class="eq-side">${statsHtml()}</div>
+    <div class="eq-side">${statsHtml()}${breakdownHtml()}</div>
   </div>`;
 
   if (equipmentMode === 'pve_a' || equipmentMode === 'pve_b') {
@@ -2614,6 +2812,33 @@ let smithSelected = null;
 const lifeFilter = { rybolowstwo: 'all', rolnictwo: 'all', gotowanie: 'all' };
 let cookingSelected = null;
 let cookingSearch = '';
+let attrStep = 1;          // ile punktów atrybutu na klik (możesz wpisać)
+let attrHold = null;       // trwający przytrzymany przycisk „+"
+
+// Przytrzymanie „+" dodaje coraz szybciej i coraz więcej. Operuje na danych
+// (nazwa atrybutu), nie na węźle DOM — render() przebudowuje przyciski.
+async function attrTick(attr) {
+  if (!attrHold || attrHold.attr !== attr) return;
+  const d = await api('attr', { attr, n: attrHold.add });
+  if (d.error || !attrHold) { attrHold = null; render(); return; }
+  render();
+  if (!attrHold) return;                       // puszczono w trakcie żądania
+  if ((S.unspentAttr ?? 0) <= 0) { attrHold = null; return; }
+  attrHold.add = Math.min(50, attrHold.add + attrStep);   // dodaje więcej
+  attrHold.delay = Math.max(70, attrHold.delay - 30);     // i szybciej
+  attrHold.timer = setTimeout(() => attrTick(attr), attrHold.delay);
+}
+function stopAttrHold() { if (attrHold) { clearTimeout(attrHold.timer); attrHold = null; } }
+document.addEventListener('pointerdown', (ev) => {
+  const b = ev.target.closest?.('[data-act="attr"]');
+  if (!b || b.disabled) return;
+  ev.preventDefault();
+  stopAttrHold();
+  attrHold = { attr: b.dataset.attr, add: attrStep, delay: 340 };
+  attrTick(b.dataset.attr);
+});
+['pointerup', 'pointercancel'].forEach(e => document.addEventListener(e, stopAttrHold));
+window.addEventListener('blur', stopAttrHold);
 // Co da się zjeść — czyta się z definicji profesji, żeby lista nie rozjechała
 // się z configiem przy dodaniu nowej potrawy.
 const JEDZENIE = new Set();
@@ -2810,15 +3035,25 @@ function renderSkille() {
 function sekcjaAtrybuty() {
   const st = S.stats;
   let h = `<div class="scrollbox">`;
+  const rozdane = Object.values(st.attrsBase ?? {}).reduce((s, v) => s + (v || 0), 0);
   h += `<div class="card ${S.unspentAttr ? 'hi' : ''} row">
     <div class="grow"><div class="t1">Punkty do rozdania</div>
       <div class="t2">10 na start, 3 za każde zdobyte piętro</div></div>
     <span class="num big-n">${S.unspentAttr}</span>
+    ${rozdane ? `<button class="btn ghost" data-act="attrreset" title="Zwraca wszystkie rozdane punkty do puli — za darmo">Reset</button>` : ''}
   </div>`;
-  for (const k of ['sila', 'intelekt', 'zrecznosc', 'wytrzymalosc']) {
+  h += `<div class="card row compact">
+    <div class="grow"><div class="t2">Punktów na klik. Przytrzymaj „+", żeby dodawać coraz szybciej i więcej.</div></div>
+    <input id="attrstep" class="attr-step" type="number" min="1" value="${attrStep}" aria-label="Punktów na klik">
+  </div>`;
+  for (const k of ['sila', 'precyzja', 'intelekt', 'zrecznosc', 'szczescie', 'witalnosc', 'twardaskora']) {
+    const total = st.attrs[k] ?? 0;
+    const baza = st.attrsBase?.[k] ?? total;
+    const zeSprz = total - baza;
     h += `<div class="card row attr-row" title="${esc(ATTR_DESC[k])}">
-      <div class="grow"><div class="t1">${ATTR_LABEL[k]}</div><div class="t2">${ATTR_DESC[k]}</div></div>
-      <span class="num attr-n">${nf(st.attrs[k])}</span>
+      <div class="grow"><div class="t1">${ATTR_LABEL[k]}</div><div class="t2">${ATTR_DESC[k]}</div>
+        <div class="t2">punkty ${nf(baza)}${zeSprz ? ` · sprzęt <b style="color:var(--brass)">+${nf(zeSprz)}</b>` : ''}</div></div>
+      <span class="num attr-n" title="Łącznie">${nf(total)}</span>
       <button class="btn" data-act="attr" data-attr="${k}" ${S.unspentAttr ? '' : 'disabled'}>+</button>
     </div>`;
   }
@@ -3036,6 +3271,10 @@ function sekcjaZbierackie() {
           ${fuelTxt
             ? `<div class="t2" style="color:${!r.unlocked ? 'var(--ink-mute)' : fuelOk ? 'var(--brass)' : '#D9736B'}">${esc(fuelTxt)}</div>` : ''}
           ${r.buff ? `<div class="t2" style="color:var(--heal)">${esc(buffTxt(r.buff))}</div>` : ''}
+          ${(() => {
+            const pot = r.daje?.mikstura ? (S.miksturyInfo ?? []).find(m => m.id === r.daje.mikstura) : null;
+            return pot ? `<div class="t2" style="color:var(--heal)">Leczy +${nf(pot.heal)} HP${pot.pct ? ` (${Math.round(pot.pct * 100)}% maks. zdrowia)` : ''}</div>` : '';
+          })()}
         </div>
         <span class="res-meta">
           ${showOwned ? `<span class="res-owned" title="Masz: ${nf(owned)}">×${nf(owned)}</span>` : ''}
@@ -3438,6 +3677,9 @@ document.addEventListener('click', async (ev) => {
   const btn = ev.target.closest('[data-act]');
   if (!btn || btn.disabled) return;
   const act = btn.dataset.act;
+  // Rozdawanie atrybutów obsługuje logika hold-to-repeat (pointerdown niżej),
+  // nie klik — inaczej tap dodawałby dwa razy.
+  if (act === 'attr') return;
   btn.disabled = true;
 
   try {
@@ -3502,6 +3744,39 @@ document.addEventListener('click', async (ev) => {
         syncFightHp(); drawFightView(); paintCombatBar();
       } else startPlayback(d);
 
+    } else if (act === 'opentytan') {
+      advView = 'tytan'; render();
+
+    } else if (act === 'tytan') {
+      // Tytan jest zawsze turowy — jak Kolos.
+      AUTO = false;
+      const baseRunStats = S.combatRunStats;
+      const d = await api('tytan', {});
+      if (d.error) { render(); return; }
+      fightStatsOpen = false;
+      fightLogOpen = false;
+      fightDetailsOpen = false;
+      fightActionTab = 'atak';
+      const K = S.tytan;
+      FIGHT = {
+        mode: 'turowa', foeName: K.label,
+        party: [{ name: S.name, hp: S.stats.hp, maxHp: S.stats.maxHp, alive: true, slot: 0 }],
+        enemies: [{ name: K.label, hp: K.hp, maxHp: K.hp, alive: true }],
+        cooldowns: {}, mana: S.stats.maxMana, maxMana: S.stats.maxMana, blokady: {},
+        baseRunStats, combatStats: d.fight?.combatStats ?? d.combatStats ?? null,
+        context: { kind: 'tytan', label: K.label, step: 1, total: 1 }, enemyDefs: [K],
+        log: [], idx: 0, playing: false, result: null,
+      };
+      if (d.awaiting) {
+        FIGHT.party = d.fight.party?.length ? d.fight.party : FIGHT.party;
+        FIGHT.enemies = d.fight.enemies?.length ? d.fight.enemies : FIGHT.enemies;
+        FIGHT.nextAction = d.fight.nextAction ?? null;
+        FIGHT.log = d.fight.log; FIGHT.idx = d.fight.log.length;
+        FIGHT.cooldowns = d.fight.cooldowns;
+        FIGHT.combatStats = d.fight.combatStats ?? FIGHT.combatStats;
+        syncFightHp(); drawFightView(); paintCombatBar();
+      } else startPlayback(d);
+
     } else if (act === 'hub') {
       advView = 'hub'; render();
 
@@ -3516,6 +3791,10 @@ document.addEventListener('click', async (ev) => {
         if (d.fight?.enemies?.length) FIGHT.enemies = d.fight.enemies;
         drawFightView();
       }
+
+    } else if (act === 'atakbreak') {
+      atakBreakdownOpen = !atakBreakdownOpen;
+      render();
 
     } else if (act === 'fightstats') {
       fightStatsOpen = !fightStatsOpen;
@@ -3809,7 +4088,7 @@ document.addEventListener('click', async (ev) => {
       const byloWyprawa = wynik?.expDone || wynik?.expFailed;
       const kind = wynik?.runKind;
       FIGHT = null; AUTO = false;
-      advView = byloWyprawa ? 'hub' : (S.expedition ? (S.expedition.kind === 'dungeon' ? 'dungeon' : 'exp') : 'wieza');
+      advView = (wynik?.kolos || wynik?.tytan || byloWyprawa) ? 'hub' : (S.expedition ? (S.expedition.kind === 'dungeon' ? 'dungeon' : 'exp') : 'wieza');
       render();
 
     } else if (act === 'mode') {
@@ -3858,8 +4137,12 @@ document.addEventListener('click', async (ev) => {
         ? null : { where: 'skill-bag', id: btn.dataset.id };
       render();
     } else if (act === 'pick') {
-      detail = (detail?.where === 'bag' && detail.id === btn.dataset.id)
-        ? null : { where: 'bag', id: btn.dataset.id };
+      const id = btn.dataset.id;
+      detail = (detail?.where === 'bag' && detail.id === id) ? null : { where: 'bag', id };
+      if (detail && !wearCache[id]) {
+        const d = await api('preview', { id });
+        if (d.preview) wearCache[d.preview.id] = d.preview;
+      }
       render();
     } else if (act === 'invcat') {
       invCat = btn.dataset.c; render();
@@ -3885,7 +4168,7 @@ document.addEventListener('click', async (ev) => {
 
     } else if (act === 'upgrade') {
       const d = await api('upgrade', { itemId: btn.dataset.id });
-      if (!d.error) { toast(`${d.name} +${d.plus}`); render(); }
+      if (!d.error) { toast(`${d.name} +${d.plus}`); wearCache = {}; render(); }
 
     } else if (act === 'minestop') {
       stopMineLoop();
@@ -3897,7 +4180,7 @@ document.addEventListener('click', async (ev) => {
       if (!d.error) { toast(btn.dataset.id ? 'Założone' : 'Zdjęte'); detail = null; render(); }
     } else if (act === 'equip') {
       const d = await api('equip', { itemId: btn.dataset.id, loadout: equipmentMode });
-      if (!d.error) { toast('Założone'); detail = null; render(); }
+      if (!d.error) { toast('Założone'); detail = null; wearCache = {}; render(); }
     } else if (act === 'sell') {
       const d = await api('sell', { itemId: btn.dataset.id });
       if (!d.error) { toast(`+${nf(d.gold)} zł`); detail = null; render(); }
@@ -3906,6 +4189,9 @@ document.addEventListener('click', async (ev) => {
       if (!d.error) { toast(`Sprzedano ${d.count} — +${nf(d.gold)} zł`); render(); }
     } else if (act === 'attr') {
       await api('attr', { attr: btn.dataset.attr }); render();
+    } else if (act === 'attrreset') {
+      const d = await api('attrreset', {});
+      if (!d.error) { toast(`Zwrócono ${d.zwrot} punktów`); wearCache = {}; render(); }
     } else if (act === 'potion') {
       const d = await api('potion', { id: btn.dataset.id ?? null });
       if (!d.error) { toast(`${d.label}: +${nf(d.ile)} HP`); render(); }
@@ -3942,6 +4228,8 @@ document.addEventListener('input', (ev) => {
   } else if (t.id === 'glosnosc') {
     UST.volume = Number(t.value) / 100;
     applyUI();
+  } else if (t.id === 'attrstep') {
+    attrStep = Math.max(1, Math.floor(Number(t.value) || 1));
   }
 });
 

@@ -2,6 +2,7 @@
 
 import CONFIG from './config.js';
 import { attackSpeed, asDoSpeed } from './combat.js';
+import { weaponDamageSplit } from './content.js';
 import { itemStatSummary, WEAPON_TYPES, handsOf, nowyWtype,
          weaponDamageType, classDamageType } from './content.js';
 import { cleanupFoodBuffs, foodEffects, professionCycleMs } from './professions.js';
@@ -40,6 +41,16 @@ export function migrate(ch) {
   // Każda postać z bazy — Wędrowiec, Wojownik, Mag, cokolwiek — staje się Bohaterem.
   // Punkty z nieistniejących już węzłów drzewka wracają niżej, same z siebie.
   ch.klasa = PROFIL;
+
+  // MIGRACJA ATRYBUTÓW 4→7. Role się rozeszły: Zręczność → Precyzja (dmg dyst.)
+  // + Zręczność (AS/unik) + Szczęście (kryt); Wytrzymałość → Witalność (HP/regen)
+  // + Twarda Skóra (% pancerza). Nie da się tego uczciwie rozdzielić za gracza,
+  // więc zwracamy WSZYSTKIE punkty i pozwalamy rozdać na nowo.
+  if (ch.attrs && ('wytrzymalosc' in ch.attrs || !('witalnosc' in ch.attrs))) {
+    const zwrot = Object.values(ch.attrs).reduce((s, v) => s + (Number(v) || 0), 0);
+    ch.attrs = { ...C.character.startingAttrs };
+    ch.unspentAttr = (ch.unspentAttr ?? 0) + zwrot;
+  }
 
   // Sloty skasowane z gry (Pas, Spodnie) zabierają ze sobą swoje przedmioty —
   // zostawione w ekwipunku wywalałyby ekran, bo nie mają już definicji slotu.
@@ -477,8 +488,11 @@ export function computeStats(ch, options = {}) {
     if (!item) continue;
     const s = itemStatSummary(item);
     const m = BIZU.has(slot) ? 1 + (K.bizuPct ?? 0) : 1;
-    a.sila += s.sila * m; a.intelekt += s.intelekt * m;
-    a.zrecznosc += s.zrecznosc * m; a.wytrzymalosc += s.wytrzymalosc * m;
+    a.sila += s.sila * m; a.precyzja += s.precyzja * m; a.intelekt += s.intelekt * m;
+    a.zrecznosc += s.zrecznosc * m; a.szczescie += s.szczescie * m;
+    // Stary afiks „Wytrzymałość" (s.wytrzymalosc) dolicza się do Witalności.
+    a.witalnosc += (s.witalnosc + s.wytrzymalosc) * m;
+    a.twardaskora += s.twardaskora * m;
     dmgFlat += s.dmgFlat * m; hpFlat += s.hpFlat * m; armorFlat += s.armorFlat * m;
     critChance += s.critChance * m; critPower += s.critPower * m;
     speedFlat += s.speed * m; accFlat += s.accuracy * m; evaFlat += s.evasion * m;
@@ -510,7 +524,7 @@ export function computeStats(ch, options = {}) {
   const staminaGrowth = Math.min(cc.hpStaminaGrowthMax ?? Infinity,
     1 + Math.max(0, poziom(ch) - (cc.hpStaminaGrowthStartLevel ?? 0))
       * (cc.hpStaminaGrowthPerLevel ?? 0));
-  const staminaHp = a.wytrzymalosc * cc.hpPerStamina * staminaGrowth;
+  const staminaHp = a.witalnosc * cc.hpPerStamina * staminaGrowth;
 
   const maxHp = Math.round(
     (cc.startHp + staminaHp + poziom(ch) * cc.hpPerLevel + hpFlat)
@@ -543,10 +557,13 @@ export function computeStats(ch, options = {}) {
   const speed = Math.round((C.combat.baseSpeed + speedFlat + T.speed + (K.speed ?? 0)
     + asDoSpeed(asFlat / 100)
     + a.zrecznosc / (cc.agiSpeedDivisor / 100)) * (1 + (B.attackSpeedPct ?? 0)));
-  const armor = Math.round((armorFlat + T.armorFlat + a.wytrzymalosc * cc.staArmorPerPoint)
-    * (1 + T.armorPct + K.armorPct + (B.armorPct ?? 0)));
+  // Twarda Skóra podbija pancerz procentowo (w modelu bariery = pulę do przebicia).
+  // Witalność nie daje już płaskiego pancerza — to teraz rola Twardej Skóry.
+  const armor = Math.round((armorFlat + T.armorFlat)
+    * (1 + T.armorPct + K.armorPct + (B.armorPct ?? 0) + a.twardaskora * cc.twardaSkoraPct));
 
-  const accuracy = cc.accuracyBase + a.zrecznosc * cc.accuracyPerAgi + accFlat / 100
+  // Celność niesie Precyzja (trafianie), nie Zręczność.
+  const accuracy = cc.accuracyBase + a.precyzja * cc.accuracyPerAgi + accFlat / 100
     + T.accuracy + (K.accuracy ?? 0) + (B.accuracy ?? 0);
   const evasion = Math.min(cc.evasionMax, a.zrecznosc * cc.evasionPerAgi + evaFlat / 100
     + T.evasion + (K.evasion ?? 0));
@@ -570,6 +587,7 @@ export function computeStats(ch, options = {}) {
     maxHp,
     maxMana,
     manaRegen: Math.max(1, Math.round(cc.manaRegenPerTurn * (1 + (B.manaRegenPct ?? 0)))),
+    hpRegen: Math.round(a.witalnosc * cc.hpRegenPerVit),
     hp: Math.max(1, maxHp - (ch.hpLost ?? 0)),
     damage: Math.max(1, damage),
     speed: Math.max(20, speed),
@@ -583,17 +601,48 @@ export function computeStats(ch, options = {}) {
     potionPct: T.potionPct,
     wtype,
     damageType: weaponDamageType(ch.equipped?.bron),
+    damageSplit: weaponDamageSplit(ch.equipped?.bron),
     resists,
     // RZĄD I ZASIĘG BIORĄ SIĘ Z BRONI. Bijesz wręcz — stoisz z przodu i obrywasz.
     // Różdżka stawia Cię w środku, łuk z tyłu, więc sojusznik-wojownik naprawdę
     // Cię zasłania: wróg musi przejść jeden albo dwa kroki, żeby Cię dosięgnąć.
     row: C.formation.heroRow[wtype] ?? 1,
     reach: C.formation.reach[wtype] ?? 1,
-    crit: C.combat.critBase + critChance / 100 + a.zrecznosc / cc.agiCritDivisor
+    crit: C.combat.critBase + critChance / 100 + a.szczescie / cc.agiCritDivisor
       + T.critChance + (K.critChance ?? 0) + (B.critChance ?? 0),
     critMult: C.combat.critMultBase + critPower / 100 + T.critPower + (K.critPower ?? 0),
+    // Pula pancerza w modelu bariery = pancerz × mnożnik gracza. To LICZBA,
+    // którą realnie trzeba przebić — stat panel ma pokazywać ją, nie surowca.
+    armorPool: C.combat.armorModel === 'barrier'
+      ? Math.round(armor * C.combat.barrierPlayerArmorMult) : armor,
     attrs: a,
+    // Baza z rozdanych punktów (bez sprzętu). UI liczy z tego wkład itemów:
+    // ze sprzętu = attrs − attrsBase.
+    attrsBase: { ...ch.attrs },
     power: Math.round(damage * 3 + maxHp * 0.5 + armor * 1.5),
+    // Rozbicie do UI — pokazuje graczowi, SKĄD bierze się liczba, tym samym
+    // wzorem, który liczy walkę. Same liczby, żadnej drugiej matematyki.
+    breakdown: {
+      glownyAttr: glowny,
+      attrValue: Math.round(a[glowny] ?? 0),
+      mainAttr: Math.round(mainAttr),
+      divisor,
+      offAttrWeight: cc.offAttrWeight,
+      dmg: {
+        plaskie: Math.round(cc.baseDamage + dmgFlat),
+        attrMult: 1 + mainAttr / divisor,
+        bonusMult: 1 + T.dmgPct + K.dmgPct + (B.dmgPct ?? 0),
+        final: Math.max(1, damage),
+      },
+      hp: {
+        baza: cc.startHp,
+        zWytrzymalosci: Math.round(staminaHp),
+        zPoziomu: poziom(ch) * cc.hpPerLevel,
+        zAfiksow: Math.round(hpFlat),
+        bonusMult: 1 + T.hpPct + K.hpPct + (B.hpPct ?? 0),
+        final: maxHp,
+      },
+    },
   };
 }
 
@@ -812,6 +861,9 @@ export function heroUnit(ch, st) {
     // Rodzaj obrażeń bierze się z broni w ręce. Log walki koloruje po tym.
     dtype: st.wtype === 'magiczne' ? 'mag' : 'fiz',
     damageType: st.damageType,
+    // Podział na główny + poboczny typ — silnik blenduje po nim odporności.
+    damageSplit: st.damageSplit,
+    hpRegen: st.hpRegen,
     resists: st.resists,
     // Szyk: bohater stoi tam, gdzie stawia go broń.
     row: st.row, reach: st.reach,
@@ -906,7 +958,7 @@ export function demo() {
   console.assert(newCharacter('T').klasa === PROFIL, 'nowa postac to Bohater, nie klasa');
   console.assert(dmg({ sila: 30 }) > dmg(), 'Sila daje obrazenia');
   console.assert(dmg({ intelekt: 30 }) > dmg(), 'Intelekt daje obrazenia');
-  console.assert(dmg({ zrecznosc: 30 }) > dmg(), 'Zrecznosc daje obrazenia');
+  console.assert(dmg({ precyzja: 30 }) > dmg(), 'Precyzja daje obrazenia');
 
   // BRON decyduje, ktory atrybut niesie obrazenia. Startowa bron to topor (mele),
   // wiec Sila liczy sie w pelni, a reszta slabiej — ale nadal cos daje.
@@ -934,11 +986,11 @@ export function demo() {
   console.assert(computeStats(zSila).maxMana === bezInt, 'Sila many nie daje');
 
   // Wytrzymałość nie jest osią obrażeń
-  console.assert(dmg({ wytrzymalosc: 30 }) === dmg(), 'Wytrzymalosc nie daje obrazen');
+  console.assert(dmg({ witalnosc: 30 }) === dmg(), 'Witalnosc nie daje obrazen');
 
   // Wartość Wytrzymałości rośnie razem z poziomem i nadąża za endgame.
-  const hpNiski = newCharacter('HP1'); hpNiski.attrs.wytrzymalosc = 100;
-  const hpWysoki = newCharacter('HP200'); hpWysoki.attrs.wytrzymalosc = 100; hpWysoki.maxFloor = 200;
+  const hpNiski = newCharacter('HP1'); hpNiski.attrs.witalnosc = 100;
+  const hpWysoki = newCharacter('HP200'); hpWysoki.attrs.witalnosc = 100; hpWysoki.maxFloor = 200;
   const niskiBezSta = newCharacter('HP1b');
   const wysokiBezSta = newCharacter('HP200b'); wysokiBezSta.maxFloor = 200;
   const wartoscStaNisko = computeStats(hpNiski).maxHp - computeStats(niskiBezSta).maxHp;

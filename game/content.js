@@ -220,14 +220,32 @@ export const handsOf = (it) => (it?.hands === 2 ? 2 : 1);
 // Cztery czytelne rodzaje obrażeń. Rodzina skilla nie wystarcza: Młot i Topór
 // są dwuręczne, ale pierwszy rozbija pancerz obuchem, a drugi tnie. Nazwa bazy
 // rozstrzyga wyjątki, wtype daje bezpieczny fallback starym zapisom.
-export function weaponDamageType(it) {
+// TOŻSAMOŚĆ BRONI: każda ma główny typ obrażeń, część ma poboczny (podział %).
+// Dzięki temu miecz omija pancerz czysto-cięciowy resztką Przebicia, a nie trzeba
+// dokładać nowych typów. Rozpoznawanie po NAZWIE BAZY — działa też dla nazw
+// tematycznych („Topór Ognia"). Suma wag = 1.
+export function weaponDamageSplit(it) {
   const nazwa = String(it?.base ?? it?.name ?? '').toLocaleLowerCase('pl');
   const wtype = nowyWtype(it);
-  if (wtype === 'magiczne') return 'magic';
-  if (/młot|mlot|maczug|kastet/.test(nazwa)) return 'smash';
-  if (/sztylet|łuk|luk|kusz|oszczep|włócz|wlocz/.test(nazwa) || wtype === 'dystansowe') return 'pierce';
-  if (/topór|topor|miecz|scimitar|ostrze/.test(nazwa)) return 'slash';
-  return wtype === 'dwureczna' ? 'smash' : 'slash';
+  if (wtype === 'magiczne' || /różdżk|rozdzk|kostur|orb|księg|ksieg|staff|berło|berlo/.test(nazwa)) return { magic: 1 };
+  if (/młot|mlot|maczug|buława|bulawa|obuch|kastet/.test(nazwa)) return { smash: 1 };
+  if (/sztylet|rapier|szpad/.test(nazwa)) return { pierce: 1 };
+  if (/łuk|luk|kusz/.test(nazwa)) return { pierce: 1 };
+  if (/oszczep|włócz|wlocz|javelin/.test(nazwa)) return { pierce: 0.9, slash: 0.1 };
+  if (/scimitar/.test(nazwa)) return { slash: 1 };
+  if (/topór|topor/.test(nazwa)) return { slash: 1 };
+  // Wielki miecz / miecz dwuręczny — czyste Cięcie. Miecz 1H — Cięcie z resztką Przebicia.
+  if (/dwuręczn|dwureczn|wielki miecz|greatsword/.test(nazwa)) return { slash: 1 };
+  if (/miecz|ostrze/.test(nazwa)) return { slash: 0.8, pierce: 0.2 };
+  if (wtype === 'dystansowe') return { pierce: 1 };
+  if (wtype === 'dwureczna') return { slash: 1 };
+  return { slash: 1 };
+}
+
+// Główny typ = najcięższa waga podziału. Używany do koloru logu i etykiety.
+export function weaponDamageType(it) {
+  const split = weaponDamageSplit(it);
+  return Object.entries(split).sort((a, b) => b[1] - a[1])[0][0];
 }
 
 export const classDamageType = (klasa, kind = null) => {
@@ -242,7 +260,7 @@ const NAMES = {
   bron:       null,   // z WEAPON_TYPES
   offhand:    ['Puklerz', 'Tarcza', 'Orb', 'Kastet', 'Sztylet'],
   helm:       ['Hełm', 'Kaptur', 'Diadem', 'Maska'],
-  napiersnik: ['Napierśnik', 'Kolczuga', 'Kirys', 'Płaszcz'],
+  napiersnik: ['Napierśnik', 'Kolczuga', 'Kirys', 'Płaszcz', 'Zbroja Runiczna'],
   buty:       ['Buty', 'Trzewiki', 'Sandały'],
   rekawice:   ['Rękawice', 'Karwasze', 'Naręczaki'],
   pierscien:  ['Pierścień', 'Sygnet', 'Obrączka'],
@@ -522,7 +540,9 @@ export function rollTrophy(seed, family, znane = [], variant = 'normal') {
 // ---------------------------------------------------------------- statystyki przedmiotu
 
 export function itemStatSummary(item) {
-  const s = { sila: 0, intelekt: 0, zrecznosc: 0, wytrzymalosc: 0,
+  const s = { sila: 0, precyzja: 0, intelekt: 0, zrecznosc: 0,
+              szczescie: 0, witalnosc: 0, twardaskora: 0,
+              wytrzymalosc: 0,   // most dla starych przedmiotów → mapuje się na Witalność
               dmgFlat: 0, hpFlat: 0, armorFlat: 0, critChance: 0, critPower: 0,
               speed: 0, accuracy: 0, evasion: 0,
               resistSlash: 0, resistSmash: 0, resistPierce: 0, resistMagic: 0,
@@ -539,7 +559,8 @@ export function itemStatSummary(item) {
   for (const a of item.affixes ?? []) {
     const v = a.value * mnoznikAfiksu;
     if (a.id === 'wszystkie') {
-      s.sila += v; s.intelekt += v; s.zrecznosc += v; s.wytrzymalosc += v;
+      s.sila += v; s.precyzja += v; s.intelekt += v; s.zrecznosc += v;
+      s.szczescie += v; s.witalnosc += v; s.twardaskora += v;
     } else if (a.id in s) {
       s[a.id] += v;
     }

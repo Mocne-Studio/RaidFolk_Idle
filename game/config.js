@@ -135,7 +135,7 @@ export const CONFIG = {
     maxTurns: 2400,
     damageTypes: {
       slash:  { label: 'Slash',  pl: 'Cięcie',       ic: '⚔' },
-      smash:  { label: 'Smash',  pl: 'Obuch',        ic: '◆' },
+      smash:  { label: 'Crush',  pl: 'Zmiażdżenie',  ic: '◆' },
       pierce: { label: 'Pierce', pl: 'Przebicie',    ic: '➶' },
       magic:  { label: 'Magia',  pl: 'Magia',        ic: '✦' },
     },
@@ -149,6 +149,22 @@ export const CONFIG = {
     // Zmierzone: przy stałym K bohater na piętrze 50 wytrzymywał 66 tur,
     // a na piętrze 10 dwadzieścia pięć.
     armorKBase: 250, armorKPerFloor: 45,
+    // MODEL PANCERZA. 'reduction' = stary armor/(armor+K), żywy w grze.
+    // 'barrier' = nowy: pancerz to druga pula życia, którą trzeba przebić,
+    //   zanim cios sięgnie HP. Przebicie omija pulę, Zmiażdżenie łamie ją
+    //   szybciej, Magia idzie po odporności na magię z pominięciem puli.
+    //   Trzymamy 'reduction' do czasu przeliczenia balansu bariery.
+    armorModel: 'barrier',
+    crushVsArmorMult: 1.3,    // Zmiażdżenie zdejmuje pulę pancerza o tyle szybciej
+    // PULA PANCERZA (model 'barrier'). Cel: pula ≈ połowa HP, żeby przebicie
+    // realnie ważyło na całej skali. Moby wyprowadzają pulę z HP (armor liniowy
+    // gubił się przy kwadratowym HP). Gracz — z pancerza sprzętu × mnożnik, żeby
+    // pełny zestaw sięgał ~0,5× HP, a golec/mag w płótnie był miękki.
+    barrierMobArmorRatio: 0.5,
+    barrierPlayerArmorMult: 2.0,
+    // Boss jest już ścianą HP (×7). Pełna pula 0,5× zrobiłaby z pewnego fightu
+    // loterię, więc bossowie i kolosy dostają mniejszą pulę.
+    barrierBossArmorRatio: 0.25,
     // Pancerz bohatera i jego drużyny po 25 poziomie stopniowo liczy się
     // mocniej, do +25% na poziomie 100. Początek Wieży zostaje bez buffa,
     // a Obrona nie przegrywa z rosnącym K w endgame.
@@ -318,7 +334,11 @@ export const CONFIG = {
     attrPointsPerFloor: 3,
     // Postać startuje z pustymi atrybutami i workiem punktów — pierwsza decyzja
     // gracza to jego build, a nie cudza rozpiska.
-    startingAttrs: { sila: 0, intelekt: 0, zrecznosc: 0, wytrzymalosc: 0 },
+    // SIEDEM ATRYBUTÓW. Siła (mele), Precyzja (dystans), Intelekt (magia),
+    // Zręczność (AS + unik), Szczęście (kryt), Witalność (HP + regen),
+    // Twarda Skóra (+% pancerza). „Atak" nie jest atrybutem — to wynik.
+    startingAttrs: { sila: 0, precyzja: 0, intelekt: 0, zrecznosc: 0,
+                     szczescie: 0, witalnosc: 0, twardaskora: 0 },
     startingAttrPoints: 10,
     // mnożniki: (1 + atrybut / dzielnik)
     strDamageDivisor: 100,    // Siła → obrażenia bronią mele
@@ -339,8 +359,12 @@ export const CONFIG = {
     // Rodzina broni decyduje, KTÓRY atrybut niesie obrażenia. Klucze to te same
     // identyfikatory, co skille bojowe — jedna nazwa, jedno miejsce.
     weaponAttr: { dwureczna: 'sila', jednoreczna: 'sila',
-                  dystansowe: 'zrecznosc', magiczne: 'intelekt' },
+                  dystansowe: 'precyzja', magiczne: 'intelekt' },
     offAttrWeight: 0.35,
+    // Twarda Skóra: +% do pancerza (puli w modelu bariery) za punkt.
+    twardaSkoraPct: 0.03,
+    // Witalność: regeneracja HP na turę = tyle × punktów Witalności.
+    hpRegenPerVit: 0.5,
 
     // ---- MANA ----
     // Zaklęcia kosztują manę, nie ładunki paska. Pasek zostaje dla umiejętności
@@ -381,7 +405,7 @@ export const CONFIG = {
     // Intelektu i Zręczności daje obrażenia każdemu, więc żadna broń ani
     // pierścień nie są z góry śmieciem.
     bohater: {
-      label: 'Bohater', dmgAttrs: ['sila', 'intelekt', 'zrecznosc'], dmgDivisor: 110,
+      label: 'Bohater', dmgAttrs: ['sila', 'precyzja', 'intelekt'], dmgDivisor: 110,
       bronie: 'wszystko, co uniesiesz',
       opis: 'Główna postać. Nie ma klasy i nie będzie jej miała — buduje się atrybutami, sprzętem i drzewkiem.',
       startWeapon: 'Wyszczerbiony Topór', startWtype: 'dwureczna',
@@ -655,6 +679,53 @@ export const CONFIG = {
       opis: 'Różdżka Lodowa — jedyny łup Yeti. Nie wypada z niczego innego.',
     },
     zlotoZaPowtorke: 25000,
+  },
+
+  // ---------- TYTAN ----------
+  // Druga próba spoza wieży, o rząd wielkości cięższa od Kolosa. Poziom 300 —
+  // grubo powyżej wszystkiego, co dziś stoi w grze. Z ZAŁOŻENIA nie do pokonania
+  // na obecnej skali: to zawartość-marchewka, nie walka na dziś. Jego jedyny łup,
+  // Aegis Tytana, to BOSKA tarcza z afiksami poza dzisiejszą tabelą — po to, żeby
+  // było widać, dokąd sięga sufit, nawet jeśli nikt tam jeszcze nie dojdzie.
+  tytan: {
+    id: 'tytan',
+    label: 'Tytan Zapomnianej Kuźni',
+    ic: '☠',
+    obraz: '/img/tytan.png',     // ZAŚLEPKA — podmień plik na portret rycerza
+    unlockFloor: 50,             // widoczny dopiero w połowie wieży
+    opis: 'Stał w kuźni, zanim wykuto pierwsze piętro. Zbroja zrosła się z nim '
+        + 'tak dawno, że nikt nie pamięta, czy w środku jeszcze coś jest. Tarcza '
+        + 'na jego ramieniu wypaliła w kamieniu ślad głębszy niż jakikolwiek cios, '
+        + 'jaki zdołasz mu oddać. On nie atakuje — on po prostu stoi, a wszystko, '
+        + 'co podejdzie za blisko, przestaje istnieć.',
+    ostrzezenie: 'Bije TRZY RAZY w turze i ogłusza. Jego pancerz i zdrowie są poza '
+        + 'wszystkim, co dziś zbudujesz. To próba na później — na dziś przegrasz.',
+    hp: 100000000,               // sto milionów — ściana nie do przebicia
+    damage: 200000,
+    armor: 80000,
+    speed: 100,
+    ataki: 3,                    // trzy ciosy pod rząd
+    skills: ['zamach'],          // Zamach: pewne ogłuszenie
+    poziom: 300,                 // skala pancerza tej walki
+    // Nagroda za PIERWSZE zwycięstwo. Boska tarcza — jedyny jej egzemplarz.
+    nagroda: {
+      base: 'Aegis Tytana', slot: 'offhand', wtype: 'tarcza', hands: 1,
+      rarity: 'god', ilvl: 300,
+      obraz: '/img/tarcza-boska.png',
+      opis: 'Aegis Tytana — boska tarcza. Jedyny łup Tytana, nie wypada z niczego innego.',
+      // Afiksy wpisane wprost, nie rolowane — mają być z założenia pojebane.
+      affixes: [
+        { id: 'wszystkie',   label: 'Wszystkie staty',    value: 250 },
+        { id: 'hpFlat',      label: 'Zdrowie',             value: 12000 },
+        { id: 'armorFlat',   label: 'Pancerz',             value: 5000 },
+        { id: 'dmgFlat',     label: 'Obrażenia',           value: 1500 },
+        { id: 'critChance',  label: 'Szansa na kryt',      value: 35,  pct: true },
+        { id: 'critPower',   label: 'Siła kryta',          value: 300, pct: true },
+        { id: 'attackSpeed', label: 'Attack Speed',        value: 80,  as: true },
+        { id: 'resistMagic', label: 'Odporność na magię',  value: 50,  pct: true },
+      ],
+    },
+    zlotoZaPowtorke: 250000,
   },
 
   // ---------- ZDOLNOŚCI PRZECIWNIKÓW ----------
@@ -1716,9 +1787,12 @@ export const CONFIG = {
     // rolowane wartości skalują się z ilvl
     pool: [
       { id: 'sila',        label: 'Siła',              min: 2, max: 5,  perIlvl: 0.55 },
+      { id: 'precyzja',    label: 'Precyzja',          min: 2, max: 5,  perIlvl: 0.55 },
       { id: 'intelekt',    label: 'Intelekt',          min: 2, max: 5,  perIlvl: 0.55 },
       { id: 'zrecznosc',   label: 'Zręczność',         min: 2, max: 5,  perIlvl: 0.55 },
-      { id: 'wytrzymalosc',label: 'Wytrzymałość',      min: 2, max: 5,  perIlvl: 0.55 },
+      { id: 'szczescie',   label: 'Szczęście',         min: 2, max: 5,  perIlvl: 0.40 },
+      { id: 'witalnosc',   label: 'Witalność',         min: 2, max: 5,  perIlvl: 0.55 },
+      { id: 'twardaskora', label: 'Twarda Skóra',      min: 1, max: 3,  perIlvl: 0.30 },
       { id: 'wszystkie',   label: 'Wszystkie staty',   min: 1, max: 2,  perIlvl: 0.20 },
       { id: 'dmgFlat',     label: 'Obrażenia',         min: 3, max: 8,  perIlvl: 1.80 },
       { id: 'hpFlat',      label: 'Zdrowie',           min: 8, max: 20, perIlvl: 3.20 },

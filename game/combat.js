@@ -82,6 +82,18 @@ export function hitChance(accuracy, strength, evasion = 0) {
 
 // ---------------------------------------------------------------- tworzenie walki
 
+// Rozmiar puli pancerza w modelu bariery. Reduction: pula = surowy pancerz
+// (nieużywana). Barrier: gracz/drużyna liczy z pancerza sprzętu ×mnożnik,
+// mob z ułamka swojego HP — inaczej pula gubiła się przy kwadratowym HP mobów.
+function barrierArmorMax(u, side) {
+  const a = u.armor ?? 0;
+  if (C.combat.armorModel !== 'barrier') return a;
+  if (side === 'gracz') return Math.round(a * C.combat.barrierPlayerArmorMult);
+  const bossLike = u.variant === 'boss' || u.variant === 'kolos' || u.variant === 'tytan';
+  const ratio = bossLike ? C.combat.barrierBossArmorRatio : C.combat.barrierMobArmorRatio;
+  return Math.round((u.maxHp ?? u.hp ?? 0) * ratio);
+}
+
 const mkUnit = (u, side, idx) => ({
   side, idx, name: u.name, kind: u.kind ?? 'gracz',
   ic: u.ic ?? null,
@@ -100,8 +112,18 @@ const mkUnit = (u, side, idx) => ({
   // wyłącznie do tego, żeby log walki miał kolor i żeby było widać, czym bijesz.
   // Wynikają z typu broni: różdżka i kostur to magia, reszta to fizyczne.
   dtype: u.dtype ?? 'fiz',
+  variant: u.variant ?? null,
+  hpRegen: u.hpRegen ?? 0,
   damageType: u.damageType ?? (u.dtype === 'mag' ? 'magic' : 'slash'),
+  // Podział typów broni (Miecz 80% Cięcie / 20% Przebicie). Silnik blenduje
+  // po nim odporności i — w modelu bariery — rozdziela cios na pulę i HP.
+  damageSplit: u.damageSplit ?? null,
   resists: { ...(u.resists ?? {}) },
+  // Pula pancerza (model 'barrier'). Wraca co walkę, bo mkUnit odpala się przy
+  // każdym createFight. Moby: ułamek HP. Gracz/drużyna: pancerz sprzętu ×mnożnik.
+  // W modelu 'reduction' pole leży nieużywane (liczy się `armor`).
+  armorMax: barrierArmorMax(u, side),
+  armorNow: barrierArmorMax(u, side),
   reflectByType: { ...(u.reflectByType ?? {}) },
   reflectCapPct: u.reflectCapPct ?? 0.12,
   // Szyk. row: 1 przód, 2 środek, 3 tył. reach: do którego rzędu sięga broń.
@@ -228,6 +250,7 @@ function snapshot(F) {
   const u2 = (u) => ({ name: u.name, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive,
                        idx: u.idx, slot: u.slot, kind: u.kind, row: u.row, advance: u.advance,
                        role: u.role, klasa: u.klasa, ic: u.ic,
+                       armorMax: u.armorMax ?? u.armor ?? 0, armorNow: Math.max(0, u.armorNow ?? u.armorMax ?? u.armor ?? 0),
                        dtype: u.dtype, damageType: u.damageType, resists: { ...u.resists } });
   const pokonani = (F.enemyHistory?.length ?? 0) + F.enemies.filter(u => !u.alive).length;
   return {
@@ -343,20 +366,44 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0,
   const blocked = target.block > 0 && rand(F) < target.block;
   if (blocked) dmg *= (1 - Math.min(0.9, target.blockCut));
 
-  // Obrona gracza ma własny mnożnik skuteczności. Fallback po stronie celu
-  // sprawia, że również wznowione walki zapisane przed patchem liczą się nowo.
-  const zapisanyPoziom = (F.armorK - C.combat.armorKBase) / C.combat.armorKPerFloor;
-  const playerArmor = target.side === 'gracz'
-    ? (F.playerArmorEffectMult ?? playerArmorEffect(zapisanyPoziom)) : 1;
-  const armor = target.armor * playerArmor * effMult(target, 'armorMult') * (1 - pierce);
-  // Odporność typu działa PO pancerzu i ma twarde widełki. Podatność jest
-  // wartością ujemną, więc Smash może naprawdę przebić się tam, gdzie Slash
-  // grzęźnie — bez odporności 100%, która robiłaby z broni martwy przedmiot.
-  const typ = damageType ?? attacker.damageType ?? (attacker.dtype === 'mag' ? 'magic' : 'slash');
-  const resist = Math.min(C.combat.resistanceMax,
-    Math.max(C.combat.resistanceMin, target.resists?.[typ] ?? 0));
-  // takenMult zbija to, co zostało po pancerzu — tak działa Obrona z menu tury.
-  dmg = Math.max(1, Math.round(reduce(F, dmg, armor) * effMult(target, 'takenMult') * (1 - resist)));
+  const clampRes = r => Math.min(C.combat.resistanceMax, Math.max(C.combat.resistanceMin, r ?? 0));
+  // Efektywny podział typów tego ciosu. Zaklęcie wymusza jeden typ; broń niesie
+  // swój (Miecz 80% Cięcie / 20% Przebicie); reszta ma pojedynczy typ.
+  const split = damageType ? { [damageType]: 1 }
+    : (attacker.damageSplit
+       ?? { [attacker.damageType ?? (attacker.dtype === 'mag' ? 'magic' : 'slash')]: 1 });
+  // Typ dominujący — do koloru i ikony wpisu logu.
+  const typ = Object.entries(split).sort((a, b) => b[1] - a[1])[0][0];
+  // Odporność ważona po podziale — do modelu redukcji i do metadanych logu.
+  const resist = Object.entries(split)
+    .reduce((s, [t, w]) => s + w * clampRes(target.resists?.[t] ?? 0), 0);
+
+  let armorHit = 0;   // ile ciosu poszło w pulę pancerza (do logu)
+  if (C.combat.armorModel === 'barrier') {
+    // PANCERZ = PULA (druga pula życia). Cios najpierw bije pulę pancerza;
+    // dopiero jej nadwyżka sięga HP. Przebicie i Magia omijają pulę.
+    let toHp = 0, toPool = 0;
+    for (const [t, w] of Object.entries(split)) {
+      const portion = dmg * w * (1 - clampRes(target.resists?.[t] ?? 0));
+      if (t === 'pierce' || t === 'magic') toHp += portion;            // omija pulę fizyczną
+      else if (t === 'smash') toPool += portion * C.combat.crushVsArmorMult; // łamie szybciej
+      else toPool += portion;                                          // Cięcie neutralne
+    }
+    // Jawne przebicie (afiks/zaklęcie) przelewa część puli prosto w HP.
+    if (pierce > 0) { const p = toPool * pierce; toPool -= p; toHp += p; }
+    const absorbed = Math.min(target.armorNow ?? 0, toPool);
+    target.armorNow = Math.max(0, (target.armorNow ?? 0) - absorbed);
+    armorHit = Math.round(absorbed);
+    toHp += (toPool - absorbed);
+    dmg = Math.max(1, Math.round(toHp * effMult(target, 'takenMult')));
+  } else {
+    // STARY MODEL: redukcja armor/(armor+K). Odporność typu działa PO pancerzu.
+    const zapisanyPoziom = (F.armorK - C.combat.armorKBase) / C.combat.armorKPerFloor;
+    const playerArmor = target.side === 'gracz'
+      ? (F.playerArmorEffectMult ?? playerArmorEffect(zapisanyPoziom)) : 1;
+    const armor = target.armor * playerArmor * effMult(target, 'armorMult') * (1 - pierce);
+    dmg = Math.max(1, Math.round(reduce(F, dmg, armor) * effMult(target, 'takenMult') * (1 - resist)));
+  }
   const actual = Math.min(target.hp, dmg);
   target.hp -= dmg;
   attacker.damageDone = (attacker.damageDone ?? 0) + actual;
@@ -366,8 +413,8 @@ function strike(F, attacker, target, { mult = 1, strength = null, pierce = 0,
   const who = label ? `${attacker.name} · ${label}` : attacker.name;
   const znak = C.combat.damageTypes?.[typ]?.ic ?? (attacker.dtype === 'mag' ? '✦' : '⚔');
   push(F, isCrit ? 'crit' : (attacker.side === 'wrog' ? 'enemy' : 'hit'),
-       `${znak} ${who} → ${target.name}: ${dmg}${isCrit ? ' KRYT' : ''}${blocked ? ' BLOK' : ''}`,
-       { dmg, blocked, dtype: typ === 'magic' ? 'mag' : 'fiz', damageType: typ, resist,
+       `${znak} ${who} → ${target.name}: ${dmg}${armorHit > 0 ? ` 🛡−${armorHit}` : ''}${isCrit ? ' KRYT' : ''}${blocked ? ' BLOK' : ''}`,
+       { dmg, armorHit, blocked, dtype: typ === 'magic' ? 'mag' : 'fiz', damageType: typ, resist,
          actor: { side: attacker.side, idx: attacker.idx }, target: { side: target.side, idx: target.idx } });
 
   // Hazard elity nie jest ukrytym podatkiem od HP: oddaje wyłącznie wskazany
@@ -675,6 +722,10 @@ function unitTurn(F, u, action) {
   // Odnowienia zdolności przeciwnika schodzą na JEGO turze — także wtedy,
   // gdy ją stracił przez ogłuszenie.
   for (const k of Object.keys(u.cd)) if (u.cd[k] > 0) u.cd[k]--;
+  // Regeneracja z Witalności — HP wraca co własną turę jednostki.
+  if ((u.hpRegen ?? 0) > 0 && u.alive && u.hp < u.maxHp) {
+    u.hp = Math.min(u.maxHp, u.hp + u.hpRegen);
+  }
   if (u.side === 'gracz' && u.idx === 0) {
     for (const k of Object.keys(F.cooldowns)) if (F.cooldowns[k] > 0) F.cooldowns[k]--;
     // Mana wraca sama co Twoją turę — inaczej długa walka kończyłaby się
@@ -789,7 +840,8 @@ export function summary(F) {
   const u2 = (u) => ({
     name: u.name, kind: u.kind, hp: Math.max(0, u.hp), maxHp: u.maxHp, alive: u.alive,
     idx: u.idx, slot: u.slot, row: u.row, advance: u.advance, role: u.role, klasa: u.klasa,
-    ic: u.ic, dtype: u.dtype, damageType: u.damageType, resists: { ...u.resists },
+    ic: u.ic, armorMax: u.armorMax ?? u.armor ?? 0, armorNow: Math.max(0, u.armorNow ?? u.armorMax ?? u.armor ?? 0),
+    dtype: u.dtype, damageType: u.damageType, resists: { ...u.resists },
   });
   const nastepny = !F.over ? nextUp(F) : null;
   const pula = nastepny ? (nastepny.side === 'wrog' ? F.party : F.enemies) : [];

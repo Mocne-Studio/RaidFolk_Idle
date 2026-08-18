@@ -51,7 +51,7 @@ async function wersjaZDysku() {
   } catch { return null; }
 }
 
-export const WERSJA = '2026-08-18.1710';
+export const WERSJA = '2026-08-19.0210';
 const C = CONFIG;
 
 // ---------------------------------------------------------------- regeneracja
@@ -342,6 +342,7 @@ function view(ch) {
                    dungeon: C.dungeons.potionCap },
     alwaysAuto: !!ch.alwaysAuto,
     kolos: kolosWidok(ch),
+    tytan: tytanWidok(ch),
     powtarzaj: !!ch.powtarzaj,
     powtarzanieOd: C.tower.powtarzanieOd,
     powtarzanieOtwarte: poziom(ch) >= C.tower.powtarzanieOd,
@@ -425,6 +426,7 @@ function view(ch) {
     // zmianę urządzenia — localStorage trzyma je tylko po to, żeby nie mrugały
     // przy starcie, zanim wróci stan.
     wersja: WERSJA,
+    armorModel: C.combat.armorModel,
     ranking: (() => { const R = ranking(); return { pietro: R.pietro, moc: R.moc, ilu: R.ilu }; })(),
     mojeMiejsce: mojeMiejsce(ch, st),
     createdAt: ch.createdAt ?? null,
@@ -447,6 +449,12 @@ function view(ch) {
       // Ile uleczy TĘ postać — procent i liczba punktów w jednym miejscu.
       heal: Math.round(m.pct ? st.maxHp * m.pct : m.flat),
     })).filter(m => m.count > 0),
+    // Pełna tabela mikstur (bez filtra na posiadane) — dla ekranu Alchemii,
+    // gdzie gracz robi to, czego jeszcze nie ma.
+    miksturyInfo: C.healing.mikstury.map(m => ({
+      id: m.id, label: m.label, pct: m.pct ?? null, flat: m.flat ?? null,
+      heal: Math.round(m.pct ? st.maxHp * m.pct : m.flat),
+    })),
     equipped: ch.equipped,
     pveEquipment: { a: pveA, b: pveB }, pveStats: { a: pveAStats, b: pveBStats },
     pveLoadout: ch.pveLoadout ?? 'a',
@@ -522,6 +530,24 @@ function mojeMiejsce(ch, st) {
     moc: gdzie(R._moc ?? [], st.power),
     ilu: R.ilu ?? 0,
   };
+}
+
+// Podgląd „co da mi ten przedmiot": realne staty PRZED i PO założeniu, liczone
+// tym samym computeStats co walka. Nie mutuje postaci — symuluje na klonie.
+function wearPreview(ch, id) {
+  const it = ch.backpack?.find(x => x.id === id);
+  if (!it) return { error: 'Nie ma takiego przedmiotu' };
+  const pick = s => ({ damage: s.damage, maxHp: s.maxHp, armor: s.armor,
+    armorPool: s.armorPool ?? s.armor,
+    power: s.power, attackSpeed: s.attackSpeed, crit: s.crit, critMult: s.critMult,
+    block: s.block });
+  const before = computeStats(ch);
+  const eq = { ...(ch.equipped ?? {}) };
+  eq[it.slot] = it;
+  // Dwuręczna zdejmuje drugą rękę — podgląd musi to pokazać, inaczej kłamie.
+  if (it.slot === 'bron' && (it.hands ?? 1) === 2) delete eq.offhand;
+  const after = computeStats({ ...ch, equipped: eq });
+  return { preview: { id, before: pick(before), after: pick(after) } };
 }
 
 // ---------------------------------------------------------------- akcje
@@ -1167,6 +1193,97 @@ function kolosWidok(ch) {
   };
 }
 
+// Tytan liczy się dokładnie jak Kolos — te same formuły, inne liczby.
+function tytanWidok(ch) {
+  const K = C.tytan;
+  const st = computeStats(ch);
+  const kA = armorK(K.poziom);
+  const naCios = Math.max(1, Math.round(st.damage * (1 - K.armor / (K.armor + kA))));
+  const efektywnaObrona = st.armor * playerArmorEffect(K.poziom);
+  const jegoCios = Math.max(1, Math.round(K.damage * (1 - efektywnaObrona / (efektywnaObrona + kA))));
+  return {
+    ...K,
+    otwarty: poziom(ch) >= K.unlockFloor,
+    pokonany: !!ch.tytanPokonany,
+    twojCios: naCios,
+    ciosowPotrzeba: Math.ceil(K.hp / naCios),
+    jegoCios,
+    ciosowNaCiebie: Math.max(1, Math.ceil(st.maxHp / (jegoCios * K.ataki))),
+  };
+}
+
+function startTytan(ch) {
+  const K = C.tytan;
+  if (poziom(ch) < K.unlockFloor) return { error: `Tytan otwiera się na piętrze ${K.unlockFloor}` };
+  if (ch.expedition) return { error: 'Najpierw skończ wyprawę' };
+  if (ch.activeFight && !ch.activeFight.over) {
+    return { fight: summary(ch.activeFight), enemy: ch.activeFight.enemies[0], awaiting: true, resumed: true };
+  }
+
+  const st = computeStats(ch);
+  ensureCombatRunStats(ch, `tytan:${K.id}`);
+  const F = createFight({
+    party: [heroUnit(ch, st), ...teamUnits(ch, st)],
+    enemies: [{
+      name: K.label, family: K.id, variant: 'kolos', level: K.poziom,
+      klasa: 'wojownik', row: 1, reach: 1, dtype: 'fiz', ic: K.ic,
+      hp: K.hp, maxHp: K.hp, damage: K.damage, armor: K.armor, speed: K.speed,
+      crit: C.combat.critBase, critMult: C.combat.critMultBase,
+      accuracy: 0.92, evasion: 0,
+      ataki: K.ataki, skills: K.skills,
+    }],
+    potions: zabierzMikstury(ch, C.expedition.potionCap),
+    wtype: st.wtype,
+    abilities: bojowe(ch),
+    maxMana: st.maxMana, manaRegen: st.manaRegen,
+    poziom: K.poziom,
+  }, (Date.now() ^ 0x7717) >>> 0, 'turowa');
+
+  F.potionsWziete = { ...F.potions };
+  F.enemyMeta = { variant: 'kolos', tytan: true, gold: 0, floor: K.poziom,
+                  fightIdx: 0, family: K.id, families: [K.id], wyprawa: false, wezel: null };
+  ch.activeFight = F;
+
+  beginTurn(F);
+  if (F.over) return resolveFight(ch);
+  return { fight: summary(F), enemy: F.enemies[0], awaiting: true, tytan: true };
+}
+
+// Rozliczenie Tytana. Pierwsze zwycięstwo oddaje Aegis Tytana, kolejne złoto.
+function tytanNagroda(ch, out) {
+  const K = C.tytan;
+  if (!ch.tytanPokonany) {
+    ch.tytanPokonany = Date.now();
+    const n = K.nagroda;
+    const it = {
+      id: null, slot: n.slot, wtype: n.wtype, hands: n.hands,
+      base: n.base, name: n.base, obraz: n.obraz ?? null,
+      rarity: n.rarity, ilvl: n.ilvl, plus: 0, energy: 0,
+      reqLevel: n.ilvl, damage: 0, armor: 0,
+      // Afiksy z configu — wpisane wprost, nie rolowane.
+      affixes: (n.affixes ?? []).map(a => ({ ...a })),
+    };
+    const def = C.gear.slots[it.slot];
+    const rar = C.rarities[it.rarity];
+    it.armor = Math.round((C.gear.armorBase + C.gear.armorPerIlvl * it.ilvl) * def.mult * rar.mult);
+    giveId(it);
+    if (ch.backpack.length < C.gear.backpackSize) {
+      ch.backpack.push(it);
+      ch.discovered[it.base] = true;
+      out.loot.push(it);
+      out.tytanNagroda = it.name;
+    } else {
+      out.backpackFull = true;
+    }
+  } else {
+    ch.gold += K.zlotoZaPowtorke;
+    out.gold = K.zlotoZaPowtorke;
+    out.tytanZloto = K.zlotoZaPowtorke;
+  }
+  out.tytan = true;
+  return out;
+}
+
 function startKolos(ch) {
   const K = C.kolos;
   if (poziom(ch) < K.unlockFloor) return { error: `Kolos otwiera się na piętrze ${K.unlockFloor}` };
@@ -1253,7 +1370,8 @@ function resolveFight(ch) {
 
   const out = { ...res, enemy: F.enemies[0], loot: [], gold: 0,
                 floorCleared: false, awaiting: false, trophy: null };
-  out.runStats = addCombatRunStats(ch, res.combatStats, meta.kolos ? `kolos:${C.kolos.id}` : null);
+  out.runStats = addCombatRunStats(ch, res.combatStats,
+    meta.tytan ? `tytan:${C.tytan.id}` : meta.kolos ? `kolos:${C.kolos.id}` : null);
 
   // Jedzenie schodzi tylko jednostkom, które rzeczywiście weszły do tej walki.
   // Każda ma własne trzy sloty, więc posiłek sojusznika nie wzmacnia bohatera.
@@ -1378,6 +1496,8 @@ function resolveFight(ch) {
       out.sakwaMats = Object.values(X.mats).reduce((a, b) => a + b, 0);
       // Dopiero BOSS oddaje sakwę. Wcześniej nie ma wyjścia poza safepointem.
       if (meta.wezel === 'boss') expFinish(ch, out);
+    } else if (meta.tytan) {
+      tytanNagroda(ch, out);
     } else if (meta.kolos) {
       // Kolos nie jest falą piętra — nie rusza postępu, ma własną nagrodę.
       kolosNagroda(ch, out);
@@ -1413,6 +1533,8 @@ function resolveFight(ch) {
         }
       }
     }
+  } else if (meta.tytan) {
+    out.tytan = true;
   } else if (meta.kolos) {
     // Przegrana z Kolosem nie kosztuje nic poza zdrowiem — nie ma piętra,
     // które można by cofnąć.
@@ -1451,7 +1573,7 @@ function resolveFight(ch) {
     ch.fight = 0;
   }
 
-  if (!res.win || out.floorCleared || out.expDone || out.expFailed || out.kolos || out.powtorka) {
+  if (!res.win || out.floorCleared || out.expDone || out.expFailed || out.kolos || out.tytan || out.powtorka) {
     ch.combatRunStats = null;
   }
   return out;
@@ -1928,6 +2050,8 @@ const server = http.createServer(async (req, res) => {
           break;
         }
         case '/api/kolos':   result = startKolos(ch); break;
+        case '/api/tytan':   result = startTytan(ch); break;
+        case '/api/preview': result = wearPreview(ch, body.id); break;
         case '/api/powtarzaj': {
           if (poziom(ch) < C.tower.powtarzanieOd) {
             result = { error: `Powtarzanie otwiera się na piętrze ${C.tower.powtarzanieOd}` };
@@ -1982,8 +2106,19 @@ const server = http.createServer(async (req, res) => {
           const a = String(body.attr);
           if (!(a in ch.attrs)) { result = { error: 'Nieznany atrybut' }; break; }
           if (ch.unspentAttr <= 0) { result = { error: 'Brak punktów' }; break; }
-          ch.attrs[a]++; ch.unspentAttr--;
-          result = { ok: true };
+          // Ile na raz — hold-to-repeat i wpisana ilość po stronie klienta.
+          const n = Math.min(ch.unspentAttr, Math.max(1, Math.floor(Number(body.n) || 1)));
+          ch.attrs[a] += n; ch.unspentAttr -= n;
+          result = { ok: true, added: n };
+          break;
+        }
+        // Reset atrybutów — za darmo, jak reset drzewka skilla. Zwraca wszystkie
+        // rozdane punkty do puli i zeruje atrybuty.
+        case '/api/attrreset': {
+          const zwrot = Object.values(ch.attrs).reduce((s, v) => s + (Number(v) || 0), 0);
+          for (const k of Object.keys(ch.attrs)) ch.attrs[k] = 0;
+          ch.unspentAttr += zwrot;
+          result = { ok: true, zwrot };
           break;
         }
         case '/api/cskill': {
