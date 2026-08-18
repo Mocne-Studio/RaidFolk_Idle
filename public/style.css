@@ -199,7 +199,7 @@ button{font:inherit;color:inherit;background:none;border:0}
 .hpoz b{font-weight:400;color:var(--ink)}
 /* Trofea to SVG, a globalna reguła daje im display:block — przez to korona
    i hełm stały JEDNO POD DRUGIM i rozdymały belkę do 110 px. */
-.hpoz svg{display:block;width:15px;height:15px;flex:none}
+.hpoz svg{display:block;width:16px;height:16px;flex:none;opacity:.85}
 .hsep{width:1px;align-self:stretch;background:var(--edge);margin:2px 0}
 
 /* CO SIĘ DZIEJE. Rzeczy lecące w tle jako ikona z pierścieniem postępu.
@@ -725,7 +725,12 @@ button.card:active{background:var(--press)}
 .tabs button:last-child{border-radius:0 var(--r-lg) var(--r-lg) 0}
 .tabs button{background:none;border:0;cursor:pointer;padding:10px 2px 12px;color:var(--ink-mute);
   display:flex;flex-direction:column;align-items:center;gap:3px;border-top:2px solid transparent}
-.tabs button .ic{font-size:19px;line-height:1;opacity:.85}
+/* Ikony są wektorami w pliku (patrz index.html), rysowanymi obrysem
+   currentColor — więc barwią się razem z zakładką i wyglądają tak samo
+   w każdym z pięciu motywów. Rozmiar ustawia CSS, nie atrybut w SVG. */
+.tabs button .ic{line-height:1;opacity:.8;display:grid;place-items:center}
+.tabs button .ic svg{display:block;width:21px;height:21px}
+.tabs button[aria-selected="true"] .ic{opacity:1}
 .tabs button .tx{font-family:var(--mono);font-size:11px;letter-spacing:.03em;white-space:nowrap}
 /* WYBRANA ZAKŁADKA BARWI SIę CAŁA, a nie kreseczką nad nią. Cienka linia
    u góry gubiła się na telefonie i nie dało się z rzutu oka powiedzieć,
@@ -971,6 +976,37 @@ button.card:active{background:var(--press)}
 .stat-box .skad b{font-weight:400;color:var(--brass)}
 .staty-rozbite .stat-box{align-items:flex-start;text-align:left}
 
+/* PRZYCISK „i” — szczegóły na żądanie.
+   Na szerokim ekranie miejsca jest dość, więc opisy stoją otwarte, a przycisk
+   jest niepotrzebny. Na telefonie siedem opisów nie mieści się na ekranie,
+   a gracz przychodzi tu żeby ROZDAĆ PUNKTY — więc wiersz jest wąski,
+   a opis rozwija się dopiero, gdy ktoś o niego poprosi. */
+.info-btn{display:none;flex:none;width:26px;height:26px;border-radius:50%;
+  background:var(--stone);border:1px solid var(--edge);color:var(--ink-mute);
+  font-family:var(--display);font-size:13px;line-height:1;cursor:pointer}
+.info-btn[aria-expanded="true"]{border-color:var(--brass);color:var(--brass)}
+@media (max-width:759px){
+  .info-btn{display:grid;place-items:center}
+  /* Wiersz atrybutu schodzi do JEDNEJ LINII: nazwa · i · wartość · plus.
+     Cel jest twardy: siedem atrybutów ma się zmieścić na ekranie telefonu bez
+     przewijania, bo gracz przychodzi tu ROZDAĆ PUNKTY. Przy 66 px na wiersz
+     samo siedem wierszy zjadało 460 px i kolumna dalej się przewijała. */
+  .attr-row{padding:5px 10px;gap:8px;align-items:center;margin-bottom:5px;min-height:var(--tap)}
+  .attr-row .t1{font-size:15px;line-height:1.15}
+  .attr-row .opis{display:none}
+  .attr-row.otwarty .opis{display:block;margin-top:3px}
+  .attr-row .attr-n{font-size:16px}
+  .attr-row .btn{min-width:38px;padding:6px 10px}
+  /* HERB ZNIKA NA TELEFONIE. Nie niesie żadnej informacji, której gracz
+     potrzebuje w biegu, a zabiera 30 px szerokości imieniu i licznikom. */
+  .hdr-crest{display:none}
+  .hdr-kto{gap:0}
+  /* Karty statystyk też: nagłówek zawsze, reszta pod „i”. */
+  .statcard .skladniki,.statcard .nota{display:none}
+  .statcard.otwarty .skladniki,.statcard.otwarty .nota{display:flex}
+  .statcard.otwarty .nota{display:block}
+}
+
 /* KARTY STATYSTYK — pełny wykład zamiast samej liczby.
    Każda mówi: co ta statystyka robi, z czego się składa, co ją podnosi
    i gdzie ma granicę. Liczby w opisach generują się z config.js, więc
@@ -1072,9 +1108,14 @@ button.topbar:active{background:var(--press)}
    Nazwa zostaje w atrybucie title i w aria-label — czytnik ekranowy dalej
    wie, gdzie prowadzi każda zakładka. */
 @media (max-width:759px){
-  .tabs button{padding:0;gap:0;place-items:center}
+  /* Bez podpisu ikona musi stać PO ŚRODKU przycisku w obu osiach. Kolumnowy
+     flex centruje w poziomie sam, ale w pionie trzymał ją u góry — stąd
+     justify-content, a nie place-items (to drugie nie dotyczy flexa tak samo). */
+  .tabs button{padding:0;gap:0;justify-content:center;align-items:center}
   .tabs button .tx{display:none}
-  .tabs button .ic{font-size:23px;opacity:.9}
+  .tabs button .ic{opacity:.9;display:grid;place-items:center;
+    width:100%;height:100%;line-height:1}
+  .tabs button .ic svg{width:24px;height:24px}
   .tabs button[aria-selected="true"] .ic{opacity:1}
 }
 @media (min-width:760px){

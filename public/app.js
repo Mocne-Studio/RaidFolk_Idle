@@ -289,9 +289,12 @@ function header() {
 
     boxy.innerHTML = ranking
       + (ranking ? '<span class="hsep"></span>' : '')
-      + poz('◈', nf(S.gold),
+      // Ikony wektorowe zamiast znaków ◈ i ⚷ — tamte zależały od kroju pisma
+      // urządzenia, więc na jednym telefonie były romb i klucz, a na drugim
+      // dwa pustaki. Te rysują się tak samo wszędzie i barwią currentColor.
+      + poz(`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M9.5 9.5h4a1.75 1.75 0 0 1 0 3.5h-3a1.75 1.75 0 0 0 0 3.5h4"/></svg>`, nf(S.gold),
           'Złoto. Sypie je walka w wieży; wydajesz je u kowala i na ulepszenia. Wyprawa nie płaci za sam marsz — płaci łupem.')
-      + poz('⚷', nf(S.keys ?? 0),
+      + poz(`<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="3.5"/><path d="m10 13 8.5-8.5"/><path d="m16 7 2 2"/><path d="m18.5 4.5 2 2"/></svg>`, nf(S.keys ?? 0),
           'Klucze otwierają Przywołanie — losujesz nimi sojuszników i pety. Szanse są jawne, bez pity i bez duplikatów.');
   }
 
@@ -2885,6 +2888,9 @@ const lifeFilter = { rybolowstwo: 'all', rolnictwo: 'all', gotowanie: 'all' };
 let cookingSelected = null;
 let cookingSearch = '';
 let attrHold = null;       // trwający przytrzymany przycisk „+"
+// Które opisy gracz rozwinął przyciskiem „i”. Na szerokim ekranie zbiór nie ma
+// znaczenia — tam CSS pokazuje opisy zawsze.
+const OPISY_OTWARTE = new Set();
 
 // PRZYTRZYMANIE „+" — PŁYNNE NARASTANIE DO 10 PUNKTÓW NA SEKUNDĘ.
 //
@@ -3119,10 +3125,23 @@ function sekcjaAtrybuty() {
     const total = st.attrs[k] ?? 0;
     const baza = st.attrsBase?.[k] ?? total;
     const zeSprz = total - baza;
-    h += `<div class="card row attr-row" title="${esc(ATTR_DESC[k])}">
-      <div class="grow"><div class="t1">${ATTR_LABEL[k]}</div><div class="t2">${ATTR_DESC[k]}</div>
-        <div class="t2">punkty ${nf(baza)}${zeSprz ? ` · sprzęt <b style="color:var(--brass)">+${nf(zeSprz)}</b>` : ''}</div></div>
-      <span class="num attr-n" title="Łącznie">${nf(total)}</span>
+    // Na telefonie wiersz jest WĄSKI: nazwa, wartość i „+". Opis i rozbicie
+    // chowają się pod „i”, bo siedem opisów nie mieści się na jednym ekranie,
+    // a gracz przychodzi tu żeby ROZDAĆ PUNKTY, nie żeby czytać.
+    // Na szerokim ekranie miejsca jest dość, więc wszystko stoi otwarte —
+    // decyduje CSS, nie drugi wariant szablonu.
+    const otw = OPISY_OTWARTE.has(k);
+    h += `<div class="card row attr-row ${otw ? 'otwarty' : ''}">
+      <div class="grow">
+        <div class="t1">${ATTR_LABEL[k]}</div>
+        <div class="opis">
+          <div class="t2">${ATTR_DESC[k]}</div>
+          <div class="t2">punkty ${nf(baza)}${zeSprz ? ` · sprzęt <b style="color:var(--brass)">+${nf(zeSprz)}</b>` : ''}</div>
+        </div>
+      </div>
+      <button class="info-btn" data-act="opis" data-k="${k}"
+        aria-expanded="${otw}" title="${esc(ATTR_DESC[k])}">i</button>
+      <span class="num attr-n" title="Łącznie z punktów i sprzętu">${nf(total)}</span>
       <button class="btn" data-act="attr" data-attr="${k}" ${S.unspentAttr ? '' : 'disabled'}>+</button>
     </div>`;
   }
@@ -4157,6 +4176,10 @@ document.addEventListener('click', async (ev) => {
       await api('settings', { theme: UST.theme });
       render();
 
+    } else if (act === 'opis') {
+      const k = btn.dataset.k;
+      if (OPISY_OTWARTE.has(k)) OPISY_OTWARTE.delete(k); else OPISY_OTWARTE.add(k);
+      render();
     } else if (act === 'jezyk') {
       // Język leży w tych samych ustawieniach co motyw — przechodzi na inne
       // urządzenie razem z postacią, bo właścicielem ustawień jest serwer.
