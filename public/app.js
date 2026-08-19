@@ -3717,7 +3717,7 @@ function sekcjaZbierackie() {
         fuel ? `Piec: Węgiel <b>${fuel}</b> <i>(masz ${S.smithing.furnace?.coal ?? 0})</i>` : null,
         !koszt && !fuel ? 'Nie wymaga składników.' : null,
       ]);
-      h += `<div class="card res-row craft-card ${r.unlocked ? '' : 'locked'} ${kopie || smithSelected === r.id ? 'hi' : ''}">
+      h += `<div class="card res-row craft-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}">
         <div class="row">
         <div class="icon">${!r.unlocked ? '🔒' : r.kind === 'magic' ? '✦' : r.daje?.potion ? '🧪' : r.output?.type === 'mining' ? '⛏' : r.output?.type === 'combat' ? '⚔' : koszt ? '🔥' : '🪨'}</div>
         <div class="grow">

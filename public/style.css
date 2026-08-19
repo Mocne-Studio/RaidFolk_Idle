@@ -92,6 +92,7 @@ button{font:inherit;color:inherit;background:none;border:0}
   --void:#070707; --press:#2C2C2C; --on-brass:#0C0C0C; --glow:none;
   --belka:#0F0F0F;
   --brass-rgb:210,210,210;
+}
 
 /* ==========================================================================
    PRZEWIJANIE
@@ -1119,7 +1120,7 @@ button.card:active{background:var(--press)}
 .statcard .co b{font-weight:400;color:var(--ink-dim)}
 /* SKŁADNIKI JAKO KAFELKI. Szablon rysował je od dawna, ale CSS został po starej
    strukturze — przez to „baza / 120 / witalność / 32" zlepiało się w jeden ciąg
-   kursywy: „baza120witalnoś{32". Każdy składnik ma teraz własne pudełko,
+   kursywy: „baza120witalnosc32". Każdy składnik ma teraz własne pudełko,
    podpis nad wartością i oddech dookoła. */
 .skladniki{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 8px}
 .sk{display:flex;flex-direction:column;gap:1px;padding:4px 9px;min-width:0;
@@ -1854,3 +1855,18 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 .attr-row{position:relative}
 .attr-row .t1{display:flex;align-items:center}
 .attr-row .chmurka{left:0;right:auto;width:min(300px,84vw);max-width:none}
+
+/* HOVER PRZYCISKU AKCJI. Kafle dostaly wlasny przycisk zamiast plakietki, ale
+   nie dostaly stanu najechania — wygladal jak napis w ramce, nie jak cel klikniecia.
+   Wypelnienie bierzemy z DOMOWEGO stanu przycisku (.btn.solid), zeby nie wymyslac
+   nowego jezyka; kolor idzie z akcentu motywu, wiec dziala w kazdej palecie. */
+button.akcja{transition:background .12s ease,color .12s ease,border-color .12s ease}
+button.akcja:hover{background:var(--brass);color:var(--on-brass);border-color:var(--brass)}
+button.akcja:active{background:var(--copper);border-color:var(--copper);color:var(--on-brass)}
+button.akcja:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+/* Zgaszony nie reaguje — brakuje skladnikow, wiec klikniecie i tak nic nie da. */
+button.akcja.zgaszona{cursor:default}
+button.akcja.zgaszona:hover{background:none;color:var(--ink-mute);border-color:var(--edge)}
+/* Przycisk „i” tez dostaje stan najechania. */
+.info-btn{transition:border-color .12s ease,color .12s ease}
+.info-btn:hover{border-color:var(--brass);color:var(--brass)}
