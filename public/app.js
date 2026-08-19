@@ -3565,11 +3565,16 @@ function sekcjaZbierackie() {
       }
       if (skillOpen === 'rolnictwo') {
         const outputy = r.outputs ?? [];
-        const plon = outputy.map(x => `${x.label} ${x.yield?.[0] ?? 1}–${x.yield?.[1] ?? 1} · masz ×${nf(mam[x.id] ?? 0)}`).join(' · ');
+        // Ile masz — na ZNACZKU w rogu, nie w środku zdania. Liczba schowana
+        // między nazwą a widelkami plonu ginieła: gracz skanuje kafle wzrokiem
+        // i szuka jednej rzeczy, a musiał ją czytać ze zdania.
+        const plon = outputy.map(x => `${x.label} ${x.yield?.[0] ?? 1}–${x.yield?.[1] ?? 1}`).join(' · ');
+        const ileMam = outputy.reduce((sum, x) => sum + (mam[x.id] ?? 0), 0);
         h += `<button class="card row res-row life-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}" ${r.unlocked ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
           <div class="icon">${r.ic ?? (r.category === 'animals' ? '🐑' : r.category === 'fruit' ? '🍎' : '🌱')}</div><div class="grow"><div class="t1">${esc(r.label)}</div>
           <div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div>
           <div class="t2 life-output">${esc(plon)}</div>${r.animalMode ? `<div class="t2">${r.animalMode === 'renewable' ? 'Odnawialny produkt zwierzęcy' : 'Ubój / jednorazowy zbiór'}</div>` : ''}</div>
+          ${ileMam ? `<span class="mam" title="Tyle masz w plecaku">×${nf(ileMam)}</span>` : ''}
           <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ZBIERASZ' : r.unlocked ? 'START' : `Lv.${r.lvl}`}</span></button>`;
         continue;
       }

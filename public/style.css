@@ -1622,3 +1622,14 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 @keyframes lad-suw{0%{transform:translateX(-110%)}100%{transform:translateX(360%)}}
 /* Niska jakość gasi animacje w całej grze — tu też. */
 [data-quality="niska"] .lad-godlo,[data-quality="niska"] .lad-pasek i{animation:none}
+
+/* ZNACZEK „ile masz” — prawy górny róg kafla.
+   Liczba stała wcześniej w środku zdania o plonie i ginęła: gracz skanuje kafle
+   wzrokiem szukając JEDNEJ rzeczy, a musiał ją wyławiać z tekstu. */
+.res-row{position:relative}
+.res-row .mam{position:absolute;top:7px;right:8px;z-index:1;
+  font-family:var(--mono);font-size:15px;line-height:1;
+  padding:4px 8px;border-radius:999px;
+  background:var(--stone);border:1px solid var(--brass);color:var(--brass)}
+.res-row.locked .mam{border-color:var(--edge);color:var(--ink-mute)}
+@media (max-width:759px){ .res-row .mam{font-size:13px;padding:3px 7px;top:6px;right:6px} }
