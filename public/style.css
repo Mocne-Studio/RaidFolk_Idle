@@ -1819,3 +1819,9 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
   .akt-box .bar{height:4px}
   .akt-box .btn{font-size:12px;padding:5px 9px;min-height:28px}
 }
+
+/* Wiersz atrybutu: kontekst dla chmurki i staly uklad — nic sie nie rozsuwa,
+   bo opis nie mieszka juz w srodku wiersza. */
+.attr-row{position:relative}
+.attr-row .t1{display:flex;align-items:center}
+.attr-row .chmurka{left:0;right:auto;width:min(300px,84vw);max-width:none}

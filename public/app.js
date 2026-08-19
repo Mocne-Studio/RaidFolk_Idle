@@ -3271,16 +3271,17 @@ function sekcjaAtrybuty() {
     // Na szerokim ekranie miejsca jest dość, więc wszystko stoi otwarte —
     // decyduje CSS, nie drugi wariant szablonu.
     const otw = OPISY_OTWARTE.has(k);
-    h += `<div class="card row attr-row ${otw ? 'otwarty' : ''}">
+    // „i” STOI PRZY NAZWIE, a opis wychodzi w chmurce — tej samej co w profesjach.
+    // Wcześniej opis rozwijał się W ŚRODKU wiersza: karta rosła, sąsiednie wiersze
+    // zjeżdżały w dół, a samo „i” opadało razem z nią. Chmurka nie rusza układu.
+    h += `<div class="card row attr-row">
       <div class="grow">
-        <div class="t1">${ATTR_LABEL[k]}</div>
-        <div class="opis">
-          <div class="t2">${ATTR_DESC[k]}</div>
-          <div class="t2">punkty ${nf(baza)}${zeSprz ? ` · sprzęt <b style="color:var(--brass)">+${nf(zeSprz)}</b>` : ''}</div>
-        </div>
+        <div class="t1">${ATTR_LABEL[k]}${chmurka(ATTR_LABEL[k], [
+          ATTR_DESC[k],
+          `Z punktów: <b>${nf(baza)}</b>`,
+          zeSprz ? `Ze sprzętu: <b>+${nf(zeSprz)}</b>` : null,
+        ], ATTR_LABEL[k])}</div>
       </div>
-      <button class="info-btn" data-act="opis" data-k="${k}"
-        aria-expanded="${otw}" title="${esc(ATTR_DESC[k])}">i</button>
       <span class="num attr-n" title="Łącznie z punktów i sprzętu">${nf(total)}</span>
       <button class="btn" data-act="attr" data-attr="${k}" ${S.unspentAttr ? '' : 'disabled'}>+</button>
     </div>`;
