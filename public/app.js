@@ -3554,14 +3554,28 @@ function sekcjaZbierackie() {
     for (const r of pokaz) {
       const kopie = akt?.res === r.id;
       if (skillOpen === 'rybolowstwo') {
+        // ŁOWISKO TO MIEJSCE, NIE PRODUKT. Wcześniej cała tabela połowu wisiała
+        // na kaflu łowiska — sardynka, płotka i pstrąg sklejone w jedną kartę, choć
+        // to trzy różne produkty. Teraz kafel łowiska niesie SAMĄ AKCJĘ, a szanse
+        // chowają się pod „i". Złowione ryby mają własne kafle niżej.
         const dostepne = (r.catchTable ?? []).filter(x => x.unlocked);
-        const licznik = dostepne.reduce((sum, x) => sum + (mam[x.id] ?? 0), 0);
-        h += `<button class="card res-row life-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}" ${r.unlocked ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
-          <div class="life-card-head"><div><div class="t1">${r.ic ?? '🎣'} ${esc(r.label)}</div><div class="t2">${r.unlocked ? `${czasKrotki(r.effectiveMs ?? r.ms)} · ważony połów` : `otwiera się na poziomie ${r.lvl}`}</div></div>
-          ${r.unlocked && licznik ? `<span class="mam" data-mam="${esc((r.catchTable ?? []).filter(x => x.unlocked).map(x => x.id).join(','))}" title="Tyle masz w plecaku">×${nf(licznik)}</span>` : ''}
-          <span class="res-meta"><span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ŁOWISZ' : r.unlocked ? 'ZARZUĆ' : `Lv.${r.lvl}`}</span></span></div>
-          <div class="catch-list">${(r.catchTable ?? []).map(x => `<span class="catch-pill ${x.unlocked ? x.rarity ?? '' : 'locked'}">${x.unlocked ? `${x.ic ? `${x.ic} ` : ''}${esc(x.label)} ×${nf(mam[x.id] ?? 0)}` : `🔒 ${esc(x.label)} Lv.${x.lvl}`}</span>`).join('')}</div>
-        </button>`;
+        const suma = dostepne.reduce((a2, x) => a2 + (x.weight ?? 0), 0) || 1;
+        const tip = r.unlocked
+          ? 'Co się łowi: ' + dostepne.map(x =>
+              `${x.label} ${Math.round((x.weight ?? 0) / suma * 100)}%`).join(' · ')
+            + (dostepne.length < (r.catchTable ?? []).length
+               ? ' · wyższe poziomy Wędkarstwa otwierają kolejne gatunki' : '')
+          : `Otwiera się na poziomie ${r.lvl}`;
+        h += `<div class="card res-row life-card lowisko ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}">
+          <div class="row">
+            <div class="icon">${r.ic ?? '🎣'}</div>
+            <div class="grow"><div class="t1">${esc(r.label)}<button class="info-btn tip maly" data-act="tip" data-tip="${esc(tip)}" aria-label="Co się tu łowi">i</button></div>
+              <div class="t2">${r.unlocked ? `${czasKrotki(r.effectiveMs ?? r.ms)} · ważony połów` : `otwiera się na poziomie ${r.lvl}`}</div></div>
+          </div>
+          ${!r.unlocked ? `<span class="akcja zgaszona">Wymaga poziomu ${r.lvl}</span>`
+            : kopie ? '<span class="akcja leci">Łowienie<i></i></span>'
+            : `<button class="akcja" data-act="mine" data-res="${r.id}">Łów</button>`}
+        </div>`;
         continue;
       }
       if (skillOpen === 'rolnictwo') {
@@ -3577,12 +3591,17 @@ function sekcjaZbierackie() {
           ? `Drop: ${outputy[0].yield?.[0] ?? 1}–${outputy[0].yield?.[1] ?? 1} szt.`
           : 'Drop: ' + outputy.map(x => `${x.label} ${x.yield?.[0] ?? 1}–${x.yield?.[1] ?? 1}`).join(' · ');
         const ileMam = outputy.reduce((sum, x) => sum + (mam[x.id] ?? 0), 0);
-        h += `<button class="card row res-row life-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}" ${r.unlocked ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
+        h += `<div class="card res-row life-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}">
+          <div class="row">
           <div class="icon">${r.ic ?? (r.category === 'animals' ? '🐑' : r.category === 'fruit' ? '🍎' : '🌱')}</div><div class="grow"><div class="t1">${esc(r.label)}</div>
           <div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div>
           <div class="t2 life-output">${esc(plon)}</div>${r.animalMode ? `<div class="t2">${r.animalMode === 'renewable' ? 'Odnawialny produkt zwierzęcy' : 'Ubój / jednorazowy zbiór'}</div>` : ''}</div>
           ${ileMam ? `<span class="mam" title="Tyle masz w plecaku">×${nf(ileMam)}</span>` : ''}
-          ${kopie || !r.unlocked ? `<span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ZBIERASZ' : `Lv.${r.lvl}`}</span>` : ''}</button>`;
+          </div>
+          ${!r.unlocked ? `<span class="akcja zgaszona">Wymaga poziomu ${r.lvl}</span>`
+            : kopie ? '<span class="akcja leci">Zbieranie<i></i></span>'
+            : `<button class="akcja" data-act="mine" data-res="${r.id}">Zbieraj</button>`}
+        </div>`;
         continue;
       }
       if (skillOpen === 'gotowanie') {
@@ -3592,20 +3611,36 @@ function sekcjaZbierackie() {
         // AKCJE SIEDZĄ NA KAFLU, nie w panelu obok. Panel zajmował całą czwartą
         // kolumnę po to, żeby trzymać dwa przyciski — a żeby ich użyć, trzeba było
         // najpierw kliknąć kafel, potem przenieść wzrok w prawo i kliknąć drugi raz.
-        const skl = koszt.map(([id, ile]) =>
-          `<span class="skl ${(mam[id] ?? 0) >= ile ? 'ok' : 'bad'}">${esc(S.matNames[id] ?? id)} ${nf(mam[id] ?? 0)}/${ile}</span>`).join('');
+        // Składniki schodzą do chmurki pod „i” przy nazwie. Na kaflu zostaje to,
+        // co potrzebne do DECYZJI: co to jest, ile masz i przycisk. Czego trzeba,
+        // czyta się raz — i wtedy się to otwiera.
+        const tipSkl = koszt.length
+          ? 'Potrzebujesz: ' + koszt.map(([id, ile]) =>
+              `${S.matNames[id] ?? id} ${ile} szt. (masz ${nf(mam[id] ?? 0)})`).join(' · ')
+          : 'Nie wymaga składników.';
+        const brakuje = koszt.filter(([id, ile]) => (mam[id] ?? 0) < ile)
+          .map(([id]) => S.matNames[id] ?? id);
+        // BEZ PRZYCISKÓW. Cały kafel jest przyciskiem — tak jak w każdej innej
+        // profesji. „Ugotuj 1" i „Gotuj wszystko" robiły prawie to samo: tryb ciągły
+        // i tak leci do przerwania albo do wyczerpania składników, a to jest sekcja
+        // Gotowania, więc nie trzeba pisać na kaflu, że się w niej gotuje.
+        // KARTA JEST <div>, NIE <button>. „i” przy nazwie jest przyciskiem, a przycisk
+        // w przycisku przeglądarka rozcina: zewnętrzny zamyka się przed wewnętrznym
+        // i połowa kafla ląduje poza kartą. Klikalna jest ETYKIETA AKCJI na dole.
         h += `<div class="card res-row life-card cook-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}">
           <div class="row">
             <div class="icon">${r.ic ?? (r.category === 'drink' ? '🥤' : r.category === 'dessert' ? '🍰' : r.category === 'fish' ? '🐟' : r.category === 'meat' ? '🍖' : '🥘')}</div>
-            <div class="grow"><div class="t1">${esc(r.label)}</div>
+            <div class="grow"><div class="t1">${esc(r.label)}${r.unlocked
+              ? `<button class="info-btn tip maly" data-act="tip" data-tip="${esc(tipSkl)}" aria-label="Z czego się robi">i</button>` : ''}</div>
               <div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div></div>
             ${(mam[r.id] ?? 0) ? `<span class="mam" data-mam="${esc(r.id)}" title="Tyle masz w plecaku">×${nf(mam[r.id])}</span>` : ''}
           </div>
-          ${r.unlocked ? `<div class="skladniki-lin">${skl}</div>
-          <div class="cook-actions">
-            <button class="btn" data-act="cookstart" data-res="${r.id}" data-mode="once" ${stac ? '' : 'disabled'}>Ugotuj 1</button>
-            <button class="btn solid" data-act="cookstart" data-res="${r.id}" data-mode="all" ${stac ? '' : 'disabled'}>Gotuj wszystko</button>
-          </div>` : `<div class="skladniki-lin"><span class="skl bad">Wymaga poziomu ${r.lvl}</span></div>`}
+          ${!r.unlocked ? `<div class="skladniki-lin"><span class="skl bad">Wymaga poziomu ${r.lvl}</span></div>`
+            : brakuje.length ? `<div class="skladniki-lin"><span class="skl bad">Brakuje: ${esc(brakuje.join(', '))}</span></div>` : ''}
+          ${!r.unlocked ? '' : kopie
+            ? '<span class="akcja leci">Gotowanie<i></i></span>'
+            : `<button class="akcja ${stac ? '' : 'zgaszona'}" ${stac
+                ? `data-act="cookstart" data-res="${r.id}" data-mode="all"` : 'disabled'}>Wytwórz</button>`}
         </div>`;
         continue;
       }
@@ -3642,11 +3677,20 @@ function sekcjaZbierackie() {
       const akcja = smith
         ? (r.unlocked ? `data-act="smithstart" data-res="${r.id}" data-mode="${directSmelt ? 'all' : 'once'}"` : 'disabled')
         : (r.unlocked && staC ? `data-act="mine" data-res="${r.id}"` : 'disabled');
-      h += `<button class="card row res-row ${r.unlocked ? '' : 'locked'} ${kopie || smithSelected === r.id ? 'hi' : ''} ${r.unlocked && !staC ? 'off' : ''}"
-        ${akcja}>
+      // Karta jest <div>, akcja na dole jest <button> — patrz komentarz przy kaflu
+      // Gotowania: przycisk w przycisku przeglądarka rozcina.
+      const tipCraft = [
+        koszt ? 'Potrzebujesz: ' + koszt.map(([id, ile]) =>
+          `${nazwaMat[id] ?? id} ${ile} szt. (masz ${nf(mam[id] ?? 0)})`).join(' · ') : null,
+        fuel ? `Piec: Węgiel ${fuel} (masz ${S.smithing.furnace?.coal ?? 0})` : null,
+        !koszt && !fuel ? 'Nie wymaga składników.' : null,
+      ].filter(Boolean).join(' — ');
+      h += `<div class="card res-row craft-card ${r.unlocked ? '' : 'locked'} ${kopie || smithSelected === r.id ? 'hi' : ''}">
+        <div class="row">
         <div class="icon">${!r.unlocked ? '🔒' : r.kind === 'magic' ? '✦' : r.daje?.potion ? '🧪' : r.output?.type === 'mining' ? '⛏' : r.output?.type === 'combat' ? '⚔' : koszt ? '🔥' : '🪨'}</div>
         <div class="grow">
-          <div class="t1">${esc(r.nodeLabel ?? r.label)}${r.daje?.potion ? ` ×${r.daje.potion}` : ''}</div>
+          <div class="t1">${esc(r.nodeLabel ?? r.label)}${r.daje?.potion ? ` ×${r.daje.potion}` : ''}${r.unlocked
+            ? `<button class="info-btn tip maly" data-act="tip" data-tip="${esc(tipCraft)}" aria-label="Z czego się robi">i</button>` : ''}</div>
           <div class="t2">${!r.unlocked
             ? `otwiera się na poziomie ${r.lvl}`
             : `${r.xp} exp · ${((r.effectiveMs ?? r.ms) / 1000).toFixed(1)} s`}</div>
@@ -3664,10 +3708,13 @@ function sekcjaZbierackie() {
           })()}
         </div>
         ${showOwned && owned ? `<span class="mam" data-mam="${esc(String(mamId))}" title="Tyle masz w plecaku">×${nf(owned)}</span>` : ''}
-        <span class="res-meta">
-          <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ROBISZ' : !r.unlocked ? `Lv.${r.lvl}` : directSmelt ? (staC ? 'PRZETAPIAJ' : 'BRAK') : smith ? (staC ? 'WYKUJ 1' : 'BRAK') : staC ? 'START' : 'BRAK'}</span>
-        </span>
-      </button>`;
+        </div>
+        ${!r.unlocked ? `<span class="akcja zgaszona">Wymaga poziomu ${r.lvl}</span>`
+          : kopie
+            ? `<span class="akcja leci">${directSmelt ? 'Przetapianie' : (smith || koszt) ? 'Tworzenie' : 'Wydobywanie'}<i></i></span>`
+            : `<button class="akcja ${staC ? '' : 'zgaszona'}" ${staC ? akcja : 'disabled'}>${
+                directSmelt ? 'Przetapiaj' : (smith || koszt) ? 'Wytwórz' : 'Wydobywaj'}</button>`}
+      </div>`;
     }
   }
   h += `</div>`;
@@ -4317,6 +4364,13 @@ document.addEventListener('click', async (ev) => {
       await api('settings', { theme: UST.theme });
       render();
 
+    } else if (act === 'tip') {
+      // Na dotyku nie ma najechania, więc chmurkę otwiera kliknięcie.
+      // Drugie kliknięcie zamyka; kliknięcie innego „i” przenosi ją tam.
+      const byl = btn.classList.contains('otwarty');
+      $$('.info-btn.tip.otwarty').forEach(e => e.classList.remove('otwarty'));
+      if (!byl) btn.classList.add('otwarty');
+      return;
     } else if (act === 'opis') {
       const k = btn.dataset.k;
       if (OPISY_OTWARTE.has(k)) OPISY_OTWARTE.delete(k); else OPISY_OTWARTE.add(k);

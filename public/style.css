@@ -1645,8 +1645,78 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
   border-radius:999px;border:1px solid var(--edge-soft);color:var(--ink-mute)}
 .skl.ok{border-color:var(--heal);color:var(--heal)}
 .skl.bad{border-color:var(--blood);color:var(--blood)}
-/* Przyciski gotowania w JEDNEJ linii. Pelnowymiarowe rozpychaly kafel i lamaly
-   sie na dwa wiersze („Gotuj / wszystko”), przez co karta rosla dwukrotnie. */
-.cook-actions{display:flex;gap:5px}
-.cook-actions .btn{flex:1;min-width:0;font-size:12px;padding:5px 6px;min-height:28px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0}
+/* Przyciski gotowania USUNIETE — caly kafel jest przyciskiem, tak jak w kazdej
+   innej profesji. „Ugotuj 1” i „Gotuj wszystko” robily prawie to samo. */
+.cook-card{cursor:pointer;text-align:left;font:inherit;color:inherit;width:100%}
+.cook-card:disabled{cursor:default}
+
+/* LOWISKO — miejsce, nie produkt. Kafel niesie sama akcje; co sie lowi i z jaka
+   szansa, chowa sie pod „i”, bo to informacja czytana raz, a nie przy kazdym rzucie. */
+.lowisko{display:flex;align-items:center;gap:8px;position:relative}
+.lowisko-go{display:flex;align-items:center;gap:9px;flex:1;min-width:0;
+  background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:0}
+.lowisko-go:disabled{cursor:default;opacity:.6}
+.lowisko-go .ic{font-size:20px;line-height:1;flex:none}
+.lowisko-go .grow{display:flex;flex-direction:column;gap:2px;min-width:0}
+/* Chmurka pod „i” — ten sam ksztalt co przy chipie aktywnosci. */
+.info-btn.tip{position:relative}
+.info-btn.tip::after,.info-btn.tip::before{opacity:0;pointer-events:none;position:absolute;
+  transition:opacity .12s ease}
+.info-btn.tip::after{content:attr(data-tip);top:calc(100% + 9px);right:-6px;width:250px;
+  background:var(--stone-hi);border:1px solid var(--edge);border-radius:var(--r-md);
+  padding:8px 11px;font-family:var(--ui);font-size:12px;line-height:1.4;
+  color:var(--ink-dim);text-align:left;white-space:normal;z-index:40;
+  text-transform:none;letter-spacing:0;
+  box-shadow:0 10px 28px rgba(0,0,0,.5)}
+.info-btn.tip::before{content:"";top:calc(100% + 3px);right:12px;width:11px;height:11px;
+  background:var(--stone-hi);border-left:1px solid var(--edge);border-top:1px solid var(--edge);
+  transform:rotate(45deg);z-index:41}
+.info-btn.tip:hover::after,.info-btn.tip:hover::before,
+.info-btn.tip.otwarty::after,.info-btn.tip.otwarty::before{opacity:1}
+/* Na dotyku chmurki nie ma hovera — otwiera ja klikniecie (klasa .otwarty). */
+.lowisko .info-btn{display:grid;place-items:center;cursor:pointer}
+
+/* ETYKIETA AKCJI NA KAFLU CRAFTINGU. Zastapila badge „START / WYKUJ 1 / BRAK” —
+   gracz ma widziec, ze kafel COS ROBI, a nie odgadywac to ze slowa w rogu.
+   Gdy brakuje skladnikow, gasnie SAMA ETYKIETA. Kafel zostaje kolorowy,
+   bo receptura JEST odblokowana — wygaszanie calej karty klamalo, ze nie masz
+   do niej dostepu, a masz: brakuje tylko wsadu. */
+/* Etykieta akcji idzie przez CALA SZEROKOSC kafla, na jego dole — jak przycisk,
+   ktorym w istocie jest. Wersja „pigulki” w rogu gubila sie miedzy skladnikami
+   a licznikiem i nie wygladala na cel klikniecia. */
+.akcja{display:block;width:100%;margin-top:auto;text-align:center;
+  font-family:var(--ui);font-size:13px;letter-spacing:.02em;
+  padding:8px 12px;border-radius:var(--r-sm);border:1px solid var(--brass);
+  color:var(--brass);background:none;white-space:nowrap}
+.akcja.zgaszona{border-color:var(--edge);color:var(--ink-mute)}
+/* Wspolny kafel craftingu ma uklad poziomy — tam etykieta zostaje przy krawedzi
+   prawej, ale dostaje ten sam wyglad. */
+.res-meta{align-self:stretch;display:flex;align-items:center}
+.res-meta .akcja{width:auto;margin:0}
+/* Kafel bez skladnikow: pelny kolor, tylko kursor mowi, ze nie da sie kliknac. */
+.cook-card[data-brak="1"]{opacity:1;cursor:default}
+
+/* STAN „LECI” NA ETYKIECIE AKCJI. Klikniecie zmienia „Wytworz” w „Tworzenie”
+   z trzema pulsujacymi kropkami — gracz widzi NA KAFLU, ze to wlasnie on jest
+   uruchomiony, bez szukania po belce u gory. Dziala tak samo w kazdej profesji. */
+.akcja.leci{border-color:var(--brass);background:rgba(200,154,74,.12);color:var(--brass)}
+.akcja.leci i{display:inline-block;width:1.6em;text-align:left;font-style:normal}
+.akcja.leci i::after{content:"";animation:kropki 1.4s steps(4,end) infinite}
+@keyframes kropki{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+[data-quality="niska"] .akcja.leci i::after{animation:none;content:"..."}
+@media (prefers-reduced-motion:reduce){.akcja.leci i::after{animation:none;content:"..."}}
+
+/* Oddech w kaflach profesji — przy etykiecie na cala szerokosc ciasny padding
+   sprawial, ze przycisk dotykal krawedzi karty. */
+.life-card,.cook-card{padding:11px 12px;gap:8px}
+.life-card{display:flex;flex-direction:column}
+.cook-card .row{margin-bottom:1px}
+
+/* Male „i” stojace TUŻ PRZY NAZWIE — informacja o skladnikach jest czytana raz,
+   wiec nie musi zajmowac miejsca na kaflu przy kazdym spojrzeniu. */
+.info-btn.maly{display:inline-grid;place-items:center;width:19px;height:19px;
+  font-size:11px;margin-left:6px;vertical-align:1px;flex:none}
+.t1 .info-btn.maly{position:relative}
+
+.craft-card{display:flex;flex-direction:column;padding:11px 12px;gap:8px}
+.craft-card .row{align-items:flex-start;gap:9px}
