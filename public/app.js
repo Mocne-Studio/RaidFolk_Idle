@@ -3558,7 +3558,8 @@ function sekcjaZbierackie() {
         const licznik = dostepne.reduce((sum, x) => sum + (mam[x.id] ?? 0), 0);
         h += `<button class="card res-row life-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}" ${r.unlocked ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
           <div class="life-card-head"><div><div class="t1">${r.ic ?? '🎣'} ${esc(r.label)}</div><div class="t2">${r.unlocked ? `${czasKrotki(r.effectiveMs ?? r.ms)} · ważony połów` : `otwiera się na poziomie ${r.lvl}`}</div></div>
-          <span class="res-meta">${r.unlocked ? `<span class="res-owned">×${nf(licznik)}</span>` : ''}<span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ŁOWISZ' : r.unlocked ? 'ZARZUĆ' : `Lv.${r.lvl}`}</span></span></div>
+          ${r.unlocked && licznik ? `<span class="mam" data-mam="${esc((r.catchTable ?? []).filter(x => x.unlocked).map(x => x.id).join(','))}" title="Tyle masz w plecaku">×${nf(licznik)}</span>` : ''}
+          <span class="res-meta"><span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ŁOWISZ' : r.unlocked ? 'ZARZUĆ' : `Lv.${r.lvl}`}</span></span></div>
           <div class="catch-list">${(r.catchTable ?? []).map(x => `<span class="catch-pill ${x.unlocked ? x.rarity ?? '' : 'locked'}">${x.unlocked ? `${x.ic ? `${x.ic} ` : ''}${esc(x.label)} ×${nf(mam[x.id] ?? 0)}` : `🔒 ${esc(x.label)} Lv.${x.lvl}`}</span>`).join('')}</div>
         </button>`;
         continue;
@@ -3585,7 +3586,8 @@ function sekcjaZbierackie() {
         h += `<button class="card row res-row life-card ${r.unlocked ? '' : 'locked'} ${selected || kopie ? 'hi' : ''}" data-act="cookselect" data-res="${r.id}">
           <div class="icon">${r.ic ?? (r.category === 'drink' ? '🥤' : r.category === 'dessert' ? '🍰' : r.category === 'fish' ? '🐟' : r.category === 'meat' ? '🍖' : '🥘')}</div>
           <div class="grow"><div class="t1">${esc(r.label)}</div><div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div></div>
-          <span class="res-meta"><span class="res-owned">×${nf(mam[r.id] ?? 0)}</span><span class="badge ${kopie ? 'on' : ''}">${kopie ? 'GOTUJESZ' : !r.unlocked ? `Lv.${r.lvl}` : stac ? 'WYBIERZ' : 'BRAK'}</span></span></button>`;
+          ${(mam[r.id] ?? 0) ? `<span class="mam" data-mam="${esc(r.id)}" title="Tyle masz w plecaku">×${nf(mam[r.id])}</span>` : ''}
+          <span class="res-meta"><span class="badge ${kopie ? 'on' : ''}">${kopie ? 'GOTUJESZ' : !r.unlocked ? `Lv.${r.lvl}` : stac ? 'WYBIERZ' : 'BRAK'}</span></span></button>`;
         continue;
       }
       // Licznik siedzi bezpośrednio na plakietce źródła. Dla Wytapiania
@@ -3593,11 +3595,18 @@ function sekcjaZbierackie() {
       // o id receptury. Sprzęt nie jest materiałem, więc ma własny plecak.
       const ownedId = r.output?.type === 'material' ? r.output.id
         : !r.output && !r.daje?.mikstura && !r.daje?.potion ? r.id : null;
-      const owned = ownedId ? (mam[ownedId] ?? 0) : null;
+      // MIKSTURY NIE LEŻĄ W MATERIAŁACH — mają własny worek (`S.mikstury`), więc
+      // `ownedId` był dla nich celowo zerowany i Alchemia jako jedyna profesja
+      // nie pokazywała, ile się ma. Teraz czytamy z tamtej listy.
+      const potkaId = r.daje?.mikstura ?? r.daje?.potion ?? null;
+      const owned = potkaId
+        ? ((S.mikstury ?? []).find(m => m.id === potkaId)?.count ?? 0)
+        : (ownedId ? (mam[ownedId] ?? 0) : null);
       // Zamknięte złoża z zerowym stanem nie dostają dodatkowej plakietki —
       // na telefonie liczy się każdy wiersz i każdy piksel. Jeśli gracz ma już
       // dany surowiec (np. po zmianie balansu poziomów), licznik nadal pokażemy.
       const showOwned = owned !== null && (r.unlocked || owned > 0);
+      const mamId = potkaId ?? ownedId ?? r.id;
       // Profesja przetwarzająca potrzebuje wsadu — pokazujemy go wprost
       // i blokujemy, gdy go brakuje.
       const koszt = r.koszt ? Object.entries(r.koszt) : null;
@@ -3632,8 +3641,8 @@ function sekcjaZbierackie() {
             return pot ? `<div class="t2" style="color:var(--heal)">Leczy +${nf(pot.heal)} HP${pot.pct ? ` (${Math.round(pot.pct * 100)}% maks. zdrowia)` : ''}</div>` : '';
           })()}
         </div>
+        ${showOwned && owned ? `<span class="mam" data-mam="${esc(String(mamId))}" title="Tyle masz w plecaku">×${nf(owned)}</span>` : ''}
         <span class="res-meta">
-          ${showOwned ? `<span class="res-owned" title="Masz: ${nf(owned)}">×${nf(owned)}</span>` : ''}
           <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ROBISZ' : !r.unlocked ? `Lv.${r.lvl}` : directSmelt ? (staC ? 'PRZETAPIAJ' : 'BRAK') : smith ? (staC ? 'WYKUJ 1' : 'BRAK') : staC ? 'START' : 'BRAK'}</span>
         </span>
       </button>`;
