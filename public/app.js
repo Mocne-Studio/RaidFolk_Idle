@@ -2082,13 +2082,13 @@ function sekcjaBojowe() {
       ? `${bron.name} i tarcza — exp dzieli się po połowie między ${czynna?.label ?? 'broń'} i Ekwipunek defensywny.`
       : `${bron.name} — cały exp idzie w ${czynna?.label ?? 'jej rodzinę'}.`;
 
-  h += `<div class="card hi">
-    <div class="t1">Skąd bierze się exp</div>
-    <div class="t2">${esc(rece)}</div>
-    <div class="t2" style="margin-top:6px"><b>Ekwipunek defensywny</b> rośnie zawsze,
-      z samego udziału w walce. <b>Kostur jest dwuręczny, ale expi Przyrządy magiczne</b> —
-      dwuręczność to liczba rąk, nie rodzina.</div>
-  </div>`;
+  // Wyjaśnienie zjadało całą kartę na górze listy, a czyta się je RAZ.
+  // Schodzi pod „i” obok nagłówka sekcji — tak jak składniki w profesjach.
+  h += `<div class="sec sec-z-info">Skille bojowe ${chmurka('Skąd bierze się exp:', [
+    esc(rece),
+    '<b>Ekwipunek defensywny</b> rośnie zawsze, z samego udziału w walce.',
+    '<b>Kostur jest dwuręczny, ale expi Przyrządy magiczne</b> — dwuręczność to liczba rąk, nie rodzina.',
+  ], 'Skąd bierze się exp')}</div>`;
 
   h += `<div class="scrollbox">`;
   for (const s of lista) {
@@ -3232,12 +3232,12 @@ function renderSkille() {
       Atrybuty${S.unspentAttr ? ` · ${S.unspentAttr}` : ''}</button>
   </div>`;
 
-  // DUZY BOX „CO ROBISZ TERAZ", zaraz pod wyborem sekcji.
-  // Koło w górnej belce zostaje SKRÓTEM widocznym z każdej zakładki, ale tutaj —
-  // na ekranie, który SŁUŻY do zbierania — gracz ma prawo do pełnej informacji
-  // i do przerwania bez szukania. Stoi na każdej z trzech sekcji, bo zbieranie
-  // leci dalej także wtedy, gdy oglądasz Bojowe albo Atrybuty.
-  h += pasekAktywnosci();
+  // DUZY BOX „CO ROBISZ TERAZ" — TYLKO NA ZBIERACKICH.
+  // Stał wcześniej na wszystkich trzech sekcjach, bo zbieranie leci także podczas
+  // oglądania Bojowych i Atrybutów. Ale tam nie ma czego nim zrobić — zjadał tylko
+  // wysokość, a od sygnalizowania „coś leci" jest koło w górnej belce, widoczne
+  // z każdego ekranu i prowadzące jednym kliknięciem tutaj.
+  if (skillTab === 'zbierackie') h += pasekAktywnosci();
 
   if (skillTab === 'bojowe') return h + sekcjaBojowe();
   if (skillTab === 'atrybuty') return h + sekcjaAtrybuty();

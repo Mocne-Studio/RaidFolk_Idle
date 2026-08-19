@@ -1790,3 +1790,32 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 /* Trójkącik przeniósł się do .tip-wrap — patrz wyżej. */
 /* Kafel musi byc kontekstem pozycjonowania i nie moze przycinac chmurki. */
 .res-row{position:relative;overflow:visible}
+
+/* Naglowek sekcji z przyciskiem „i” — kontekst pozycjonowania dla chmurki. */
+.sec-z-info{position:relative;display:flex;align-items:center;gap:2px}
+.sec-z-info .chmurka{left:0;right:auto;width:min(320px,86vw);max-width:none}
+
+/* ATRYBUTY NA TELEFONIE — JEDEN SCROLL, NIE DWA.
+   Obie kolumny mialy wlasny .scrollbox, wiec na telefonie, gdzie ukladaja sie
+   jedna pod druga, powstawaly dwa niezalezne obszary przewijania: gracz przewijal
+   atrybuty, dochodzil do konca i musial trafic palcem w drugi obszar, zeby
+   zobaczyc statystyki. Teraz cala sekcja przewija sie jako jedno. */
+@media (max-width:759px){
+  .two-col.atryb{overflow-y:auto;min-height:0}
+  .two-col.atryb > .col{overflow:visible;flex:none;min-height:0}
+}
+
+/* BOX AKTYWNOSCI KOMPAKTOWY NA TELEFONIE. Na 375 px zjadal ponad 90 px wysokosci
+   — nazwa lamala sie na dwa wiersze, a wiersz „cykl / zostalo / exp” na trzy.
+   Zostaje ikona, nazwa, pasek i przerwanie; szczegoly czasu ida obok nazwy
+   i lamia sie tylko wtedy, gdy naprawde musza. */
+@media (max-width:759px){
+  .akt-box{padding:7px 9px;gap:8px;margin-bottom:7px}
+  .akt-box > .akt-go{gap:8px}
+  .akt-box .ic{font-size:19px}
+  .akt-box .t1{font-size:13px;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .akt-box .t1 small{font-size:11px}
+  .akt-box .t2{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .akt-box .bar{height:4px}
+  .akt-box .btn{font-size:12px;padding:5px 9px;min-height:28px}
+}
