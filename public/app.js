@@ -3213,7 +3213,7 @@ function pasekAktywnosci() {
         <span class="t1">${esc(r?.nodeLabel ?? r?.label ?? akt.res)}
           <small>${esc(sk?.label ?? '')}</small></span>
         <span class="bar"><i id="aktprog" style="width:${pct}%"></i></span>
-        <span class="t2">${MINE?.ms ? `cykl ${(MINE.ms / 1000).toFixed(1)} s · ` : ''}zostało <b id="aktczas">${zostalo != null ? zostalo.toFixed(1) : '—'}</b> s${r?.xp ? ` · ${r.xp} exp za cykl` : ''}</span>
+        <span class="t2">zostało <b id="aktczas">${zostalo != null ? zostalo.toFixed(1) : '—'}</b> s</span>
       </span>
     </button>
     <button class="btn" data-act="minestop">Przerwij</button>
