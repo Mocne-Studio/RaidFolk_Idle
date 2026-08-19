@@ -3583,11 +3583,24 @@ function sekcjaZbierackie() {
         const selected = cookingSelected === r.id;
         const koszt = Object.entries(r.koszt ?? {});
         const stac = koszt.every(([id, ile]) => (mam[id] ?? 0) >= ile);
-        h += `<button class="card row res-row life-card ${r.unlocked ? '' : 'locked'} ${selected || kopie ? 'hi' : ''}" data-act="cookselect" data-res="${r.id}">
-          <div class="icon">${r.ic ?? (r.category === 'drink' ? '🥤' : r.category === 'dessert' ? '🍰' : r.category === 'fish' ? '🐟' : r.category === 'meat' ? '🍖' : '🥘')}</div>
-          <div class="grow"><div class="t1">${esc(r.label)}</div><div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div></div>
-          ${(mam[r.id] ?? 0) ? `<span class="mam" data-mam="${esc(r.id)}" title="Tyle masz w plecaku">×${nf(mam[r.id])}</span>` : ''}
-          <span class="res-meta"><span class="badge ${kopie ? 'on' : ''}">${kopie ? 'GOTUJESZ' : !r.unlocked ? `Lv.${r.lvl}` : stac ? 'WYBIERZ' : 'BRAK'}</span></span></button>`;
+        // AKCJE SIEDZĄ NA KAFLU, nie w panelu obok. Panel zajmował całą czwartą
+        // kolumnę po to, żeby trzymać dwa przyciski — a żeby ich użyć, trzeba było
+        // najpierw kliknąć kafel, potem przenieść wzrok w prawo i kliknąć drugi raz.
+        const skl = koszt.map(([id, ile]) =>
+          `<span class="skl ${(mam[id] ?? 0) >= ile ? 'ok' : 'bad'}">${esc(S.matNames[id] ?? id)} ${nf(mam[id] ?? 0)}/${ile}</span>`).join('');
+        h += `<div class="card res-row life-card cook-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}">
+          <div class="row">
+            <div class="icon">${r.ic ?? (r.category === 'drink' ? '🥤' : r.category === 'dessert' ? '🍰' : r.category === 'fish' ? '🐟' : r.category === 'meat' ? '🍖' : '🥘')}</div>
+            <div class="grow"><div class="t1">${esc(r.label)}</div>
+              <div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div></div>
+            ${(mam[r.id] ?? 0) ? `<span class="mam" data-mam="${esc(r.id)}" title="Tyle masz w plecaku">×${nf(mam[r.id])}</span>` : ''}
+          </div>
+          ${r.unlocked ? `<div class="skladniki-lin">${skl}</div>
+          <div class="cook-actions">
+            <button class="btn" data-act="cookstart" data-res="${r.id}" data-mode="once" ${stac ? '' : 'disabled'}>Ugotuj 1</button>
+            <button class="btn solid" data-act="cookstart" data-res="${r.id}" data-mode="all" ${stac ? '' : 'disabled'}>Gotuj wszystko</button>
+          </div>` : `<div class="skladniki-lin"><span class="skl bad">Wymaga poziomu ${r.lvl}</span></div>`}
+        </div>`;
         continue;
       }
       // Licznik siedzi bezpośrednio na plakietce źródła. Dla Wytapiania
@@ -3636,6 +3649,9 @@ function sekcjaZbierackie() {
           ${fuelTxt
             ? `<div class="t2" style="color:${!r.unlocked ? 'var(--ink-mute)' : fuelOk ? 'var(--brass)' : '#D9736B'}">${esc(fuelTxt)}</div>` : ''}
           ${r.buff ? `<div class="t2" style="color:var(--heal)">${esc(buffTxt(r.buff))}</div>` : ''}
+          ${smith && r.unlocked ? `<div class="t2">${esc(r.special ? 'Receptura bossa · bez losowania jakości'
+            : r.output?.type === 'material' ? 'Wytapianie do wyczerpania rudy lub paliwa'
+            : Object.entries(r.qualityChances ?? {}).map(([id, n]) => `${S.smithing.qualities[id].label} ${n}%`).join(' · ') || 'Wykuwa jedną sztukę')}</div>` : ''}
           ${(() => {
             const pot = r.daje?.mikstura ? (S.miksturyInfo ?? []).find(m => m.id === r.daje.mikstura) : null;
             return pot ? `<div class="t2" style="color:var(--heal)">Leczy +${nf(pot.heal)} HP${pot.pct ? ` (${Math.round(pot.pct * 100)}% maks. zdrowia)` : ''}</div>` : '';
@@ -3652,52 +3668,18 @@ function sekcjaZbierackie() {
 
   // ---- prawa: co się teraz dzieje ----
   h += `<div class="col skill-now">`;
-  if (skillOpen === 'kowalstwo') {
-    const r = s.resources.find(x => x.id === smithSelected)
-      ?? s.resources.find(x => x.category === smithCategory);
-    if (r) {
-      smithSelected = r.id;
-      const koszt = [
-        ...Object.entries(r.koszt ?? {}).map(([id, n]) => `${S.matNames[id] ?? id} ×${n}`),
-        ...(r.fuel ? [`Piec: Węgiel ×${r.fuel}`] : []),
-      ].join(' · ');
-      const szanse = r.special ? 'Receptura bossa · bez losowania jakości'
-        : r.output?.type === 'material' ? 'Wytapianie nie losuje jakości'
-        : Object.entries(r.qualityChances ?? {}).map(([id, n]) => `${S.smithing.qualities[id].label} ${n}%`).join(' · ');
-      const mam = Object.fromEntries((S.materials ?? []).map(m => [m.id, m.count]));
-      const matsOk = Object.entries(r.koszt ?? {}).every(([id, n]) => (mam[id] ?? 0) >= n);
-      const fuelOk = !r.fuel || (S.smithing.furnace?.coal ?? 0) >= r.fuel;
-      const stac = r.unlocked && matsOk && fuelOk;
-      h += `<div class="card hi smith-detail"><div class="t1">${esc(r.label)}</div>
-        <div class="t2">Kowalstwo ${r.lvl} · ${(r.ms / 1000).toFixed(1)} s · ${r.xp} exp</div>
-        <div class="sec">Koszt</div><div class="t2">${esc(koszt || '—')}</div>
-        <div class="sec">Jakość</div><div class="t2">${esc(szanse)}</div>
-        <div class="card compact smith-hint"><div class="t2">${r.output?.type === 'material'
-          ? 'Kliknięcie receptury rozpoczyna przetapianie do wyczerpania rudy lub paliwa.'
-          : 'Kliknięcie receptury wykuwa dokładnie jedną sztukę.'}</div></div></div>`;
-    }
-  }
+  // PANEL SZCZEGÓŁÓW KOWALSTWA ZOSTAŁ USUNIĘTY. Koszt, paliwo i jakość stoją
+  // na kaflu receptury, a kliknięcie kafla JEST akcją — panel powtarzał te same
+  // liczby i zabierał czwartą kolumnę liście receptur.
+
 
   // KARTA „Zestaw Skill" STĄD ZNIKŁA. Trzymała dwie liczby i przycisk do
   // Ekwipunku, a zajmowała całą trzecią kolumnę — przez co lista surowców
   // dostawała trzy wąskie kolumny zamiast czterech szerokich.
-  if (skillOpen === 'gotowanie') {
-    const r = s.resources.find(x => x.id === cookingSelected) ?? s.resources.find(x => x.unlocked) ?? s.resources[0];
-    if (r) {
-      cookingSelected = r.id;
-      const mam = Object.fromEntries((S.materials ?? []).map(m => [m.id, m.count]));
-      const skladniki = Object.entries(r.koszt ?? {});
-      const stac = r.unlocked && skladniki.every(([id, ile]) => (mam[id] ?? 0) >= ile);
-      h += `<div class="card hi recipe-detail"><div class="t1">${esc(r.label)}</div>
-        <div class="t2">Gotowanie ${r.lvl} · ${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}</div>
-        <div class="sec">Składniki</div><div class="ingredient-list">${skladniki.map(([id, ile]) => `<div class="ingredient ${(mam[id] ?? 0) >= ile ? 'ok' : 'bad'}"><span>${esc(S.matNames[id] ?? id)}</span><b>${nf(mam[id] ?? 0)} / ${ile}</b></div>`).join('')}</div>
-        <div class="sec">Rezultat</div>
-        <div class="t2">Gotowe jedzenie pojawi się w Drużynie. Tam wybierzesz jednostkę i zobaczysz jego bonus.</div>
-        <div class="cook-actions"><button class="btn" data-act="cookstart" data-res="${r.id}" data-mode="once" ${stac ? '' : 'disabled'}>Ugotuj 1</button>
-        <button class="btn solid" data-act="cookstart" data-res="${r.id}" data-mode="all" ${stac ? '' : 'disabled'}>Gotuj wszystko</button></div>
-        ${!r.unlocked ? `<div class="t2 bad-text">Wymaga poziomu ${r.lvl}</div>` : !stac ? '<div class="t2 bad-text">Brakuje składników</div>' : ''}</div>`;
-    }
-  }
+  // PANEL SZCZEGÓŁÓW GOTOWANIA ZOSTAŁ USUNIĘTY. Wszystko, co niesie — składniki,
+  // stan spiżarni i oba przyciski — stoi teraz NA KAFLU przepisu, więc panel
+  // zajmował czwartą kolumnę bez powodu i wymuszał dwa kliknięcia zamiast jednego.
+
   // KARTA „Aktywność" STĄD ZNIKŁA. Mówiła dokładnie to samo, co stała belka
   // nad treścią — dwa razy ta sama rzecz na jednym ekranie, a przy okazji
   // zajmowała całą prawą kolumnę, która jest potrzebna na przegląd skilli.

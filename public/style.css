@@ -1633,3 +1633,17 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
   background:var(--stone);border:1px solid var(--brass);color:var(--brass)}
 .res-row.locked .mam{border-color:var(--edge);color:var(--ink-mute)}
 @media (max-width:759px){ .res-row .mam{font-size:13px;padding:3px 7px;top:6px;right:6px} }
+
+/* KAFEL GOTOWANIA — akcje na kaflu, nie w panelu obok.
+   Panel zajmowal cala czwarta kolumne po to, zeby trzymac dwa przyciski,
+   a zeby ich uzyc trzeba bylo kliknac kafel, przeniesc wzrok w prawo
+   i kliknac drugi raz. */
+.cook-card{display:flex;flex-direction:column;gap:7px;cursor:default}
+.cook-card .row{align-items:center;gap:9px}
+.skladniki-lin{display:flex;flex-wrap:wrap;gap:5px}
+.skl{font-family:var(--mono);font-size:11px;line-height:1.2;padding:3px 7px;
+  border-radius:999px;border:1px solid var(--edge-soft);color:var(--ink-mute)}
+.skl.ok{border-color:var(--heal);color:var(--heal)}
+.skl.bad{border-color:var(--blood);color:var(--blood)}
+.cook-actions{display:flex;gap:6px}
+.cook-actions .btn{flex:1;font-size:13px;padding:7px 8px;min-height:34px}
