@@ -334,7 +334,7 @@ button.akt-chip{cursor:pointer}
   /* CZTERY KOLUMNY NA PC. Po usunięciu karty „Zestaw Skill" prawa kolumna
      stoi pusta przy większości profesji, więc lista dostaje tę szerokość. */
   .three-col>.skill-mid{flex:3.6;display:grid;align-content:start;
-    grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+    grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
   /* Pusta kolumna nie ma prawa zabierać miejsca. Kowalstwo i Gotowanie dalej
      coś w niej stawiają — tam zostaje. */
   .three-col>.skill-now:empty{display:none}
@@ -1400,8 +1400,8 @@ textarea:focus{outline:none;border-color:var(--brass)}
 
   /* SUROWCE NA DWIE KOLUMNY. Jedna kolumna znaczyła, że dziesięć rud to dziesięć
      ekranów przewijania — a to jest ekran, na którym się wybiera, nie czyta. */
-  .three-col>.skill-mid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:6px;align-content:start}
+  .three-col>.skill-mid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:5px;align-content:start}
   .three-col>.skill-mid>*{grid-column:1/-1}
   .three-col>.skill-mid>.res-row{grid-column:auto;margin:0}
 }
@@ -1652,28 +1652,18 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 
 /* LOWISKO — miejsce, nie produkt. Kafel niesie sama akcje; co sie lowi i z jaka
    szansa, chowa sie pod „i”, bo to informacja czytana raz, a nie przy kazdym rzucie. */
-.lowisko{display:flex;align-items:center;gap:8px;position:relative}
+/* Lowisko uzywa TEGO SAMEGO ukladu co reszta kafli: kolumna, tresc do lewej.
+   Zostal po nim uklad poziomy z czasow, gdy mial wlasny przycisk-go w srodku —
+   przez to ikona i nazwa wisialy na srodku karty, a nie przy jej lewej krawedzi. */
+.lowisko{display:flex;flex-direction:column;gap:8px;position:relative;text-align:left}
 .lowisko-go{display:flex;align-items:center;gap:9px;flex:1;min-width:0;
   background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;padding:0}
 .lowisko-go:disabled{cursor:default;opacity:.6}
 .lowisko-go .ic{font-size:20px;line-height:1;flex:none}
 .lowisko-go .grow{display:flex;flex-direction:column;gap:2px;min-width:0}
-/* Chmurka pod „i” — ten sam ksztalt co przy chipie aktywnosci. */
-.info-btn.tip{position:relative}
-.info-btn.tip::after,.info-btn.tip::before{opacity:0;pointer-events:none;position:absolute;
-  transition:opacity .12s ease}
-.info-btn.tip::after{content:attr(data-tip);top:calc(100% + 9px);right:-6px;width:250px;
-  background:var(--stone-hi);border:1px solid var(--edge);border-radius:var(--r-md);
-  padding:8px 11px;font-family:var(--ui);font-size:12px;line-height:1.4;
-  color:var(--ink-dim);text-align:left;white-space:normal;z-index:40;
-  text-transform:none;letter-spacing:0;
-  box-shadow:0 10px 28px rgba(0,0,0,.5)}
-.info-btn.tip::before{content:"";top:calc(100% + 3px);right:12px;width:11px;height:11px;
-  background:var(--stone-hi);border-left:1px solid var(--edge);border-top:1px solid var(--edge);
-  transform:rotate(45deg);z-index:41}
-.info-btn.tip:hover::after,.info-btn.tip:hover::before,
-.info-btn.tip.otwarty::after,.info-btn.tip.otwarty::before{opacity:1}
-/* Na dotyku chmurki nie ma hovera — otwiera ja klikniecie (klasa .otwarty). */
+/* STARA CHMURKA NA PSEUDOELEMENCIE USUNIĘTA. Zostawała w arkuszu obok nowej,
+   więc na najechaniu wychodził DRUGI dymek — z tą samą treścią, w innym miejscu.
+   Dymek jest teraz jednym elementem (.chmurka) i otwiera go kliknięcie. */
 .lowisko .info-btn{display:grid;place-items:center;cursor:pointer}
 
 /* ETYKIETA AKCJI NA KAFLU CRAFTINGU. Zastapila badge „START / WYKUJ 1 / BRAK” —
@@ -1716,7 +1706,84 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
    wiec nie musi zajmowac miejsca na kaflu przy kazdym spojrzeniu. */
 .info-btn.maly{display:inline-grid;place-items:center;width:19px;height:19px;
   font-size:11px;margin-left:6px;vertical-align:1px;flex:none}
-.t1 .info-btn.maly{position:relative}
+/* CHMURKA KOTWICZY SIE DO CALEJ KARTY, nie do malenkiego „i”. Przy stalej
+   szerokosci 250 px i kotwicy na 19-pikselowym przycisku wychodzila poza kafel
+   i zaslaniala sasiednie karty. Teraz ma szerokosc kafla i staje POD nim. */
+
 
 .craft-card{display:flex;flex-direction:column;padding:11px 12px;gap:8px}
 .craft-card .row{align-items:flex-start;gap:9px}
+
+/* WYNIK NA PASKU WALKI. Pasek do tej pory znikal z koncem walki — gracz siedzacy
+   w Skillach dowiadywal sie o porazce przez to, ze cos przestalo sie ruszac. */
+.cb-head .wyg{color:var(--heal)}
+.cb-head .prz{color:var(--blood)}
+.cb-wynik{display:flex;flex-wrap:wrap;gap:14px;padding:3px 0 5px;
+  font-family:var(--mono);font-size:12px;color:var(--ink-mute)}
+.cb-wynik b{font-weight:400;color:var(--ink);margin-left:5px}
+.cb-wynik b.wyg{color:var(--heal)}
+.cb-wynik b.prz{color:var(--blood)}
+
+/* PASEK WALKI JAKO OSOBNE OKNO nad dolnym menu — ten sam ksztalt co belki
+   nawigacyjne: zaokraglenie, wlasne tlo i margines, wiec czyta sie jak panel,
+   a nie jak pas doklejony do krawedzi tresci. */
+#combatbar{background:var(--belka);border:1px solid var(--edge);
+  border-radius:var(--r-lg);margin:0 8px 7px;padding:9px 12px}
+#combatbar[hidden]{display:none}
+.cb-act{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.cb-act .cbtn.go{flex:1;min-width:0}
+
+/* IKONA NA WYSOKOSC OBU LINII — nazwy i wiersza „exp · czas”. Mala ikona przy
+   dwuwierszowym naglowku wisiala w powietrzu; teraz siega od gory nazwy do dolu
+   drugiego wiersza, a tekst pod spodem rownaja sie do JEJ lewej krawedzi. */
+.life-card .row > .icon,.craft-card .row > .icon,.cook-card .row > .icon{
+  width:42px;height:42px;min-width:42px;font-size:24px;
+  display:grid;place-items:center;flex:none;align-self:flex-start;
+  border-radius:var(--r-sm);background:var(--stone);border:1px solid var(--edge-soft)}
+.life-card .row,.craft-card .row,.cook-card .row{align-items:flex-start}
+/* Tekst pod naglowkiem rowna sie z ikona, nie z jej lewa krawedzia karty. */
+.life-card > .life-output,.life-card > .skladniki-lin,
+.craft-card > .skladniki-lin,.cook-card > .skladniki-lin{margin-left:51px}
+
+/* Ikona kafla na wysokosc obu wierszy naglowka. Poprzednia regula nie lapala,
+   bo .icon ma wlasny rozmiar ustawiony wyzej w arkuszu. */
+.res-row .row > .icon{width:42px;height:42px;min-width:42px;font-size:23px;
+  display:grid;place-items:center;flex:none;align-self:flex-start}
+
+/* Naglowek kafla zawsze do lewej i na cala szerokosc — zeby ikona stala przy
+   krawedzi, a nie plywala na srodku, gdy tekst jest krotki. */
+.res-row > .row{width:100%;justify-content:flex-start;text-align:left}
+.res-row > .row > .grow{flex:1;min-width:0}
+
+/* CHMURKA JAKO PRAWDZIWY ELEMENT — pseudoelement z content:attr() nie umie lamac
+   linii, wiec lista skladnikow sklejała sie w jeden ciag. Teraz to <span>
+   z lista, wiec kazdy skladnik ma swoj wiersz i numer. */
+/* Dymek kotwiczy sie do samego „i” (opakowanie .tip-wrap), wiec trojkacik
+   staje dokladnie pod nim niezaleznie od dlugosci nazwy. Szerokosc jest stala,
+   ale przyciete do kafla przez max-width, wiec nie wychodzi poza karte. */
+.tip-wrap{position:relative;display:inline-block;vertical-align:baseline}
+/* TREŚĆ TRZYMA SIĘ KARTY, TRÓJKĄCIK ZOSTAJE POD „i”.
+   Dymek kotwiczony do samego „i” zawsze wystawał poza kafel — w prawo albo w lewo,
+   zależnie od długości nazwy. Więc ciało dymka rozpina się na szerokość karty,
+   a sam trójkącik rysuje `.tip-wrap`, który stoi dokładnie przy „i”. */
+.tip-wrap{position:static}
+.tip-wrap::after{content:"";display:none;position:absolute;width:10px;height:10px;
+  margin-left:4px;margin-top:3px;z-index:41;
+  background:var(--stone-hi);border-left:1px solid var(--edge);border-top:1px solid var(--edge);
+  transform:rotate(45deg)}
+.tip-wrap:has(.chmurka.otwarta)::after{display:block}
+.chmurka{display:none;position:absolute;left:8px;right:8px;top:calc(100% + 8px);
+  width:auto;max-width:none;
+  z-index:40;background:var(--stone-hi);border:1px solid var(--edge);
+  border-radius:var(--r-md);padding:9px 12px;text-align:left;
+  font-family:var(--ui);font-size:12px;line-height:1.45;color:var(--ink-dim);
+  text-transform:none;letter-spacing:0;box-shadow:0 10px 28px rgba(0,0,0,.5)}
+.chmurka.otwarta{display:block}
+.chmurka > b{display:block;font-weight:400;color:var(--ink);margin-bottom:5px}
+.chmurka ol{margin:0;padding-left:18px}
+.chmurka li{margin:2px 0}
+.chmurka b{font-weight:400;color:var(--brass)}
+.chmurka i{font-style:normal;color:var(--ink-mute)}
+/* Trójkącik przeniósł się do .tip-wrap — patrz wyżej. */
+/* Kafel musi byc kontekstem pozycjonowania i nie moze przycinac chmurki. */
+.res-row{position:relative;overflow:visible}

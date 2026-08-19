@@ -438,6 +438,29 @@ function podiumHtml(lista, trofeum, jednostka, moje = null, mojWynik = 0) {
 
 // ---------------------------------------------------------------- walka
 
+// CHMURKA JAKO PRAWDZIWY ELEMENT, nie pseudoelement z content:attr().
+// attr() nie umie łamać linii — lista składników sklejała się w jeden ciąg.
+// `poz` to tablica wierszy; numeruje je sam, gdy jest więcej niż jeden.
+const chmurka = (tytul, poz, aria = 'Szczegóły') => {
+  const wiersze = (poz ?? []).filter(Boolean);
+  if (!wiersze.length) return '';
+  const lista = wiersze.length > 1
+    ? `<ol>${wiersze.map(x => `<li>${x}</li>`).join('')}</ol>`
+    : `<div class="jeden">${wiersze[0]}</div>`;
+  // Przycisk i dymek w jednym opakowaniu — dzięki temu dymek kotwiczy się
+  // do „i”, a trójkącik staje dokładnie pod nim, niezależnie od długości nazwy.
+  return `<span class="tip-wrap"><button class="info-btn tip maly" data-act="tip"
+    aria-label="${esc(aria)}">i</button><span class="chmurka"><b>${esc(tytul)}</b>${lista}</span></span>`;
+};
+
+// Czy gracz zamknął podsumowanie na pasku. Zeruje się przy każdej nowej walce,
+// więc „ZAMKNIJ" chowa TEN wynik, a nie wyłącza funkcji na zawsze.
+let WYNIK_ZAMKNIETY = false;
+// OSTATNI WYNIK ŻYJE DŁUŻEJ NIŻ OBIEKT WALKI. `FIGHT` jest zerowany zaraz po
+// rozliczeniu (i przy każdej kolejnej fali w automacie), więc podsumowanie
+// na pasku znikało w tej samej chwili, w której miało się pokazać.
+let OSTATNI_WYNIK = null;   // { result, hp, maxHp, context }
+
 // Stan odtwarzania walki po stronie klienta.
 // Trzymany osobno, żeby render() nie przerysowywał areny w trakcie animacji.
 let FIGHT = null;   // { log, idx, timer, php, pmax, ehp, emax, enemy, result, mode }
@@ -3560,16 +3583,16 @@ function sekcjaZbierackie() {
         // chowają się pod „i". Złowione ryby mają własne kafle niżej.
         const dostepne = (r.catchTable ?? []).filter(x => x.unlocked);
         const suma = dostepne.reduce((a2, x) => a2 + (x.weight ?? 0), 0) || 1;
-        const tip = r.unlocked
-          ? 'Co się łowi: ' + dostepne.map(x =>
-              `${x.label} ${Math.round((x.weight ?? 0) / suma * 100)}%`).join(' · ')
-            + (dostepne.length < (r.catchTable ?? []).length
-               ? ' · wyższe poziomy Wędkarstwa otwierają kolejne gatunki' : '')
-          : `Otwiera się na poziomie ${r.lvl}`;
+        const tip = chmurka(r.unlocked ? 'Co się łowi:' : 'Zamknięte',
+          r.unlocked
+            ? [...dostepne.map(x => `${esc(x.label)} <b>${Math.round((x.weight ?? 0) / suma * 100)}%</b>`),
+               dostepne.length < (r.catchTable ?? []).length
+                 ? '<i>Wyższe poziomy Wędkarstwa otwierają kolejne gatunki</i>' : null]
+            : [`Otwiera się na poziomie ${r.lvl}`]);
         h += `<div class="card res-row life-card lowisko ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}">
           <div class="row">
             <div class="icon">${r.ic ?? '🎣'}</div>
-            <div class="grow"><div class="t1">${esc(r.label)}<button class="info-btn tip maly" data-act="tip" data-tip="${esc(tip)}" aria-label="Co się tu łowi">i</button></div>
+            <div class="grow"><div class="t1">${esc(r.label)}${tip}</div>
               <div class="t2">${r.unlocked ? `${czasKrotki(r.effectiveMs ?? r.ms)} · ważony połów` : `otwiera się na poziomie ${r.lvl}`}</div></div>
           </div>
           ${!r.unlocked ? `<span class="akcja zgaszona">Wymaga poziomu ${r.lvl}</span>`
@@ -3590,12 +3613,19 @@ function sekcjaZbierackie() {
         const plon = jedno
           ? `Drop: ${outputy[0].yield?.[0] ?? 1}–${outputy[0].yield?.[1] ?? 1} szt.`
           : 'Drop: ' + outputy.map(x => `${x.label} ${x.yield?.[0] ?? 1}–${x.yield?.[1] ?? 1}`).join(' · ');
+        // Dopiski w rodzaju „Odnawialny produkt zwierzęcy" schodzą do „i”.
+        // Czyta się je RAZ, a na kaflu rosły o cały wiersz i rozpychały siatkę.
+        const tipRol = chmurka('Co daje:', [
+          ...outputy.map(x => `${esc(x.label)} <b>${x.yield?.[0] ?? 1}–${x.yield?.[1] ?? 1} szt.</b>`),
+          r.animalMode === 'renewable' ? '<i>Odnawialny produkt zwierzęcy — zwierzę zostaje</i>'
+            : r.animalMode ? '<i>Ubój — zbiór jednorazowy</i>' : null,
+        ]);
         const ileMam = outputy.reduce((sum, x) => sum + (mam[x.id] ?? 0), 0);
         h += `<div class="card res-row life-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}">
           <div class="row">
-          <div class="icon">${r.ic ?? (r.category === 'animals' ? '🐑' : r.category === 'fruit' ? '🍎' : '🌱')}</div><div class="grow"><div class="t1">${esc(r.label)}</div>
+          <div class="icon">${r.ic ?? (r.category === 'animals' ? '🐑' : r.category === 'fruit' ? '🍎' : '🌱')}</div><div class="grow"><div class="t1">${esc(r.label)}${tipRol}</div>
           <div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div>
-          <div class="t2 life-output">${esc(plon)}</div>${r.animalMode ? `<div class="t2">${r.animalMode === 'renewable' ? 'Odnawialny produkt zwierzęcy' : 'Ubój / jednorazowy zbiór'}</div>` : ''}</div>
+          <div class="t2 life-output">${esc(plon)}</div></div>
           ${ileMam ? `<span class="mam" title="Tyle masz w plecaku">×${nf(ileMam)}</span>` : ''}
           </div>
           ${!r.unlocked ? `<span class="akcja zgaszona">Wymaga poziomu ${r.lvl}</span>`
@@ -3614,10 +3644,11 @@ function sekcjaZbierackie() {
         // Składniki schodzą do chmurki pod „i” przy nazwie. Na kaflu zostaje to,
         // co potrzebne do DECYZJI: co to jest, ile masz i przycisk. Czego trzeba,
         // czyta się raz — i wtedy się to otwiera.
-        const tipSkl = koszt.length
-          ? 'Potrzebujesz: ' + koszt.map(([id, ile]) =>
-              `${S.matNames[id] ?? id} ${ile} szt. (masz ${nf(mam[id] ?? 0)})`).join(' · ')
-          : 'Nie wymaga składników.';
+        const tipSkl = chmurka(koszt.length ? 'Potrzebujesz:' : 'Składniki',
+          koszt.length
+            ? koszt.map(([id, ile]) =>
+                `${esc(S.matNames[id] ?? id)} <b>${ile} szt.</b> <i>(masz ${nf(mam[id] ?? 0)})</i>`)
+            : ['Nie wymaga składników.']);
         const brakuje = koszt.filter(([id, ile]) => (mam[id] ?? 0) < ile)
           .map(([id]) => S.matNames[id] ?? id);
         // BEZ PRZYCISKÓW. Cały kafel jest przyciskiem — tak jak w każdej innej
@@ -3631,7 +3662,7 @@ function sekcjaZbierackie() {
           <div class="row">
             <div class="icon">${r.ic ?? (r.category === 'drink' ? '🥤' : r.category === 'dessert' ? '🍰' : r.category === 'fish' ? '🐟' : r.category === 'meat' ? '🍖' : '🥘')}</div>
             <div class="grow"><div class="t1">${esc(r.label)}${r.unlocked
-              ? `<button class="info-btn tip maly" data-act="tip" data-tip="${esc(tipSkl)}" aria-label="Z czego się robi">i</button>` : ''}</div>
+              ? `${tipSkl}` : ''}</div>
               <div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div></div>
             ${(mam[r.id] ?? 0) ? `<span class="mam" data-mam="${esc(r.id)}" title="Tyle masz w plecaku">×${nf(mam[r.id])}</span>` : ''}
           </div>
@@ -3679,18 +3710,18 @@ function sekcjaZbierackie() {
         : (r.unlocked && staC ? `data-act="mine" data-res="${r.id}"` : 'disabled');
       // Karta jest <div>, akcja na dole jest <button> — patrz komentarz przy kaflu
       // Gotowania: przycisk w przycisku przeglądarka rozcina.
-      const tipCraft = [
-        koszt ? 'Potrzebujesz: ' + koszt.map(([id, ile]) =>
-          `${nazwaMat[id] ?? id} ${ile} szt. (masz ${nf(mam[id] ?? 0)})`).join(' · ') : null,
-        fuel ? `Piec: Węgiel ${fuel} (masz ${S.smithing.furnace?.coal ?? 0})` : null,
+      const tipCraft = chmurka(koszt || fuel ? 'Potrzebujesz:' : 'Składniki', [
+        ...(koszt ? koszt.map(([id, ile]) =>
+          `${esc(nazwaMat[id] ?? id)} <b>${ile} szt.</b> <i>(masz ${nf(mam[id] ?? 0)})</i>`) : []),
+        fuel ? `Piec: Węgiel <b>${fuel}</b> <i>(masz ${S.smithing.furnace?.coal ?? 0})</i>` : null,
         !koszt && !fuel ? 'Nie wymaga składników.' : null,
-      ].filter(Boolean).join(' — ');
+      ]);
       h += `<div class="card res-row craft-card ${r.unlocked ? '' : 'locked'} ${kopie || smithSelected === r.id ? 'hi' : ''}">
         <div class="row">
         <div class="icon">${!r.unlocked ? '🔒' : r.kind === 'magic' ? '✦' : r.daje?.potion ? '🧪' : r.output?.type === 'mining' ? '⛏' : r.output?.type === 'combat' ? '⚔' : koszt ? '🔥' : '🪨'}</div>
         <div class="grow">
           <div class="t1">${esc(r.nodeLabel ?? r.label)}${r.daje?.potion ? ` ×${r.daje.potion}` : ''}${r.unlocked
-            ? `<button class="info-btn tip maly" data-act="tip" data-tip="${esc(tipCraft)}" aria-label="Z czego się robi">i</button>` : ''}</div>
+            ? `${tipCraft}` : ''}</div>
           <div class="t2">${!r.unlocked
             ? `otwiera się na poziomie ${r.lvl}`
             : `${r.xp} exp · ${((r.effectiveMs ?? r.ms) / 1000).toFixed(1)} s`}</div>
@@ -3906,8 +3937,44 @@ function paintCombatBar() {
   // siedzi w Ekwipunku, a wyprawa stoi i on o tym nie wie.
   const czeka = S.expedition && (S.expedition.decyzja || S.expedition.safepoint);
   const trwa = FIGHT && (FIGHT.playing || AUTO || (FIGHT.mode === 'turowa' && !FIGHT.result));
-  if (!trwa && !czeka) { bar.hidden = true; return; }
+  // TRZECI STAN PASKA: WYNIK. Do tej pory pasek po prostu ZNIKAŁ z końcem walki —
+  // gracz siedzący w Skillach albo Ekwipunku dowiadywał się o porażce przez to,
+  // że coś przestało się ruszać. Teraz pasek zostaje i mówi, jak poszło,
+  // a po wyczyszczeniu piętra pozwala wejść wyżej BEZ wracania na Przygody.
+  // Zapamiętujemy wynik, dopóki obiekt walki jeszcze żyje.
+  if (FIGHT?.result) {
+    OSTATNI_WYNIK = { result: FIGHT.result, hp: FIGHT.party?.[0]?.hp ?? 0,
+      maxHp: FIGHT.party?.[0]?.maxHp ?? 0, context: FIGHT.context ?? {} };
+  }
+  const wynik = !trwa && !czeka && OSTATNI_WYNIK && !WYNIK_ZAMKNIETY;
+  if (!trwa && !czeka && !wynik) { bar.hidden = true; return; }
   bar.hidden = false;
+
+  if (wynik) {
+    const R = OSTATNI_WYNIK.result;
+    const meR = { hp: OSTATNI_WYNIK.hp, maxHp: OSTATNI_WYNIK.maxHp };
+    const hpP = meR.maxHp ? Math.max(0, Math.round(meR.hp / meR.maxHp * 100)) : 0;
+    const ctxR = OSTATNI_WYNIK.context ?? {};
+    const nawieza = !['expedition', 'dungeon'].includes(ctxR.kind);
+    bar.innerHTML = `
+      <div class="cb-head">
+        <span class="${R.win ? 'wyg' : 'prz'}">${R.win ? (R.floorCleared ? 'PIĘTRO ZDOBYTE' : 'WALKA WYGRANA') : 'PORAŻKA'}</span>
+        <span>${nawieza ? `PIĘTRO ${ctxR.floor ?? S.floor} · FALA ${ctxR.step ?? '—'} / ${ctxR.total ?? S.fightsOnFloor}` : ''}</span>
+      </div>
+      <div class="cb-wynik">
+        <span>Zdrowie <b class="${hpP < 40 ? 'prz' : ''}">${nf(meR?.hp ?? 0)} / ${nf(meR?.maxHp ?? 0)}</b></span>
+        ${R.gold ? `<span>Złoto <b class="wyg">+${nf(R.gold)}</b></span>` : ''}
+        ${R.potionsUsed ? `<span>Mikstury <b class="prz">−${R.potionsUsed}</b></span>` : ''}
+        ${R.nagroda ? `<span>Punkty <b class="wyg">+${R.nagroda.attr}</b></span>` : ''}
+      </div>
+      <div class="cb-act">
+        ${R.win && R.floorCleared && nawieza
+          ? `<button class="cbtn go" data-act="advance">WEJDŹ NA PIĘTRO ${(ctxR.floor ?? S.floor) + 1}</button>`
+          : `<button class="cbtn go" data-act="fight">${R.win ? 'NASTĘPNA FALA' : 'SPRÓBUJ PONOWNIE'}</button>`}
+        <button class="cbtn" data-act="wynikzamknij" title="Chowa podsumowanie">ZAMKNIJ</button>
+      </div>`;
+    return;
+  }
 
   if (!trwa && czeka) {
     const E = S.expedition;
@@ -4068,7 +4135,17 @@ document.addEventListener('click', async (ev) => {
   btn.disabled = true;
 
   try {
+    if (act === 'tip') {
+      // Chmurka jest RODZEŃSTWEM przycisku — pokaż tę, zamknij pozostałe.
+      const moja = btn.parentElement?.querySelector('.chmurka');
+      const byla = moja?.classList.contains('otwarta');
+      $$('.chmurka.otwarta').forEach(e => e.classList.remove('otwarta'));
+      if (moja && !byla) moja.classList.add('otwarta');
+      return;
+    }
+    if (act === 'wynikzamknij') { WYNIK_ZAMKNIETY = true; OSTATNI_WYNIK = null; paintCombatBar(); return; }
     if (act === 'fight') {
+      WYNIK_ZAMKNIETY = false; OSTATNI_WYNIK = null;
       // Auto obejmuje cały ciąg fal. Boss aktu wyłamuje się z tego z definicji.
       AUTO = S.mode === 'auto' && !S.forcedTurn;
       await startWave();
@@ -4364,13 +4441,6 @@ document.addEventListener('click', async (ev) => {
       await api('settings', { theme: UST.theme });
       render();
 
-    } else if (act === 'tip') {
-      // Na dotyku nie ma najechania, więc chmurkę otwiera kliknięcie.
-      // Drugie kliknięcie zamyka; kliknięcie innego „i” przenosi ją tam.
-      const byl = btn.classList.contains('otwarty');
-      $$('.info-btn.tip.otwarty').forEach(e => e.classList.remove('otwarty'));
-      if (!byl) btn.classList.add('otwarty');
-      return;
     } else if (act === 'opis') {
       const k = btn.dataset.k;
       if (OPISY_OTWARTE.has(k)) OPISY_OTWARTE.delete(k); else OPISY_OTWARTE.add(k);
@@ -4513,6 +4583,7 @@ document.addEventListener('click', async (ev) => {
       render();
 
     } else if (act === 'advance') {
+      WYNIK_ZAMKNIETY = false; OSTATNI_WYNIK = null;
       FIGHT = null; AUTO = false;
       advView = 'wieza';
       const d = await api('advance', {});
