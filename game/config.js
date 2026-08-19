@@ -756,7 +756,7 @@ export const CONFIG = {
       { id: 'otchlan',  label: 'Otchłań',             opis: 'Zimny fiolet i stal.' },
       { id: 'krew',     label: 'Krew',                opis: 'Czerń i rdza. Najciemniejszy.' },
       { id: 'pergamin', label: 'Pergamin',            opis: 'Jedyny jasny. Na dzień i na słońce.' },
-      { id: 'grafit',   label: 'Grafit',              opis: 'Odcienie szarości. Kolor zostaje tylko tam, gdzie coś znaczy.' },
+      { id: 'grafit',   label: 'Grafit',              opis: 'Czysta skala szarości. Zero koloru — różnice niosą same jasności.' },
     ],
     quality: [
       { id: 'wysoka', label: 'Wysoka', opis: 'Animacje, cienie i gradienty.' },

@@ -75,21 +75,23 @@ button{font:inherit;color:inherit;background:none;border:0}
 #start{max-width:520px}
 @media (min-width:760px){ #start{max-width:640px} }
 
-/* GRAFIT — grafit z jednym karmazynowym akcentem, w duchu landingu Syndix.
-   Tła i krawędzie są czystymi szarościami (nasycenie zero), a cały kolor niesie
-   JEDEN akcent: karmazyn. To on jest tu „mosiądzem" — podkreśla wybraną zakładkę,
-   przyciski i wartości, dokładnie tak jak czerwień na landingu.
-   Zielone leczenie zostaje przygaszone, ale zostaje: pasek zdrowia i pasek
-   leczenia muszą się różnić czymś więcej niż położeniem. */
+/* GRAFIT — CZYSTA SKALA SZAROŚCI. Nasycenie zero w KAŻDYM kolorze, łącznie
+   z akcentem i barwami znaczeniowymi. Akcentem jest tu srebro: to ono podkreśla
+   wybraną zakładkę, przyciski i wartości, tak jak mosiądz w Mroku.
+
+   ŚWIADOMY KOMPROMIS: obrażenia i leczenie różnią się tu wyłącznie JASNOŚCIĄ,
+   bo odcień byłby złamaniem zasady motywu. Leczenie jest niemal białe, obrażenia
+   — wyraźnie ciemniejszym szarym. Na paskach czyta się to dalej, ale słabiej niż
+   w motywach barwnych; taka jest cena skali szarości i warto o niej wiedzieć. */
 [data-theme="grafit"]{
-  --ground:#0A0A0B; --stone:#111113; --stone-hi:#191A1D;
-  --edge:#33353A; --edge-soft:#232427;
-  --ink:#F1F2F3; --ink-dim:#B4B7BB; --ink-mute:#8E9196;
-  --brass:#E75F5F; --copper:#A33232; --blood:#E75F5F; --heal:#7FAE8E; --skill:#8FA0B4;
-  --void:#070708; --press:#2A2C30; --on-brass:#0C0C0D; --glow:none;
-  --belka:#0E0E10;
-  --brass-rgb:231,95,95;
-}
+  /* Każda składowa RGB jest RÓWNA — zero odcienia, czysta szarość. */
+  --ground:#0A0A0A; --stone:#121212; --stone-hi:#1B1B1B;
+  --edge:#363636; --edge-soft:#242424;
+  --ink:#F2F2F2; --ink-dim:#B6B6B6; --ink-mute:#909090;
+  --brass:#D2D2D2; --copper:#808080; --blood:#969696; --heal:#E8E8E8; --skill:#ACACAC;
+  --void:#070707; --press:#2C2C2C; --on-brass:#0C0C0C; --glow:none;
+  --belka:#0F0F0F;
+  --brass-rgb:210,210,210;
 
 /* ==========================================================================
    PRZEWIJANIE
