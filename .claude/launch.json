@@ -4,25 +4,24 @@
     {
       "name": "start",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "start"
-      ],
+      "runtimeArgs": ["run", "start"],
       "port": 8080,
       "autoPort": false
     },
     {
       "name": "start-podglad",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "start"
-      ],
+      "runtimeArgs": ["run", "start"],
       "port": 8090,
-      "env": {
-        "PORT": "8090"
-      },
+      "env": { "PORT": "8090" },
       "autoPort": true
+    },
+    {
+      "name": "tunel",
+      "runtimeExecutable": "C:/Program Files (x86)/cloudflared/cloudflared.exe",
+      "runtimeArgs": ["tunnel", "--url", "http://localhost:8080", "--no-autoupdate", "--metrics", "localhost:8099", "--logfile", "C:/Dev/RaidFolk_idle/tunnel.log"],
+      "port": 8099,
+      "autoPort": false
     }
   ]
 }

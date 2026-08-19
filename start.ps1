@@ -28,7 +28,7 @@ $env:PORT = $Port
 $server = Start-Process node -ArgumentList 'server.js' -WorkingDirectory $root -PassThru -WindowStyle Hidden
 Start-Sleep -Milliseconds 1200
 
-try { Invoke-WebRequest "http://127.0.0.1:$Port/api/classes" -UseBasicParsing -TimeoutSec 5 | Out-Null }
+try { Invoke-WebRequest "http://127.0.0.1:$Port/api/roster" -UseBasicParsing -TimeoutSec 5 | Out-Null }
 catch { Write-Host "Serwer nie wstal. Sprawdz: node server.js" -ForegroundColor Red; exit 1 }
 
 $ip = (Get-NetIPAddress -AddressFamily IPv4 |
