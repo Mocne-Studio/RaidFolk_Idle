@@ -16,12 +16,18 @@
   --r-lg:14px; --r-md:10px; --r-sm:8px; --tap:44px;
   --sep:rgba(233,224,210,.09);         /* separator w duchu iOS-owego hairline */
   /* SZEROKOŚĆ GRY NA DUŻYM EKRANIE. Jedno miejsce — patrz #app. */
+  /* SKŁADOWE AKCENTU. Potrzebne do półprzezroczystych tła i poświat: CSS nie
+     umie zrobić rgba() z wartości hex w zmiennej. Bez tego tinty były wpisane
+     na sztywno jako rgba(200,154,74,…) i NIE ZMIENIAŁY SIĘ z motywem — w skali
+     szarości wychodziły z tego oliwkowe plamy. Każda paleta ma własne. */
+  --brass-rgb:200,154,74;
   --gra-szer:1180px;
   /* PASKI PRZEWIJANIA — patrz sekcja PRZEWIJANIE. Kolory idą z palety motywu,
      więc pasek zmienia się razem z motywem i nie ma pięciu miejsc do poprawiania. */
   --pasek-gr:9px;
 
-  --belka:#161310;   /* tlo gornej belki i dolnego menu */}
+  --belka:#161310;   /* tlo gornej belki i dolnego menu */  --brass-rgb:200,154,74;
+}
 *{box-sizing:border-box}
 html,body{height:100dvh}
 body{
@@ -68,6 +74,22 @@ button{font:inherit;color:inherit;background:none;border:0}
 #app[hidden],#start[hidden]{display:none}
 #start{max-width:520px}
 @media (min-width:760px){ #start{max-width:640px} }
+
+/* GRAFIT — grafit z jednym karmazynowym akcentem, w duchu landingu Syndix.
+   Tła i krawędzie są czystymi szarościami (nasycenie zero), a cały kolor niesie
+   JEDEN akcent: karmazyn. To on jest tu „mosiądzem" — podkreśla wybraną zakładkę,
+   przyciski i wartości, dokładnie tak jak czerwień na landingu.
+   Zielone leczenie zostaje przygaszone, ale zostaje: pasek zdrowia i pasek
+   leczenia muszą się różnić czymś więcej niż położeniem. */
+[data-theme="grafit"]{
+  --ground:#0A0A0B; --stone:#111113; --stone-hi:#191A1D;
+  --edge:#33353A; --edge-soft:#232427;
+  --ink:#F1F2F3; --ink-dim:#B4B7BB; --ink-mute:#8E9196;
+  --brass:#E75F5F; --copper:#A33232; --blood:#E75F5F; --heal:#7FAE8E; --skill:#8FA0B4;
+  --void:#070708; --press:#2A2C30; --on-brass:#0C0C0D; --glow:none;
+  --belka:#0E0E10;
+  --brass-rgb:231,95,95;
+}
 
 /* ==========================================================================
    PRZEWIJANIE
@@ -118,7 +140,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --brass:#C89A4A; --copper:#9A5B34; --blood:#D1655D; --heal:#4E9E6A; --skill:#4F8CAF;
   --void:#0C0A09; --press:#26211B; --on-brass:#17120B; --glow:none;
 
-  --belka:#161310;   /* tlo gornej belki i dolnego menu */}
+  --belka:#161310;   /* tlo gornej belki i dolnego menu */  --brass-rgb:200,154,74;
+}
 /* MOSIĄDZ ŚWIETLISTY — jedyny z gradientem. Tło żyje, panele mają ciepły odblask. */
 [data-theme="mosiadz"]{
   --ground:#171008; --stone:#241A0E; --stone-hi:#2F2213;
@@ -129,7 +152,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --glow:radial-gradient(120% 70% at 50% -10%,rgba(240,196,92,.22),transparent 62%),
          radial-gradient(90% 60% at 50% 110%,rgba(200,122,56,.16),transparent 60%);
 
-  --belka:#1F160C;   /* tlo gornej belki i dolnego menu */}
+  --belka:#1F160C;   /* tlo gornej belki i dolnego menu */  --brass-rgb:240,196,92;
+}
 /* OTCHŁAŃ — zimny fiolet i stal. */
 [data-theme="otchlan"]{
   --ground:#0B0D16; --stone:#121623; --stone-hi:#1A1F30;
@@ -139,7 +163,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --void:#070911; --press:#1F2537; --on-brass:#0B0D16;
   --glow:radial-gradient(120% 70% at 50% -10%,rgba(142,155,240,.12),transparent 62%);
 
-  --belka:#0F131E;   /* tlo gornej belki i dolnego menu */}
+  --belka:#0F131E;   /* tlo gornej belki i dolnego menu */  --brass-rgb:142,155,240;
+}
 /* KREW — czerń i rdza. Najciemniejszy z całej piątki. */
 [data-theme="krew"]{
   --ground:#0D0808; --stone:#160E0E; --stone-hi:#1F1414;
@@ -148,7 +173,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --brass:#CB5E56; --copper:#8E3A2E; --blood:#E0564B; --heal:#4E9E6A; --skill:#9D70AB;
   --void:#080505; --press:#241717; --on-brass:#150908;
 
-  --belka:#130C0C;   /* tlo gornej belki i dolnego menu */}
+  --belka:#130C0C;   /* tlo gornej belki i dolnego menu */  --brass-rgb:203,94,86;
+}
 /* PERGAMIN — jedyny jasny. Sprawdza, czy kontrasty gry stoją także na papierze. */
 [data-theme="pergamin"]{
   --ground:#DCD2BC; --stone:#EFE6D3; --stone-hi:#F8F2E3;
@@ -158,7 +184,8 @@ button{font:inherit;color:inherit;background:none;border:0}
   --void:#E4DAC3; --press:#E2D7BE; --on-brass:#FFF8E8;
   --sep:rgba(43,35,24,.12);
 
-  --belka:#E8DECA;   /* tlo gornej belki i dolnego menu */}
+  --belka:#E8DECA;   /* tlo gornej belki i dolnego menu */  --brass-rgb:121,82,20;
+}
 /* Poświatę niesie tło aplikacji. Bez motywu gradientowego --glow jest none
    i przeglądarka nic nie rysuje. */
 #app{background-image:var(--glow)}
@@ -234,7 +261,7 @@ button{font:inherit;color:inherit;background:none;border:0}
 .akt-box{position:relative}
 .akt-go::before{content:"";position:absolute;inset:0;border-radius:var(--r-md)}
 .akt-box .btn{position:relative;z-index:1}
-.akt-box:hover{background:rgba(200,154,74,.07);border-color:var(--brass)}
+.akt-box:hover{background:rgba(var(--brass-rgb),.07);border-color:var(--brass)}
 .akt-box:active{background:var(--press)}
 .akt-go:hover,.akt-go:active{background:none}
 /* Jedyny wyjątek: „Przerwij”. To inna czynność niż przejście do profesji,
@@ -475,7 +502,7 @@ button.card:active{background:var(--press)}
 /* Nowa arena pokazuje prawdziwy szyk silnika: trzy osobne rzędy, a nie pięć
    portretów w jednym pasku. Dzięki temu od razu widać, kto zasłania maga lub
    łowcę oraz kogo właśnie atakuje odtwarzana akcja. */
-#arena{margin-top:6px;background:linear-gradient(180deg,rgba(126,44,44,.07),transparent 42%,rgba(200,154,74,.05));
+#arena{margin-top:6px;background:linear-gradient(180deg,rgba(126,44,44,.07),transparent 42%,rgba(var(--brass-rgb),.05));
   border:1px solid var(--edge-soft);border-radius:5px;padding:5px}
 .combat-intel{min-height:27px;display:flex;align-items:center;justify-content:center;gap:5px;
   padding:3px 6px;margin-bottom:4px;background:var(--void);border:1px solid var(--edge-soft);
@@ -492,7 +519,7 @@ button.card:active{background:var(--press)}
 .battle-side-title>span{font-size:11px;letter-spacing:.14em}
 .battle-side-title small{font-size:11px;font-weight:400;letter-spacing:.04em}
 .battle-side-title .formation-queue{display:inline-flex;align-items:center;justify-content:center;gap:2px;
-  width:max-content;margin-inline:auto;padding:2px 5px;border:1px solid rgba(200,154,74,.36);
+  width:max-content;margin-inline:auto;padding:2px 5px;border:1px solid rgba(var(--brass-rgb),.36);
   border-radius:10px;background:rgba(10,9,7,.54);color:var(--ink-mute);letter-spacing:.06em}
 .battle-side-title .formation-queue b{font-weight:600;color:var(--brass)}
 .formation-grid{display:grid;grid-template-columns:repeat(var(--formation-count),minmax(0,1fr));
@@ -515,7 +542,7 @@ button.card:active{background:var(--press)}
   border:1px solid var(--edge-soft);border-radius:3px;padding:4px 4px 3px;transition:.12s border-color,.12s box-shadow}
 #arena button.unit{display:block;width:100%;color:inherit;font:inherit;appearance:none;cursor:pointer}
 #arena button.unit:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
-#arena .unit.priority-target{border-color:var(--brass);box-shadow:0 0 0 1px rgba(200,154,74,.45),0 0 12px rgba(200,154,74,.28)}
+#arena .unit.priority-target{border-color:var(--brass);box-shadow:0 0 0 1px rgba(var(--brass-rgb),.45),0 0 12px rgba(var(--brass-rgb),.28)}
 #arena .unit .target-mark{position:absolute;z-index:5;right:2px;top:1px;color:#f1c66d;
   font:700 13px/1 var(--mono);text-shadow:0 0 5px #000,0 0 7px #d48c2f;pointer-events:none}
 #arena .unit.priority-target .png{filter:drop-shadow(0 0 5px rgba(240,188,81,.9))}
@@ -595,10 +622,10 @@ button.card:active{background:var(--press)}
 /* Właściwa scena Dungeonu: tło jest assetem środowiska, a formacje pozostają
    osobną warstwą UI. Portret JPG/WebP można później podać w `unit.portrait`. */
 #arena.dungeon-scene{position:relative;overflow:hidden;isolation:isolate;min-height:230px;
-  padding:8px;background-color:#100f0d;border-color:rgba(200,154,74,.44);
+  padding:8px;background-color:#100f0d;border-color:rgba(var(--brass-rgb),.44);
   box-shadow:inset 0 0 36px rgba(0,0,0,.48),0 8px 20px rgba(0,0,0,.28)}
 #arena.dungeon-scene.thorn-scene{
-  background-image:radial-gradient(ellipse at 50% 66%,rgba(200,154,74,.14),transparent 42%),
+  background-image:radial-gradient(ellipse at 50% 66%,rgba(var(--brass-rgb),.14),transparent 42%),
     linear-gradient(90deg,rgba(177,132,62,.08),transparent 45%,transparent 55%,rgba(126,44,44,.10)),
     linear-gradient(180deg,rgba(7,10,8,.12),rgba(10,8,7,.38)),
     url('/img/dungeon-thorn-arena-v1.webp');
@@ -690,7 +717,7 @@ button.card:active{background:var(--press)}
 .fight-action-tabs button span{font-size:15px;line-height:1}
 .fight-action-tabs button b{max-width:100%;font-family:var(--mono);font-size:11px;font-weight:400;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fight-action-tabs button[aria-selected="true"]{color:var(--brass);border-color:var(--brass);background:rgba(200,154,74,.1)}
+.fight-action-tabs button[aria-selected="true"]{color:var(--brass);border-color:var(--brass);background:rgba(var(--brass-rgb),.1)}
 .role-card{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}
 .role-card .badge{margin-top:1px}
 @media(min-width:760px){
@@ -758,7 +785,7 @@ button.card:active{background:var(--press)}
 .waves i{flex:1;min-width:12px;height:6px;border-radius:2px;background:var(--void);
   border:1px solid var(--edge-soft)}
 .waves i.done{background:var(--brass);border-color:var(--brass)}
-.waves i.now{background:rgba(200,154,74,.3);border-color:var(--brass)}
+.waves i.now{background:rgba(var(--brass-rgb),.3);border-color:var(--brass)}
 
 /* siła ciosu */
 .strikes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
@@ -775,7 +802,7 @@ button.card:active{background:var(--press)}
   text-transform:uppercase;padding:9px 0;cursor:pointer;background:none;
   border:1px solid var(--edge);border-radius:3px;color:var(--ink-mute)}
 .segs button[aria-selected="true"]{border-color:var(--brass);color:var(--brass);
-  background:rgba(200,154,74,.1)}
+  background:rgba(var(--brass-rgb),.1)}
 
 .big-num{text-align:center;font-family:var(--mono);font-size:26px;color:var(--blood);
   padding:10px 0 4px;font-variant-numeric:tabular-nums}
@@ -826,7 +853,7 @@ button.card:active{background:var(--press)}
 .picker button{background:var(--stone-hi);border:1px solid var(--edge-soft);border-radius:4px;
   padding:5px;cursor:pointer;line-height:0;display:grid;place-items:center;
   width:46px;height:46px}
-.picker button.on{border-color:var(--brass);background:rgba(200,154,74,.12)}
+.picker button.on{border-color:var(--brass);background:rgba(var(--brass-rgb),.12)}
 .picker .glyph{font-family:var(--display);font-size:21px;line-height:1;color:var(--ink-dim)}
 .picker button.on .glyph{color:var(--brass)}
 .picker.colors button i{display:block;width:26px;height:26px;border-radius:50%}
@@ -838,7 +865,7 @@ button.card:active{background:var(--press)}
 .eq-modes button{font-family:var(--mono);font-size:11px;letter-spacing:.06em;
   padding:5px 8px;border-radius:3px;border:1px solid var(--edge);background:none;
   color:var(--ink-mute);cursor:pointer}
-.eq-modes button.on{border-color:var(--brass);color:var(--brass);background:rgba(200,154,74,.12)}
+.eq-modes button.on{border-color:var(--brass);color:var(--brass);background:rgba(var(--brass-rgb),.12)}
 @media (max-width:430px){
   .eq-head{gap:4px}
   .scr-head .eq-title{font-size:13px}
@@ -962,7 +989,7 @@ button.card:active{background:var(--press)}
 .trasa .tw{font-family:var(--mono);font-size:15px;color:var(--ink-mute);opacity:.5;
   width:100%;text-align:center}
 .trasa .tw.done{color:var(--brass);opacity:.85}
-.trasa .tw.here{color:var(--ink);opacity:1;text-shadow:0 0 10px rgba(200,154,74,.9);transform:scale(1.35)}
+.trasa .tw.here{color:var(--ink);opacity:1;text-shadow:0 0 10px rgba(var(--brass-rgb),.9);transform:scale(1.35)}
 .trasa .t-boss{color:var(--blood)}
 .trasa .t-elita{color:var(--copper)}
 .trasa .t-safepoint{color:var(--heal)}
@@ -1004,7 +1031,7 @@ button.card:active{background:var(--press)}
 .dungeon-loadouts button{min-width:0;display:flex;align-items:center;justify-content:space-between;gap:5px;
   padding:6px;background:var(--stone);border:1px solid var(--edge-soft);border-radius:3px;
   color:var(--ink-mute);text-align:left;cursor:pointer}
-.dungeon-loadouts button.on{border-color:var(--brass);background:rgba(200,154,74,.10);color:var(--ink-dim)}
+.dungeon-loadouts button.on{border-color:var(--brass);background:rgba(var(--brass-rgb),.10);color:var(--ink-dim)}
 .dungeon-loadouts button:disabled{opacity:1;cursor:default}
 .dungeon-loadouts span{display:flex;flex-direction:column;min-width:0}
 .dungeon-loadouts b{font-family:var(--mono);font-size:11px;font-weight:500;color:var(--brass)}
@@ -1124,7 +1151,7 @@ button.card:active{background:var(--press)}
 .invtabs button{font-family:var(--mono);font-size:11px;letter-spacing:.06em;
   text-transform:uppercase;padding:5px 8px;border-radius:3px;border:1px solid var(--edge);
   background:none;color:var(--ink-mute);cursor:pointer}
-.invtabs button.on{border-color:var(--brass);color:var(--brass);background:rgba(200,154,74,.12)}
+.invtabs button.on{border-color:var(--brass);color:var(--brass);background:rgba(var(--brass-rgb),.12)}
 .invtabs .junk{margin-left:auto;border-color:var(--edge-soft)}
 
 .invlist{flex:1;min-height:0;overflow-y:auto;display:grid;gap:5px;
@@ -1216,7 +1243,7 @@ button.topbar:active{background:var(--press)}
   border-radius:var(--r-lg);overflow:hidden;margin-bottom:8px}
 .pm{display:flex;align-items:center;gap:9px;padding:8px 12px;border-top:1px solid var(--sep)}
 .pm:first-child{border-top:0}
-.pm.ja{background:rgba(200,154,74,.10)}
+.pm.ja{background:rgba(var(--brass-rgb),.10)}
 .pm .mj{display:flex;align-items:center;gap:4px;flex:none;width:44px}
 .pm .mj b{font-family:var(--mono);font-size:13px;color:var(--brass);font-weight:600}
 .pm .hb{flex:none;line-height:0}
@@ -1286,7 +1313,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .cbtn{font-family:var(--mono);font-size:12px;letter-spacing:.08em;padding:6px 9px;
   border-radius:3px;border:1px solid var(--edge);background:none;color:var(--ink-mute);
   cursor:pointer;flex:none}
-.cbtn.on{border-color:var(--brass);color:var(--brass);background:rgba(200,154,74,.12)}
+.cbtn.on{border-color:var(--brass);color:var(--brass);background:rgba(var(--brass-rgb),.12)}
 .cbtn.go{flex:1;border-color:var(--brass);color:var(--brass)}
 
 /* ---------- pasek zbierania ----------
@@ -1331,7 +1358,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .tower-mode>span,.tower-mode-note{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--ink-mute)}
 .tower-mode button{padding:3px 7px;border:1px solid var(--edge-soft);border-radius:2px;background:none;
   color:var(--ink-mute);font-family:var(--mono);font-size:11px;cursor:pointer}
-.tower-mode button[aria-selected="true"]{border-color:var(--brass);color:var(--brass);background:rgba(200,154,74,.1)}
+.tower-mode button[aria-selected="true"]{border-color:var(--brass);color:var(--brass);background:rgba(var(--brass-rgb),.1)}
 .tower-mode-note{text-align:center;margin-top:6px;color:var(--brass)}
 .tower-folds{display:grid;grid-template-columns:1fr 1.35fr;gap:5px;margin-bottom:6px}
 .tower-folds button{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 6px;
@@ -1350,7 +1377,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .floor .k{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-mute)}
 .floor.done{border-color:var(--edge);color:var(--brass)}
 .floor.done .k{color:var(--brass);opacity:.7}
-.floor.here{border-color:var(--brass);background:rgba(200,154,74,.14);color:var(--brass)}
+.floor.here{border-color:var(--brass);background:rgba(var(--brass-rgb),.14);color:var(--brass)}
 .floor.boss{border-color:var(--copper)}
 .floor.boss .k{color:var(--copper)}
 .floor.here.boss{border-color:var(--brass)}
@@ -1374,7 +1401,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .skillrow .grow{display:flex;flex-direction:column;gap:1px;text-align:left}
 .skillrow .nm{font-size:13px;white-space:nowrap}
 .skillrow .lv{font-family:var(--mono);font-size:11px;color:var(--ink-mute)}
-.skillrow.on{border-color:var(--brass);background:rgba(200,154,74,.12);color:var(--brass)}
+.skillrow.on{border-color:var(--brass);background:rgba(var(--brass-rgb),.12);color:var(--brass)}
 .skillrow.on .lv{color:var(--brass)}
 .skillrow .dot{position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;
   background:var(--heal);animation:puls 1.2s ease-in-out infinite}
@@ -1420,7 +1447,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .res-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex:none}
 .res-owned{min-width:42px;padding:3px 7px;border:1px solid var(--edge-soft);border-radius:999px;
   font-family:var(--mono);font-size:13px;line-height:1;text-align:center;color:var(--brass);
-  background:rgba(200,154,74,.08);font-variant-numeric:tabular-nums}
+  background:rgba(var(--brass-rgb),.08);font-variant-numeric:tabular-nums}
 .res-row.locked .res-owned{color:var(--ink-mute);background:none}
 .xp-card{border-color:var(--edge)}
 .bar.xp>i{background:linear-gradient(90deg,#2F5567,var(--skill))}
@@ -1429,7 +1456,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .life-filters button{min-height:32px;padding:6px 11px;border:1px solid var(--edge-soft);
   border-radius:999px;background:var(--stone-hi);color:var(--ink-dim);font:inherit;font-size:13px;cursor:pointer}
 .life-filters button[aria-selected="true"]{border-color:var(--brass);color:var(--brass);
-  background:rgba(200,154,74,.12)}
+  background:rgba(var(--brass-rgb),.12)}
 .cook-search{width:100%;margin:0 0 8px;padding:8px 11px;background:var(--stone-hi);
   border:1px solid var(--edge-soft);color:var(--ink);font:inherit;font-size:15px}
 .life-card{display:block}
@@ -1442,7 +1469,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .catch-pill.mystic{border-color:#8562a8;color:#c6a1e8}
 .catch-pill.locked{opacity:.45}
 .life-output{color:var(--brass)}
-.mastery{border-color:var(--brass);background:rgba(200,154,74,.07)}
+.mastery{border-color:var(--brass);background:rgba(var(--brass-rgb),.07)}
 .ingredient-list{margin:6px 0 8px;border-top:1px solid var(--sep)}
 .ingredient{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--sep);
   font-size:13px;color:var(--ink-dim)}
@@ -1476,7 +1503,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .portal .r2{width:126px;height:126px;border-color:var(--copper);opacity:.5;
   animation-duration:9s;animation-direction:reverse}
 .portal .r3{width:84px;height:84px;border-color:var(--brass);opacity:.45;animation-duration:6s}
-.portal .core{font-size:34px;line-height:1;filter:drop-shadow(0 0 12px rgba(200,154,74,.45))}
+.portal .core{font-size:34px;line-height:1;filter:drop-shadow(0 0 12px rgba(var(--brass-rgb),.45))}
 .portal.lit .r2,.portal.lit .r3{border-color:#E8C35A;opacity:.9}
 .portal.lit .core{filter:drop-shadow(0 0 22px rgba(232,195,90,.9))}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -1503,7 +1530,7 @@ textarea:focus{outline:none;border-color:var(--brass)}
 .logtabs button{font-family:var(--mono);font-size:12px;letter-spacing:.06em;
   text-transform:uppercase;padding:6px 9px;border-radius:3px;border:1px solid var(--edge);
   background:none;color:var(--ink-mute);cursor:pointer}
-.logtabs button.on{border-color:var(--brass);color:var(--brass);background:rgba(200,154,74,.12)}
+.logtabs button.on{border-color:var(--brass);color:var(--brass);background:rgba(var(--brass-rgb),.12)}
 
 
 /* ==========================================================================
@@ -1692,7 +1719,7 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
 /* STAN „LECI” NA ETYKIECIE AKCJI. Klikniecie zmienia „Wytworz” w „Tworzenie”
    z trzema pulsujacymi kropkami — gracz widzi NA KAFLU, ze to wlasnie on jest
    uruchomiony, bez szukania po belce u gory. Dziala tak samo w kazdej profesji. */
-.akcja.leci{border-color:var(--brass);background:rgba(200,154,74,.12);color:var(--brass)}
+.akcja.leci{border-color:var(--brass);background:rgba(var(--brass-rgb),.12);color:var(--brass)}
 .akcja.leci i{display:inline-block;width:1.6em;text-align:left;font-style:normal}
 .akcja.leci i::after{content:"";animation:kropki 1.4s steps(4,end) infinite}
 @keyframes kropki{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
