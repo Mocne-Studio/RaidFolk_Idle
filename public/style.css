@@ -1645,5 +1645,8 @@ input[type="text"]{border-radius:var(--r-md);min-height:var(--tap)}
   border-radius:999px;border:1px solid var(--edge-soft);color:var(--ink-mute)}
 .skl.ok{border-color:var(--heal);color:var(--heal)}
 .skl.bad{border-color:var(--blood);color:var(--blood)}
-.cook-actions{display:flex;gap:6px}
-.cook-actions .btn{flex:1;font-size:13px;padding:7px 8px;min-height:34px}
+/* Przyciski gotowania w JEDNEJ linii. Pelnowymiarowe rozpychaly kafel i lamaly
+   sie na dwa wiersze („Gotuj / wszystko”), przez co karta rosla dwukrotnie. */
+.cook-actions{display:flex;gap:5px}
+.cook-actions .btn{flex:1;min-width:0;font-size:12px;padding:5px 6px;min-height:28px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0}

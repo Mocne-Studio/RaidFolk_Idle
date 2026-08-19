@@ -3569,14 +3569,20 @@ function sekcjaZbierackie() {
         // Ile masz — na ZNACZKU w rogu, nie w środku zdania. Liczba schowana
         // między nazwą a widelkami plonu ginieła: gracz skanuje kafle wzrokiem
         // i szuka jednej rzeczy, a musiał ją czytać ze zdania.
-        const plon = outputy.map(x => `${x.label} ${x.yield?.[0] ?? 1}–${x.yield?.[1] ?? 1}`).join(' · ');
+        // „Drop: 2–4 szt." zamiast „Ziemniak 2–4". Nazwa surowca stoi już w tytule
+        // kafla — powtarzanie jej w linii plonu zjadało miejsce i nic nie wnosiło.
+        // Gdy uprawa daje KILKA różnych rzeczy, wtedy nazwy są potrzebne i wracają.
+        const jedno = outputy.length === 1;
+        const plon = jedno
+          ? `Drop: ${outputy[0].yield?.[0] ?? 1}–${outputy[0].yield?.[1] ?? 1} szt.`
+          : 'Drop: ' + outputy.map(x => `${x.label} ${x.yield?.[0] ?? 1}–${x.yield?.[1] ?? 1}`).join(' · ');
         const ileMam = outputy.reduce((sum, x) => sum + (mam[x.id] ?? 0), 0);
         h += `<button class="card row res-row life-card ${r.unlocked ? '' : 'locked'} ${kopie ? 'hi' : ''}" ${r.unlocked ? `data-act="mine" data-res="${r.id}"` : 'disabled'}>
           <div class="icon">${r.ic ?? (r.category === 'animals' ? '🐑' : r.category === 'fruit' ? '🍎' : '🌱')}</div><div class="grow"><div class="t1">${esc(r.label)}</div>
           <div class="t2">${r.unlocked ? `${r.xp} exp · ${czasKrotki(r.effectiveMs ?? r.ms)}` : `otwiera się na poziomie ${r.lvl}`}</div>
           <div class="t2 life-output">${esc(plon)}</div>${r.animalMode ? `<div class="t2">${r.animalMode === 'renewable' ? 'Odnawialny produkt zwierzęcy' : 'Ubój / jednorazowy zbiór'}</div>` : ''}</div>
           ${ileMam ? `<span class="mam" title="Tyle masz w plecaku">×${nf(ileMam)}</span>` : ''}
-          <span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ZBIERASZ' : r.unlocked ? 'START' : `Lv.${r.lvl}`}</span></button>`;
+          ${kopie || !r.unlocked ? `<span class="badge ${kopie ? 'on' : ''}">${kopie ? 'ZBIERASZ' : `Lv.${r.lvl}`}</span>` : ''}</button>`;
         continue;
       }
       if (skillOpen === 'gotowanie') {
@@ -4235,6 +4241,8 @@ document.addEventListener('click', async (ev) => {
 
     } else if (act === 'cookstart') {
       const res = btn.dataset.res;
+      // To samo co przy zbieraniu: nie restartujemy tego, co już się gotuje.
+      if (S.activity?.skill === 'gotowanie' && S.activity?.res === res) return;
       const d = await api('mine', { skill: 'gotowanie', res, mode: btn.dataset.mode ?? 'all' });
       if (d.error) return;
       const r = S.skills.gotowanie.resources.find(x => x.id === res);
@@ -4242,6 +4250,8 @@ document.addEventListener('click', async (ev) => {
       startMineLoop('gotowanie', res, S.activity?.ms ?? r.effectiveMs ?? r.ms);
 
     } else if (act === 'smithstart') {
+      // To samo co przy zbieraniu: nie restartujemy trwającego wytapiania.
+      if (S.activity?.skill === 'kowalstwo' && S.activity?.res === btn.dataset.res) return;
       const res = btn.dataset.res;
       smithSelected = res;
       const d = await api('mine', { skill: 'kowalstwo', res, mode: btn.dataset.mode ?? 'once' });
@@ -4490,6 +4500,11 @@ document.addEventListener('click', async (ev) => {
       invCat = btn.dataset.c; render();
     } else if (act === 'mine') {
       const res = btn.dataset.res;
+      // KLIKNIĘCIE W TO, CO WŁAŚNIE LECI, NIC NIE ROBI.
+      // Wcześniej restartowało cykl od zera: gracz stukał w kafel żeby sprawdzić
+      // postęp albo trafiał w niego przypadkiem i tracił cały odliczony czas.
+      // Przerwanie ma jedno miejsce — przycisk w belce aktywności.
+      if (S.activity?.skill === skillOpen && S.activity?.res === res) return;
       const d = await api('mine', { skill: skillOpen, res });
       if (d.error) return;
       const r = S.skills[skillOpen].resources.find(x => x.id === res);
