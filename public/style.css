@@ -1400,8 +1400,11 @@ textarea:focus{outline:none;border-color:var(--brass)}
 
   /* SUROWCE NA DWIE KOLUMNY. Jedna kolumna znaczyła, że dziesięć rud to dziesięć
      ekranów przewijania — a to jest ekran, na którym się wybiera, nie czyta. */
-  .three-col>.skill-mid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
-    gap:5px;align-content:start}
+  /* NA TELEFONIE JEDNA KOLUMNA. Kafel niesie ikone, nazwe, exp, czas, drop,
+     licznik i przycisk akcji na cala szerokosc — przy dwoch czy czterech
+     kolumnach na 375 px nie ma na to miejsca i wszystko sie lamie. */
+  .three-col>.skill-mid{display:grid;grid-template-columns:minmax(0,1fr);
+    gap:6px;align-content:start}
   .three-col>.skill-mid>*{grid-column:1/-1}
   .three-col>.skill-mid>.res-row{grid-column:auto;margin:0}
 }
